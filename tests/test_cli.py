@@ -46,6 +46,37 @@ class CliTests(unittest.TestCase):
         self.assertIn("$325.00 CAD total", output)
         self.assertIn("https://www.ebay.ca/itm/example", output)
 
+    def test_ebay_search_command_does_not_call_unknown_shipping_total(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [
+                    {
+                        "title": "Dell OptiPlex",
+                        "item_price_cad": 180.00,
+                        "shipping_cad": None,
+                        "total_price_cad": 180.00,
+                        "shipping_is_estimated": True,
+                        "condition_raw": "Used",
+                        "location": None,
+                        "url": "https://www.ebay.ca/itm/example",
+                    }
+                ]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "ebay-search", "OptiPlex"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("$180.00 CAD item price + unknown shipping", output)
+        self.assertNotIn("$180.00 CAD total", output)
+
     def test_ebay_search_command_reports_runtime_errors(self):
         class FailingEbaySource:
             def __init__(self, marketplace="EBAY_CA"):

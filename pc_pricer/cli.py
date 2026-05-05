@@ -105,7 +105,7 @@ def _format_listing_price(listing: dict) -> str:
     total = _format_money(listing.get("total_price_cad"))
 
     if listing.get("shipping_is_estimated"):
-        return f"{total} total ({item_price} item + unknown shipping)"
+        return f"{item_price} item price + unknown shipping"
     return f"{total} total ({item_price} item + {shipping} shipping)"
 
 
