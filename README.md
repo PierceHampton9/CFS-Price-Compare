@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated computers.
 
-Current status: Windows spec detection works, and initial search query building is covered by tests.
+Current status: Windows spec detection and initial query building work. eBay source setup is in progress.
 
 ## Setup
 
@@ -49,3 +49,15 @@ Run tests with:
 ```powershell
 python -m unittest discover -s tests
 ```
+
+## Local Credentials
+
+Do not commit real API credentials. The eBay source reads credentials from environment variables:
+
+```powershell
+EBAY_CLIENT_ID
+EBAY_CLIENT_SECRET
+EBAY_ACCESS_TOKEN
+```
+
+`.env.example` is only a safe template for the names to use. Real values belong in `.env` or your shell environment, not in committed files.
