@@ -50,6 +50,12 @@ After setting eBay credentials in your shell, you can manually test active eBay 
 pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 5
 ```
 
+To run a draft active-listing price report from one search query:
+
+```powershell
+pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
+```
+
 ## Development
 
 Run tests with:

@@ -7,9 +7,10 @@ import json
 import sys
 from typing import Any
 
+from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.detector import detect_specs
 from pc_pricer.normalizer import normalize_listings
-from pc_pricer.reporter import format_condition, format_listing_price
+from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.sources.ebay import EbaySource
 
 
@@ -29,6 +30,15 @@ def main() -> None:
     ebay_parser.add_argument("--limit", type=int, default=5, help="Maximum listings to return.")
     ebay_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
     ebay_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    price_query_parser = subparsers.add_parser(
+        "price-query",
+        help="Search active eBay listings and print a draft price report.",
+    )
+    price_query_parser.add_argument("query", nargs="+", help="Search terms to price.")
+    price_query_parser.add_argument("--limit", type=int, default=10, help="Maximum listings to fetch.")
+    price_query_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     args = parser.parse_args()
 
@@ -56,6 +66,20 @@ def main() -> None:
             print(json.dumps(listings, indent=2, default=str))
         else:
             print_ebay_listings(query, listings)
+    elif args.command == "price-query":
+        query = " ".join(args.query)
+        try:
+            listings = EbaySource(marketplace=args.marketplace).search(query, args.limit)
+            listings = normalize_listings(listings)
+            result = aggregate_listings(listings)
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            print(format_price_report(result))
 
 
 def print_detected_specs(specs: dict[str, Any]) -> None:
