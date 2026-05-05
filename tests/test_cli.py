@@ -19,12 +19,14 @@ class CliTests(unittest.TestCase):
                 self.max_results = max_results
                 return [
                     {
+                        "source": "ebay",
                         "title": "Lenovo ThinkPad X13 Yoga",
                         "item_price_cad": 300.00,
                         "shipping_cad": 25.00,
                         "total_price_cad": 325.00,
                         "shipping_is_estimated": False,
                         "condition_raw": "Used",
+                        "condition_norm": None,
                         "location": "Calgary, AB, CA",
                         "url": "https://www.ebay.ca/itm/example",
                     }
@@ -44,6 +46,7 @@ class CliTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("Lenovo ThinkPad X13 Yoga", output)
         self.assertIn("$325.00 CAD total", output)
+        self.assertIn("Condition: good (Used)", output)
         self.assertIn("https://www.ebay.ca/itm/example", output)
 
     def test_ebay_search_command_does_not_call_unknown_shipping_total(self):
@@ -54,12 +57,14 @@ class CliTests(unittest.TestCase):
             def search(self, _query, _max_results):
                 return [
                     {
+                        "source": "ebay",
                         "title": "Dell OptiPlex",
                         "item_price_cad": 180.00,
                         "shipping_cad": None,
                         "total_price_cad": 180.00,
                         "shipping_is_estimated": True,
                         "condition_raw": "Used",
+                        "condition_norm": None,
                         "location": None,
                         "url": "https://www.ebay.ca/itm/example",
                     }
