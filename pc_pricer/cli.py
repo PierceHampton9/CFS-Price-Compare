@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from pc_pricer.detector import detect_specs
+from pc_pricer.normalizer import normalize_listings
 from pc_pricer.sources.ebay import EbaySource
 
 
@@ -45,6 +46,7 @@ def main() -> None:
         query = " ".join(args.query)
         try:
             listings = EbaySource(marketplace=args.marketplace).search(query, args.limit)
+            listings = normalize_listings(listings)
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
@@ -87,7 +89,7 @@ def print_ebay_listings(query: str, listings: list[dict]) -> None:
     for index, listing in enumerate(listings, start=1):
         print(f"{index}. {listing.get('title') or 'Untitled listing'}")
         print(f"   Price:     {_format_listing_price(listing)}")
-        print(f"   Condition: {listing.get('condition_raw') or 'Unknown'}")
+        print(f"   Condition: {_format_condition(listing)}")
         print(f"   Location:  {listing.get('location') or 'Unknown'}")
         print(f"   URL:       {listing.get('url') or 'Unknown'}")
 
@@ -107,6 +109,14 @@ def _format_listing_price(listing: dict) -> str:
     if listing.get("shipping_is_estimated"):
         return f"{item_price} item price + unknown shipping"
     return f"{total} total ({item_price} item + {shipping} shipping)"
+
+
+def _format_condition(listing: dict) -> str:
+    raw = listing.get("condition_raw") or "Unknown"
+    normalized = listing.get("condition_norm")
+    if not normalized:
+        return raw
+    return f"{normalized} ({raw})"
 
 
 def _format_money(value: Any) -> str:
