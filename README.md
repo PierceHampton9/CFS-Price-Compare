@@ -42,6 +42,14 @@ To include the raw Windows hardware data:
 pc_pricer detect --json --raw
 ```
 
+## eBay Smoke Test
+
+After setting eBay credentials in your shell, you can manually test active eBay results:
+
+```powershell
+pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 5
+```
+
 ## Development
 
 Run tests with:
