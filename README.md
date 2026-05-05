@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated computers.
 
-Current status: Windows spec detection, initial query building, eBay active-listing search, and basic listing condition normalization work.
+Current status: Windows spec detection, initial query building, eBay active-listing search, basic listing condition normalization, and standalone price aggregation work.
 
 ## Setup
 
