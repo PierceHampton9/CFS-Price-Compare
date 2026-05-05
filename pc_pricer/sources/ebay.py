@@ -1,0 +1,2 @@
+"""eBay source placeholder."""
+

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cfs-price-compare"
+version = "0.1.0"
+description = "Command-line pricing helper for donated computers."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+pc_pricer = "pc_pricer.cli:main"
