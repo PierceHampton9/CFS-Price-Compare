@@ -1,7 +1,12 @@
+import io
 import unittest
+import warnings
 from datetime import date
+from email.message import Message
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
+from pc_pricer.sources import ebay
 from pc_pricer.sources.ebay import EbayCredentials, EbaySource
 
 
@@ -141,6 +146,32 @@ class EbaySourceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Missing eBay credentials"):
             source.search("laptop", max_results=1)
+
+    def test_http_errors_are_wrapped(self):
+        def fake_urlopen(_req, timeout):
+            self.assertEqual(timeout, 30)
+            raise HTTPError(
+                url="https://api.ebay.com/example",
+                code=401,
+                msg="Unauthorized",
+                hdrs=Message(),
+                fp=io.BytesIO(b""),
+            )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ResourceWarning)
+            with patch("pc_pricer.sources.ebay.request.urlopen", fake_urlopen):
+                with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
+                    ebay._http_get_json("https://api.ebay.com/example", {})
+
+    def test_url_errors_are_wrapped(self):
+        def fake_urlopen(_req, timeout):
+            self.assertEqual(timeout, 30)
+            raise URLError("network unavailable")
+
+        with patch("pc_pricer.sources.ebay.request.urlopen", fake_urlopen):
+            with self.assertRaisesRegex(RuntimeError, "network unavailable"):
+                ebay._http_get_json("https://api.ebay.com/example", {})
 
 
 if __name__ == "__main__":

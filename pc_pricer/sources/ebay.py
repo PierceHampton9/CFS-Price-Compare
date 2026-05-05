@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
-from urllib import parse, request
+from urllib import error, parse, request
 
 
 BROWSE_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
@@ -207,15 +207,25 @@ def _date_from_ebay_timestamp(value: Any) -> date | None:
 
 def _http_get_json(url: str, headers: dict[str, str]) -> dict[str, Any]:
     req = request.Request(url, headers=headers, method="GET")
-    with request.urlopen(req, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with request.urlopen(req, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raise RuntimeError(f"eBay request failed with HTTP {exc.code}.") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"eBay request failed: {exc.reason}") from exc
 
 
 def _http_post_json(url: str, headers: dict[str, str], body: dict[str, str]) -> dict[str, Any]:
     encoded_body = parse.urlencode(body).encode("utf-8")
     req = request.Request(url, data=encoded_body, headers=headers, method="POST")
-    with request.urlopen(req, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with request.urlopen(req, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raise RuntimeError(f"eBay request failed with HTTP {exc.code}.") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"eBay request failed: {exc.reason}") from exc
 
 
 def _safe_int(value: Any) -> int:
