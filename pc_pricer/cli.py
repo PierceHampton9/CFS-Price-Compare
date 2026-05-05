@@ -9,6 +9,7 @@ from typing import Any
 
 from pc_pricer.detector import detect_specs
 from pc_pricer.normalizer import normalize_listings
+from pc_pricer.reporter import format_condition, format_listing_price
 from pc_pricer.sources.ebay import EbaySource
 
 
@@ -88,8 +89,8 @@ def print_ebay_listings(query: str, listings: list[dict]) -> None:
 
     for index, listing in enumerate(listings, start=1):
         print(f"{index}. {listing.get('title') or 'Untitled listing'}")
-        print(f"   Price:     {_format_listing_price(listing)}")
-        print(f"   Condition: {_format_condition(listing)}")
+        print(f"   Price:     {format_listing_price(listing)}")
+        print(f"   Condition: {format_condition(listing)}")
         print(f"   Location:  {listing.get('location') or 'Unknown'}")
         print(f"   URL:       {listing.get('url') or 'Unknown'}")
 
@@ -99,31 +100,6 @@ def _format_ram(specs: dict[str, Any]) -> str:
     if not ram_gb:
         return "Unknown"
     return f"{ram_gb} GB"
-
-
-def _format_listing_price(listing: dict) -> str:
-    item_price = _format_money(listing.get("item_price_cad"))
-    shipping = _format_money(listing.get("shipping_cad"))
-    total = _format_money(listing.get("total_price_cad"))
-
-    if listing.get("shipping_is_estimated"):
-        return f"{item_price} item price + unknown shipping"
-    return f"{total} total ({item_price} item + {shipping} shipping)"
-
-
-def _format_condition(listing: dict) -> str:
-    raw = listing.get("condition_raw") or "Unknown"
-    normalized = listing.get("condition_norm")
-    if not normalized:
-        return raw
-    return f"{normalized} ({raw})"
-
-
-def _format_money(value: Any) -> str:
-    try:
-        return f"${float(value):,.2f} CAD"
-    except (TypeError, ValueError):
-        return "Unknown"
 
 
 def _format_storage(storage: Any) -> str:
