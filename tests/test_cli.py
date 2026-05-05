@@ -149,10 +149,6 @@ class CliTests(unittest.TestCase):
         self.assertIn('"median_price_cad": 250.0', stdout.getvalue())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _listing(title, total_price, is_sold=False):
     return {
         "source": "ebay",
@@ -167,3 +163,7 @@ def _listing(title, total_price, is_sold=False):
         "query_tier": 1,
         "url": "https://www.ebay.ca/itm/example",
     }
+
+
+if __name__ == "__main__":
+    unittest.main()
