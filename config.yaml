@@ -1,0 +1,12 @@
+# Tuning values will live here as the pricing pipeline grows.
+
+min_comparables: 5
+warn_below_comparables: 10
+max_sold_listing_age_days: 90
+max_asking_listing_age_days: 30
+
+sources:
+  ebay:
+    enabled: true
+  canada_computers:
+    enabled: false

@@ -1,2 +1,51 @@
-# CFS-Price-Compare
-A program which will use the model of the device (if it is an All-In-One) or the aggregate value of the device's specs to find comparable listings online and determine a fair resale value for the device.
+# CFS Price Compare
+
+Repository/folder name: `CFS-Price-Compare`.
+
+A command-line tool for estimating fair resale prices for donated computers.
+
+Current status: the project skeleton is in place, and Windows spec detection is the first working piece.
+
+## Setup
+
+Requires Python 3.11 or newer.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+## Detect Specs
+
+Run this on the computer you want to inspect:
+
+```powershell
+pc_pricer detect
+```
+
+If Windows says `pc_pricer` is not recognized, use:
+
+```powershell
+python -m pc_pricer.cli detect
+```
+
+For machine-readable output:
+
+```powershell
+pc_pricer detect --json
+```
+
+To include the raw Windows hardware data:
+
+```powershell
+pc_pricer detect --json --raw
+```
+
+## Development
+
+Run tests with:
+
+```powershell
+python -m unittest discover -s tests
+```
