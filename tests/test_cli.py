@@ -102,6 +102,68 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exc.exception.code, 1)
         self.assertIn("Missing eBay credentials", stderr.getvalue())
 
+    def test_price_query_command_prints_report(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, query, max_results):
+                self.query = query
+                self.max_results = max_results
+                return [
+                    _listing("Listing 1", 220, is_sold=False),
+                    _listing("Listing 2", 280, is_sold=True),
+                ]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "ThinkPad", "X13", "--limit", "2"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Price estimate", output)
+        self.assertIn("Median price:      $250.00 CAD", output)
+        self.assertIn("Sold / asking:     1 sold, 1 asking", output)
+        self.assertIn("Supporting listings", output)
+        self.assertIn("Condition: good (Used)", output)
+
+    def test_price_query_command_can_print_json(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Listing", 250)]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "laptop", "--json"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        self.assertIn('"median_price_cad": 250.0', stdout.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _listing(title, total_price, is_sold=False):
+    return {
+        "source": "ebay",
+        "title": title,
+        "item_price_cad": total_price,
+        "shipping_cad": 0,
+        "total_price_cad": total_price,
+        "shipping_is_estimated": False,
+        "condition_raw": "Used",
+        "condition_norm": None,
+        "is_sold": is_sold,
+        "query_tier": 1,
+        "url": "https://www.ebay.ca/itm/example",
+    }
