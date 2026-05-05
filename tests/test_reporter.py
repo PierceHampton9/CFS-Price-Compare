@@ -1,5 +1,6 @@
 import unittest
 
+from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.reporter import format_price_report
 
 
@@ -120,6 +121,46 @@ class ReporterTests(unittest.TestCase):
 
         self.assertIn("$180.00 CAD item price + unknown shipping", report)
         self.assertNotIn("$180.00 CAD total", report)
+
+    def test_formats_real_aggregation_result(self):
+        aggregation = aggregate_listings(
+            [
+                {
+                    "source": "ebay",
+                    "title": "Listing 1",
+                    "item_price_cad": 200,
+                    "shipping_cad": 20,
+                    "total_price_cad": 220,
+                    "shipping_is_estimated": False,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": False,
+                    "query_tier": 1,
+                    "url": "https://www.ebay.ca/itm/1",
+                },
+                {
+                    "source": "ebay",
+                    "title": "Listing 2",
+                    "item_price_cad": 260,
+                    "shipping_cad": 20,
+                    "total_price_cad": 280,
+                    "shipping_is_estimated": False,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": True,
+                    "query_tier": 1,
+                    "url": "https://www.ebay.ca/itm/2",
+                },
+            ],
+            warn_below_comparables=1,
+        )
+
+        report = format_price_report(aggregation)
+
+        self.assertIn("Median price:      $250.00 CAD", report)
+        self.assertIn("Sold / asking:     1 sold, 1 asking", report)
+        self.assertIn("Supporting listings", report)
+        self.assertIn("Condition: good (Used)", report)
 
 
 if __name__ == "__main__":

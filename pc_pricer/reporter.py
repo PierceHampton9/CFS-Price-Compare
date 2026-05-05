@@ -59,16 +59,16 @@ def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
     ]
     for index, listing in enumerate(listings, start=1):
         lines.append(f"{index}. {listing.get('title') or 'Untitled listing'}")
-        lines.append(f"   Price:     {_format_listing_price(listing)}")
+        lines.append(f"   Price:     {format_listing_price(listing)}")
         lines.append(f"   Source:    {listing.get('source') or 'unknown'}")
         lines.append(f"   Status:    {_format_listing_status(listing)}")
-        lines.append(f"   Condition: {_format_condition(listing)}")
+        lines.append(f"   Condition: {format_condition(listing)}")
         lines.append(f"   Tier:      {_format_query_tier(listing.get('query_tier'))}")
         lines.append(f"   URL:       {listing.get('url') or 'Unknown'}")
     return lines
 
 
-def _format_listing_price(listing: dict[str, Any]) -> str:
+def format_listing_price(listing: dict[str, Any]) -> str:
     item_price = _format_money(listing.get("item_price_cad"))
     shipping = _format_money(listing.get("shipping_cad"))
     total = _format_money(listing.get("total_price_cad"))
@@ -84,7 +84,7 @@ def _format_listing_status(listing: dict[str, Any]) -> str:
     return "sold" if listing.get("is_sold") is True else "asking"
 
 
-def _format_condition(listing: dict[str, Any]) -> str:
+def format_condition(listing: dict[str, Any]) -> str:
     raw = listing.get("condition_raw") or "Unknown"
     normalized = listing.get("condition_norm")
     if not normalized:
