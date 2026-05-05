@@ -8,9 +8,5 @@ max_asking_listing_age_days: 30
 sources:
   ebay:
     enabled: true
-    marketplace: EBAY_CA
-    client_id_env: EBAY_CLIENT_ID
-    client_secret_env: EBAY_CLIENT_SECRET
-    access_token_env: EBAY_ACCESS_TOKEN
   canada_computers:
     enabled: false

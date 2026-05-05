@@ -63,7 +63,7 @@ class EbaySource:
         self._token_expires_at: datetime | None = None
 
     def search(self, query: str, max_results: int) -> list[dict]:
-        """Search active eBay Canada listings and return standardized listings."""
+        """Search active eBay listings for the configured marketplace."""
         if not self.enabled:
             return []
         if not self.credentials.can_authenticate():

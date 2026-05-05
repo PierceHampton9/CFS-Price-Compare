@@ -60,4 +60,6 @@ EBAY_CLIENT_SECRET
 EBAY_ACCESS_TOKEN
 ```
 
-`.env.example` is only a safe template for the names to use. Real values belong in `.env` or your shell environment, not in committed files.
+For now, set these in your shell before live eBay testing. The project does not automatically load `.env` files yet.
+
+`.env.example` is only a safe template for the names to use. Real values must stay out of committed files.
