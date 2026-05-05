@@ -38,6 +38,22 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(queries[0]["tier"], 2)
         self.assertEqual(queries[0]["text"], "Lenovo ThinkPad X1 Carbon i7-8650U 16GB")
 
+    def test_all_in_one_uses_laptop_style_queries(self):
+        specs = {
+            "brand": "HP",
+            "model": "EliteOne 800 G5",
+            "oem_sku": "7YX45UT",
+            "form_factor": "all-in-one",
+            "cpu_short": "i5-9500",
+            "ram_gb": 16,
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "7YX45UT")
+        self.assertEqual(queries[0]["tier"], 1)
+        self.assertEqual(queries[1]["text"], "HP EliteOne 800 G5 i5-9500 16GB")
+
     def test_desktop_queries_are_spec_led(self):
         specs = {
             "brand": "Dell",
@@ -57,6 +73,26 @@ class QueryBuilderTests(unittest.TestCase):
         )
         self.assertEqual(queries[1]["text"], "i5-7500 16GB 256GB SSD desktop")
         self.assertEqual(queries[2]["text"], "i5-7500 16GB desktop")
+
+    def test_desktop_storage_sizes_can_be_strings(self):
+        specs = {
+            "brand": "Dell",
+            "model": "OptiPlex 7050",
+            "form_factor": "desktop",
+            "cpu_short": "i5-7500",
+            "ram_gb": 16,
+            "storage": [
+                {"size_gb": "238", "type": "SSD"},
+                {"size_gb": 1024, "type": "HDD"},
+            ],
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(
+            queries[0]["text"],
+            "Dell OptiPlex 7050 i5-7500 16GB 1TB HDD",
+        )
 
     def test_desktop_includes_dedicated_gpu(self):
         specs = {

@@ -122,11 +122,13 @@ def _storage_term(specs: dict[str, Any]) -> str | None:
     if not isinstance(storage, list):
         return None
 
-    drives = [drive for drive in storage if isinstance(drive, dict) and drive.get("size_gb")]
+    drives = [
+        drive for drive in storage if isinstance(drive, dict) and _safe_int(drive.get("size_gb")) > 0
+    ]
     if not drives:
         return None
 
-    drive = max(drives, key=lambda item: item.get("size_gb") or 0)
+    drive = max(drives, key=lambda item: _safe_int(item.get("size_gb")))
     size = _marketed_storage_size(drive.get("size_gb"))
     drive_type = _clean(drive.get("type"))
 
@@ -203,7 +205,11 @@ def _clean(value: Any) -> str | None:
 
 
 def _clean_query_text(text: Any) -> str | None:
-    cleaned = _clean(text)
-    if not cleaned:
-        return None
-    return re.sub(r"\s+", " ", cleaned).strip()
+    return _clean(text)
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
