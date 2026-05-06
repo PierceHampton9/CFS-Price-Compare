@@ -15,6 +15,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "warn_below_comparables": 10,
     "wide_iqr_ratio": 0.40,
     "support_limit": 5,
+    "high_shipping_cad": 75,
+    "high_shipping_ratio": 0.25,
     "max_sold_listing_age_days": 90,
     "max_asking_listing_age_days": 30,
     "sources": {

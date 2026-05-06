@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated computers.
 
-Current status: Windows spec detection, initial query building, eBay active-listing search, basic listing condition normalization, standalone price aggregation, report formatting, and config-driven CLI defaults.
+Current status: Windows spec detection, manual spec entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, and config-driven CLI defaults.
 
 ## Setup
 
@@ -42,32 +42,46 @@ To include the raw Windows hardware data:
 pc_pricer detect --json --raw
 ```
 
-## eBay Smoke Test
+## Price a Computer
 
-After setting eBay credentials in your shell, you can manually test active eBay results:
+To price the current Windows PC from detected specs:
 
 ```powershell
-pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 5
+pc_pricer price-detect --condition good --limit-per-query 10
 ```
 
-To run a draft active-listing price report from one search query:
+To price a computer by typing the specs:
+
+```powershell
+pc_pricer price-manual --form-factor laptop --brand Lenovo --model "ThinkPad X13 Yoga" --cpu "i5-1135G7" --ram 16 --storage 512 --condition good
+```
+
+For desktops, include the specs that actually drive value:
+
+```powershell
+pc_pricer price-manual --form-factor desktop --brand Dell --model "OptiPlex 7050" --cpu "i5-7500" --ram 16 --storage 256 --condition good
+```
+
+To test one manually written search query without tiered query building:
 
 ```powershell
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
-```
-
-`price-query` defaults to pricing against `good` condition listings and filters obvious parts/accessory results. Use `--condition any` only when you want to inspect unfiltered condition results.
-
-To detect the current Windows PC and price it from generated tiered queries:
-
-```powershell
-pc_pricer price-detect --limit-per-query 10
 ```
 
 Search, pricing, and eBay credential-check commands read defaults from `config.yaml`. Command-line flags still win:
 
 ```powershell
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
+```
+
+Reports show the median price, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, and up to 5 supporting listings. Current eBay pricing uses active asking listings, so treat the output as a draft human-reviewed estimate.
+
+## eBay Smoke Test
+
+After setting eBay credentials in your shell or local `.env`, you can manually test active eBay results:
+
+```powershell
+pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 5
 ```
 
 ## Live eBay Validation
@@ -122,7 +136,7 @@ pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 3
 Then run a draft report:
 
 ```powershell
-pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
+pc_pricer price-manual --form-factor laptop --brand Lenovo --model "ThinkPad X13 Yoga" --cpu "i5-1135G7" --ram 16 --storage 512 --limit-per-query 5
 ```
 
 For the first live pass, check:
@@ -130,6 +144,7 @@ For the first live pass, check:
 - whether credentials authenticate successfully
 - whether titles, prices, shipping, condition, URLs, and locations appear
 - whether missing shipping is shown as unknown shipping, not as a total
+- whether high/unknown shipping and non-Canadian locations are flagged
 - whether the query returns obviously wrong models or parts-only listings
 - whether the supporting listings look relevant enough for human review
 

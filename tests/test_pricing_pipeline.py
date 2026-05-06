@@ -109,7 +109,7 @@ class PricingPipelineTests(unittest.TestCase):
             support_limit=1,
         )
 
-        self.assertEqual(result["confidence_flags"], [])
+        self.assertEqual(result["confidence_flags"], ["asking_prices_only"])
         self.assertEqual(len(result["supporting_listings"]), 1)
 
 

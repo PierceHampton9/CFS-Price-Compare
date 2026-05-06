@@ -181,6 +181,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("Median price:      $250.00 CAD", output)
         self.assertIn("Sold / asking:     1 sold, 1 asking", output)
         self.assertIn("Supporting listings", output)
+        self.assertIn("Queries used:", output)
+        self.assertIn("  ThinkPad X13", output)
+        self.assertNotIn("Tunknown", output)
         self.assertIn("Condition: good (Used)", output)
         self.assertIn("Target condition:  good", output)
 
@@ -348,6 +351,80 @@ sources:
             cli.main()
 
         self.assertIn('"median_price_cad": 250.0', stdout.getvalue())
+
+    def test_price_manual_command_prints_report_from_manual_specs(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, query, max_results):
+                self.query = query
+                self.max_results = max_results
+                return [_listing("Manual laptop listing", 300)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--brand",
+            "Lenovo",
+            "--model",
+            "ThinkPad X13 Yoga",
+            "--form-factor",
+            "laptop",
+            "--cpu",
+            "i5-1135G7",
+            "--ram",
+            "16",
+            "--storage",
+            "512",
+            "--limit-per-query",
+            "4",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Manual specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
+        self.assertIn("Queries used:", output)
+        self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
+        self.assertIn("Median price:      $300.00 CAD", output)
+        self.assertIn("Asking prices only", output)
+
+    def test_price_manual_command_can_print_json(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Manual desktop listing", 200)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--form-factor",
+            "desktop",
+            "--cpu",
+            "i5-7500",
+            "--ram",
+            "16",
+            "--storage",
+            "256",
+            "--json",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('"median_price_cad": 200.0', output)
+        self.assertIn('"input_method": "manual"', output)
 
     def test_price_detect_command_prints_report_from_detected_specs(self):
         class FakeEbaySource:

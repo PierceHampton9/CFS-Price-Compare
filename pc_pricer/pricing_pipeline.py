@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.listing_filter import filter_listings
 from pc_pricer.normalizer import normalize_listings
+from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.query_builder import build_queries
 
 
@@ -24,6 +25,8 @@ def price_specs(
     warn_below_comparables: int = 10,
     wide_iqr_ratio: float = 0.40,
     support_limit: int = 5,
+    high_shipping_cad: float = 75.0,
+    high_shipping_ratio: float = 0.25,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     queries = build_queries(specs)
@@ -48,6 +51,12 @@ def price_specs(
             "excluded_count": filtered["excluded_count"],
             "excluded_reasons": filtered["excluded_reasons"],
         }
+    )
+    result = add_listing_quality_flags(
+        result,
+        filtered["listings"],
+        high_shipping_cad=high_shipping_cad,
+        high_shipping_ratio=high_shipping_ratio,
     )
 
     if not queries:
