@@ -110,6 +110,10 @@ class CliTests(unittest.TestCase):
 
             def check_credentials(self):
                 self.checked = True
+                return {
+                    "status": "oauth_token_minted",
+                    "message": "OAuth token request succeeded.",
+                }
 
         stdout = io.StringIO()
         argv = ["pc_pricer", "ebay-check"]
@@ -120,8 +124,8 @@ class CliTests(unittest.TestCase):
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("eBay credentials found.", output)
-        self.assertIn("OAuth token check succeeded.", output)
+        self.assertIn("eBay credential configuration found.", output)
+        self.assertIn("OAuth token request succeeded.", output)
         self.assertIn("Marketplace: EBAY_CA", output)
 
     def test_ebay_check_command_reports_runtime_errors(self):

@@ -158,10 +158,34 @@ class EbaySourceTests(unittest.TestCase):
             http_post=fake_post,
         )
 
-        source.check_credentials()
+        result = source.check_credentials()
 
         self.assertTrue(called["post"])
         self.assertFalse(called["get"])
+        self.assertEqual(result["status"], "oauth_token_minted")
+
+    def test_check_credentials_reports_existing_access_token_without_network(self):
+        called = {"get": False, "post": False}
+
+        def fake_post(_url, _headers, _body):
+            called["post"] = True
+            return {"access_token": "minted-token", "expires_in": 7200}
+
+        def fake_get(_url, _headers):
+            called["get"] = True
+            return {"itemSummaries": []}
+
+        source = EbaySource(
+            credentials=EbayCredentials(access_token="existing-token"),
+            http_get=fake_get,
+            http_post=fake_post,
+        )
+
+        result = source.check_credentials()
+
+        self.assertFalse(called["post"])
+        self.assertFalse(called["get"])
+        self.assertEqual(result["status"], "token_present")
 
     def test_missing_credentials_raise_clear_error(self):
         source = EbaySource(credentials=EbayCredentials())

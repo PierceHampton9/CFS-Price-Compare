@@ -87,14 +87,26 @@ class EbaySource:
                 listings.append(listing)
         return listings
 
-    def check_credentials(self) -> None:
-        """Validate that credentials can produce an access token."""
+    def check_credentials(self) -> dict[str, str]:
+        """Check whether eBay credentials are available for API use."""
         if not self.credentials.can_authenticate():
             raise RuntimeError(
                 "Missing eBay credentials. Set EBAY_ACCESS_TOKEN or both "
                 "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
             )
+
+        if self.credentials.access_token:
+            self._access_token()
+            return {
+                "status": "token_present",
+                "message": "Access token is present. Run ebay-search to confirm eBay accepts it.",
+            }
+
         self._access_token()
+        return {
+            "status": "oauth_token_minted",
+            "message": "OAuth token request succeeded.",
+        }
 
     def _headers(self) -> dict[str, str]:
         return {

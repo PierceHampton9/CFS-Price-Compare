@@ -74,10 +74,17 @@ if ($env:EBAY_CLIENT_ID) { "EBAY_CLIENT_ID set" }
 if ($env:EBAY_CLIENT_SECRET) { "EBAY_CLIENT_SECRET set" }
 ```
 
-Run a small active-listing search:
+Check credential setup:
 
 ```powershell
 pc_pricer ebay-check
+```
+
+If `EBAY_ACCESS_TOKEN` is set directly, `ebay-check` confirms the token is present but does not prove eBay accepts it. If `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set, it requests an OAuth token.
+
+Run a small active-listing search:
+
+```powershell
 pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 3
 ```
 

@@ -75,13 +75,13 @@ def main() -> None:
     elif args.command == "ebay-check":
         source = EbaySource(marketplace=args.marketplace)
         try:
-            source.check_credentials()
+            check_result = source.check_credentials()
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
 
-        print("eBay credentials found.")
-        print("OAuth token check succeeded.")
+        print("eBay credential configuration found.")
+        print(check_result["message"])
         print(f"Marketplace: {source.marketplace}")
     elif args.command == "price-query":
         query = " ".join(args.query)
