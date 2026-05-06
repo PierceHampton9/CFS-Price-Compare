@@ -14,17 +14,15 @@ PARTS_TITLE_PATTERNS = [
     r"\bmotherboard\b",
     r"\bmainboard\b",
     r"\blogic board\b",
-    r"\blcd\b",
     r"\bscreen replacement\b",
-    r"\bkeyboard\b",
+    r"\breplacement\s+(lcd|screen|keyboard|battery|cable)\b",
+    r"\b(lcd|screen|keyboard|battery|cable)\s+replacement\b",
+    r"\b(keyboard|battery|screen|cable)\s+only\b",
     r"\bpalm\s*rest\b",
     r"\bpalmrest\b",
-    r"\bbattery\b",
     r"\bhinge\b",
     r"\bbezel\b",
     r"\bbottom case\b",
-    r"\bcable\b",
-    r"\breplacement\b",
 ]
 
 
@@ -58,7 +56,10 @@ def exclusion_reason(listing: dict[str, Any], target_condition: str | None = "go
         return "parts_or_accessory"
 
     condition = _clean_condition(target_condition)
-    if condition and _clean_condition(listing.get("condition_norm")) != condition:
+    listing_condition = _clean_condition(listing.get("condition_norm"))
+    if condition and not listing_condition:
+        return "unknown_condition"
+    if condition and listing_condition != condition:
         return "condition_mismatch"
 
     return None
