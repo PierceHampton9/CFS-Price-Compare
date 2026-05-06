@@ -14,6 +14,7 @@ FLAG_LABELS = {
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
     "parts_or_accessory": "parts/accessory listing",
+    "unknown_condition": "unknown condition",
 }
 
 

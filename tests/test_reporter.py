@@ -40,10 +40,11 @@ class ReporterTests(unittest.TestCase):
                 "source_counts": {"ebay": 3},
                 "query_tier": None,
                 "target_condition": "good",
-                "excluded_count": 2,
+                "excluded_count": 3,
                 "excluded_reasons": {
                     "condition_mismatch": 1,
                     "parts_or_accessory": 1,
+                    "unknown_condition": 1,
                 },
                 "confidence_flags": [],
                 "supporting_listings": [],
@@ -51,9 +52,10 @@ class ReporterTests(unittest.TestCase):
         )
 
         self.assertIn("Target condition:  good", report)
-        self.assertIn("Filtered out:      2", report)
+        self.assertIn("Filtered out:      3", report)
         self.assertIn("condition mismatch: 1", report)
         self.assertIn("parts/accessory listing: 1", report)
+        self.assertIn("unknown condition: 1", report)
 
     def test_formats_confidence_flags(self):
         report = format_price_report(

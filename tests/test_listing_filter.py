@@ -15,7 +15,13 @@ class ListingFilterTests(unittest.TestCase):
 
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Used laptop"])
         self.assertEqual(result["excluded_count"], 2)
-        self.assertEqual(result["excluded_reasons"], {"condition_mismatch": 2})
+        self.assertEqual(
+            result["excluded_reasons"],
+            {
+                "condition_mismatch": 1,
+                "unknown_condition": 1,
+            },
+        )
         self.assertEqual(result["target_condition"], "good")
 
     def test_any_condition_keeps_non_parts_listings(self):
@@ -43,10 +49,31 @@ class ListingFilterTests(unittest.TestCase):
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Lenovo ThinkPad X13 Yoga"])
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 3})
 
+    def test_keeps_complete_systems_that_mention_common_parts(self):
+        listings = [
+            _listing("ThinkPad X13 Yoga with backlit keyboard", "good"),
+            _listing("ThinkPad X13 Yoga new battery 16GB RAM", "good"),
+            _listing("ThinkPad X13 Yoga LCD touchscreen laptop", "good"),
+            _listing("ThinkPad X13 Yoga charger cable included", "good"),
+        ]
+
+        result = filter_listings(listings, target_condition="good")
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            [listing["title"] for listing in listings],
+        )
+        self.assertEqual(result["excluded_count"], 0)
+
     def test_exclusion_reason_prefers_parts_over_condition_mismatch(self):
         listing = _listing("ThinkPad X13 Yoga motherboard", "mint")
 
         self.assertEqual(exclusion_reason(listing, target_condition="good"), "parts_or_accessory")
+
+    def test_unknown_condition_has_separate_reason(self):
+        listing = _listing("ThinkPad X13 Yoga", None)
+
+        self.assertEqual(exclusion_reason(listing, target_condition="good"), "unknown_condition")
 
 
 def _listing(title, condition_norm):
