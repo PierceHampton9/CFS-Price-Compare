@@ -16,6 +16,7 @@ from pc_pricer.normalizer import normalize_listings
 from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
+from pc_pricer.setup_credentials import run_setup
 from pc_pricer.sources.ebay import EbaySource
 
 
@@ -28,6 +29,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="pc_pricer")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    setup_parser = subparsers.add_parser(
+        "setup",
+        help="Prompt for eBay credentials and save them to a local .env file.",
+    )
+    setup_parser.add_argument("--env-file", help="Override where the .env file is written.")
+
     detect_parser = subparsers.add_parser("detect", help="Detect specs on this Windows PC.")
     detect_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     detect_parser.add_argument("--raw", action="store_true", help="Include raw Windows CIM output.")
@@ -39,7 +46,7 @@ def main() -> None:
     ebay_parser.add_argument("query", nargs="+", help="Search terms to send to eBay.")
     ebay_parser.add_argument("--limit", type=int, default=None, help="Maximum listings to return.")
     ebay_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
-    ebay_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    ebay_parser.add_argument("--config", default=None, help="Path to config file.")
     ebay_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     ebay_check_parser = subparsers.add_parser(
@@ -47,7 +54,7 @@ def main() -> None:
         help="Validate eBay credentials without searching listings.",
     )
     ebay_check_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
-    ebay_check_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    ebay_check_parser.add_argument("--config", default=None, help="Path to config file.")
 
     price_query_parser = subparsers.add_parser(
         "price-query",
@@ -62,7 +69,7 @@ def main() -> None:
         default=None,
         help="Target listing condition for pricing.",
     )
-    price_query_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    price_query_parser.add_argument("--config", default=None, help="Path to config file.")
     price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     price_manual_parser = subparsers.add_parser(
@@ -96,7 +103,7 @@ def main() -> None:
         default=None,
         help="Target listing condition for pricing.",
     )
-    price_manual_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    price_manual_parser.add_argument("--config", default=None, help="Path to config file.")
     price_manual_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     price_detect_parser = subparsers.add_parser(
@@ -116,13 +123,22 @@ def main() -> None:
         default=None,
         help="Target listing condition for pricing.",
     )
-    price_detect_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    price_detect_parser.add_argument("--config", default=None, help="Path to config file.")
     price_detect_parser.add_argument("--raw", action="store_true", help="Include raw detected specs in JSON output.")
     price_detect_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     args = parser.parse_args()
 
-    if args.command == "detect":
+    if args.command == "setup":
+        try:
+            env_path = run_setup(args.env_file)
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        print(f"Saved eBay credentials to: {env_path}")
+        print("Next run: pc_pricer ebay-check")
+    elif args.command == "detect":
         try:
             specs = detect_specs(include_raw=args.raw)
         except RuntimeError as exc:

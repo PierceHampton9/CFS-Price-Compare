@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
-def load_env_file(path: str | Path = ".env") -> None:
+def default_env_path() -> Path:
+    """Return the local .env path for source runs or packaged exe runs."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / ".env"
+    return Path.cwd() / ".env"
+
+
+def load_env_file(path: str | Path | None = None) -> None:
     """Load KEY=VALUE pairs from a local .env file without overriding the shell."""
-    env_path = Path(path)
+    env_path = Path(path) if path is not None else default_env_path()
+    _load_one_env_file(env_path)
+
+
+def _load_one_env_file(env_path: Path) -> None:
     if not env_path.exists():
         return
 
