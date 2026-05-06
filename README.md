@@ -207,15 +207,15 @@ Build a Windows release zip from a development machine:
 .\scripts\build-windows.ps1
 ```
 
-The build script installs `requirements-build.txt`, runs PyInstaller, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates `dist\CFS-Price-Compare-v0.1.0-windows.zip`.
+The build script installs `requirements-build.txt`, runs PyInstaller, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates a release zip under `dist\`.
 
 Release checklist:
 
 1. Merge the PR to `main`.
 2. Run `git switch main` and `git pull --ff-only`.
 3. Run `python -m unittest discover -s tests`.
-4. Run `.\scripts\build-windows.ps1 -Version 0.1.1`, using the release version you want.
-5. Verify `dist\CFS-Price-Compare-v0.1.1-windows\pc_pricer.exe --help`.
+4. Run `.\scripts\build-windows.ps1 -Version <version>`, using the release version you want.
+5. Verify `dist\CFS-Price-Compare-v<version>-windows\pc_pricer.exe --help`.
 6. Upload only the generated zip from `dist\` to GitHub Releases.
 7. Do not upload `.env`, `build/`, or the unzipped release folder.
 

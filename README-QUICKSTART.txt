@@ -42,7 +42,7 @@ Sanity-check the report
 - Start with Conservative est. when the report is based on active asking listings.
 - Check the supporting listings before trusting the number.
 - Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
-- Rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
+- Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
 - Confidence flags are about estimate strength, such as too few comparables or a wide price range.
 - Pricing limitations explain what the data can and cannot prove, such as asking-only pricing.
 - Listing warnings point out listing-level concerns, such as unknown shipping, high shipping, or non-Canadian locations.
