@@ -20,29 +20,32 @@ def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
-    model = _clean(specs.get("model"))
+    model = _model_term(specs)
     oem_sku = _clean(specs.get("oem_sku"))
     cpu = _cpu_term(specs)
     ram = _ram_term(specs)
+    storage = _storage_term(specs)
 
     queries = []
     if oem_sku:
         queries.append(_query(oem_sku, 1, f"exact {form_factor} OEM SKU"))
 
-    spec_query = _join_terms(brand, model, cpu, ram)
-    if spec_query:
+    if model:
+        spec_query = _join_terms(brand, model, cpu, ram)
         queries.append(_query(spec_query, 2, f"{form_factor} brand/model/spec fallback"))
 
-    family_query = _join_terms(brand, model)
-    if family_query:
-        queries.append(_query(family_query, 3, f"{form_factor} brand/model family fallback"))
+        family_query = _join_terms(brand, model)
+        if family_query:
+            queries.append(_query(family_query, 3, f"{form_factor} brand/model family fallback"))
+    elif cpu and ram:
+        queries.append(_query(_join_terms(brand, cpu, ram, storage, form_factor), 3, f"{form_factor} spec fallback"))
 
     return queries
 
 
 def _desktop_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
-    model = _clean(specs.get("model"))
+    model = _model_term(specs)
     cpu = _cpu_term(specs)
     ram = _ram_term(specs)
     storage = _storage_term(specs)
@@ -108,6 +111,12 @@ def _dedupe_queries(queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _cpu_term(specs: dict[str, Any]) -> str | None:
     return _clean(specs.get("cpu_short")) or _clean(specs.get("cpu"))
+
+
+def _model_term(specs: dict[str, Any]) -> str | None:
+    if specs.get("model_is_machine_type") and not _clean(specs.get("search_model")):
+        return None
+    return _clean(specs.get("search_model")) or _clean(specs.get("model"))
 
 
 def _ram_term(specs: dict[str, Any]) -> str | None:
