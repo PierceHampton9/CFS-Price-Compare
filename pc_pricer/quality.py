@@ -13,21 +13,23 @@ def add_listing_quality_flags(
 ) -> dict[str, Any]:
     """Return a copy of a pricing result with listing-quality flags appended."""
     updated = dict(result)
-    flags = list(updated.get("confidence_flags") or [])
+    limitations = list(updated.get("pricing_limitations") or [])
+    warnings = list(updated.get("listing_warnings") or [])
 
     if updated.get("asking_count", 0) > 0 and updated.get("sold_count", 0) == 0:
-        _append_flag(flags, "asking_prices_only")
+        _append_flag(limitations, "asking_prices_only")
 
     if any(_has_unknown_shipping(listing) for listing in listings):
-        _append_flag(flags, "unknown_shipping")
+        _append_flag(warnings, "unknown_shipping")
 
     if any(_has_high_shipping(listing, high_shipping_cad, high_shipping_ratio) for listing in listings):
-        _append_flag(flags, "high_shipping")
+        _append_flag(warnings, "high_shipping")
 
     if any(_is_non_canadian_listing(listing) for listing in listings):
-        _append_flag(flags, "non_canadian_location")
+        _append_flag(warnings, "non_canadian_location")
 
-    updated["confidence_flags"] = flags
+    updated["pricing_limitations"] = limitations
+    updated["listing_warnings"] = warnings
     return updated
 
 

@@ -239,7 +239,8 @@ sources:
         self.assertEqual(instances[0].marketplace, "EBAY_US")
         self.assertEqual(instances[0].max_results, 2)
         output = stdout.getvalue()
-        self.assertIn("Median price:      $500.00 CAD", output)
+        self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", output)
+        self.assertIn("Asking median:     $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
 
@@ -291,7 +292,7 @@ sources:
         self.assertEqual(instances[0].marketplace, "EBAY_CA")
         self.assertEqual(instances[0].max_results, 1)
         output = stdout.getvalue()
-        self.assertIn("Median price:      $200.00 CAD", output)
+        self.assertIn("Conservative est.: $180.00 CAD - $190.00 CAD", output)
         self.assertIn("Target condition:  good", output)
 
     def test_price_query_command_filters_condition_and_parts_by_default(self):
@@ -315,7 +316,7 @@ sources:
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("Median price:      $200.00 CAD", output)
+        self.assertIn("Conservative est.: $180.00 CAD - $190.00 CAD", output)
         self.assertIn("Comparables:       1", output)
         self.assertIn("Filtered out:      2", output)
         self.assertIn("condition mismatch: 1", output)
@@ -344,7 +345,8 @@ sources:
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("Median price:      $500.00 CAD", output)
+        self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", output)
+        self.assertIn("Asking median:     $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
 
@@ -405,7 +407,8 @@ sources:
         self.assertIn("Manual specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
         self.assertIn("Queries used:", output)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
-        self.assertIn("Median price:      $300.00 CAD", output)
+        self.assertIn("Conservative est.: $270.00 CAD - $285.00 CAD", output)
+        self.assertIn("Asking median:     $300.00 CAD", output)
         self.assertIn("Asking prices only", output)
 
     def test_price_manual_command_can_print_json(self):
@@ -475,7 +478,7 @@ sources:
         self.assertIn("Detected specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
         self.assertIn("Queries used:", output)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
-        self.assertIn("Median price:      $300.00 CAD", output)
+        self.assertIn("Conservative est.: $270.00 CAD - $285.00 CAD", output)
         self.assertNotIn("private-serial", output)
 
     def test_price_detect_command_can_print_json_with_raw_specs(self):

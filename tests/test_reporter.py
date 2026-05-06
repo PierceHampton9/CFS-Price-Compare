@@ -133,6 +133,37 @@ class ReporterTests(unittest.TestCase):
 
         self.assertIn("Confidence flags: Low comparable count, Wide price range", report)
 
+    def test_formats_asking_adjusted_estimate_and_separate_warnings(self):
+        report = format_price_report(
+            {
+                "count": 2,
+                "median_price_cad": 500,
+                "asking_median_price_cad": 500,
+                "conservative_low_cad": 450,
+                "conservative_high_cad": 475,
+                "iqr_low_cad": 450,
+                "iqr_high_cad": 550,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 2,
+                "pricing_basis": "asking_adjusted",
+                "confidence_flags": ["low_comparable_count"],
+                "pricing_limitations": ["asking_prices_only"],
+                "listing_warnings": ["unknown_shipping", "non_canadian_location"],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", report)
+        self.assertIn("Asking median:     $500.00 CAD", report)
+        self.assertIn("Pricing basis:    active asking listings, discounted 5-10%", report)
+        self.assertIn("Confidence flags: Low comparable count", report)
+        self.assertIn("Pricing limits:   Asking prices only", report)
+        self.assertIn("Listing warnings: Unknown shipping", report)
+        self.assertIn("Non-Canadian location", report)
+        self.assertNotIn("Sold / asking:", report)
+
     def test_formats_no_comparables(self):
         report = format_price_report(
             {
