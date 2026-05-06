@@ -249,6 +249,163 @@ class CliTests(unittest.TestCase):
 
         self.assertIn('"median_price_cad": 250.0', stdout.getvalue())
 
+    def test_price_detect_command_prints_report_from_detected_specs(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, query, max_results):
+                self.query = query
+                self.max_results = max_results
+                return [_listing("Detected laptop listing", 300)]
+
+        specs = {
+            "brand": "Lenovo",
+            "model": "ThinkPad X13 Yoga",
+            "oem_sku": None,
+            "form_factor": "laptop",
+            "cpu": "Intel Core i5-1135G7",
+            "cpu_short": "i5-1135G7",
+            "ram_gb": 16,
+            "serial_number": "private-serial",
+        }
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-detect", "--limit-per-query", "4"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ), patch("pc_pricer.cli.detect_specs", return_value=specs) as detect:
+            cli.main()
+
+        detect.assert_called_once_with(include_raw=False)
+        output = stdout.getvalue()
+        self.assertIn("Detected specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
+        self.assertIn("Queries used:", output)
+        self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
+        self.assertIn("Median price:      $300.00 CAD", output)
+        self.assertNotIn("private-serial", output)
+
+    def test_price_detect_command_can_print_json_with_raw_specs(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Detected laptop listing", 300)]
+
+        specs = {
+            "brand": "Lenovo",
+            "model": "ThinkPad X13 Yoga",
+            "form_factor": "laptop",
+            "cpu_short": "i5-1135G7",
+            "ram_gb": 16,
+            "raw": {"ComputerSystem": {"Model": "ThinkPad X13 Yoga"}},
+        }
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-detect", "--raw", "--json"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ), patch("pc_pricer.cli.detect_specs", return_value=specs):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('"median_price_cad": 300.0', output)
+        self.assertIn('"raw": {', output)
+
+    def test_price_detect_command_json_omits_serial_number_by_default(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Detected laptop listing", 300)]
+
+        specs = {
+            "brand": "Lenovo",
+            "model": "ThinkPad X13 Yoga",
+            "form_factor": "laptop",
+            "cpu_short": "i5-1135G7",
+            "ram_gb": 16,
+            "serial_number": "private-serial",
+        }
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-detect", "--json"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ), patch("pc_pricer.cli.detect_specs", return_value=specs):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('"median_price_cad": 300.0', output)
+        self.assertNotIn("private-serial", output)
+
+    def test_price_detect_command_reports_no_results(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return []
+
+        specs = {
+            "brand": "Lenovo",
+            "model": "ThinkPad X13 Yoga",
+            "form_factor": "laptop",
+            "cpu_short": "i5-1135G7",
+            "ram_gb": 16,
+        }
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-detect"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ), patch("pc_pricer.cli.detect_specs", return_value=specs):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Detected specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
+        self.assertIn("Queries used:", output)
+        self.assertIn("No usable comparable listings found.", output)
+
+    def test_price_detect_command_reports_no_generated_queries(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                self.fail("No searches should run without generated queries.")
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-detect"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ), patch("pc_pricer.cli.detect_specs", return_value={}):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("No usable comparable listings found.", output)
+        self.assertIn("No usable search queries", output)
+
+    def test_price_detect_command_reports_detection_errors(self):
+        stderr = io.StringIO()
+        argv = ["pc_pricer", "price-detect"]
+
+        with patch("sys.argv", argv), patch("sys.stderr", stderr), patch(
+            "pc_pricer.cli.detect_specs", side_effect=RuntimeError("Windows only")
+        ):
+            with self.assertRaises(SystemExit) as exc:
+                cli.main()
+
+        self.assertEqual(exc.exception.code, 1)
+        self.assertIn("Windows only", stderr.getvalue())
+
 
 def _listing(title, total_price, is_sold=False, condition_raw="Used"):
     return {

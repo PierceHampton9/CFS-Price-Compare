@@ -57,6 +57,38 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("parts/accessory listing: 1", report)
         self.assertIn("unknown condition: 1", report)
 
+    def test_formats_detected_specs_and_queries_when_present(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 300,
+                "iqr_low_cad": 280,
+                "iqr_high_cad": 320,
+                "count": 2,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 2,
+                "specs": {
+                    "brand": "Lenovo",
+                    "model": "ThinkPad X13 Yoga",
+                    "cpu_short": "i5-1135G7",
+                    "ram_gb": 16,
+                },
+                "queries": [
+                    {
+                        "text": "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB",
+                        "tier": 2,
+                    }
+                ],
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Detected specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", report)
+        self.assertIn("Queries used:", report)
+        self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", report)
+
     def test_formats_confidence_flags(self):
         report = format_price_report(
             {
