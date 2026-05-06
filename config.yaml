@@ -1,12 +1,18 @@
 # Tuning values will live here as the pricing pipeline grows.
 
+default_condition: good
+default_limit: 10
+default_limit_per_query: 10
 min_comparables: 5
 warn_below_comparables: 10
+wide_iqr_ratio: 0.40
+support_limit: 5
 max_sold_listing_age_days: 90
 max_asking_listing_age_days: 30
 
 sources:
   ebay:
     enabled: true
+    marketplace: EBAY_CA
   canada_computers:
     enabled: false

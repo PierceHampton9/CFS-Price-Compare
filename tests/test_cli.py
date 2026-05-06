@@ -1,11 +1,18 @@
 import io
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 from pc_pricer import cli
 
 
+CONFIG_PATH = Path("tests/cli_test_config.yaml")
+
+
 class CliTests(unittest.TestCase):
+    def tearDown(self):
+        CONFIG_PATH.unlink(missing_ok=True)
+
     def test_ebay_search_command_prints_listings(self):
         instances = []
 
@@ -175,6 +182,99 @@ class CliTests(unittest.TestCase):
         self.assertIn("Sold / asking:     1 sold, 1 asking", output)
         self.assertIn("Supporting listings", output)
         self.assertIn("Condition: good (Used)", output)
+        self.assertIn("Target condition:  good", output)
+
+    def test_price_query_command_uses_config_defaults(self):
+        instances = []
+
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+                instances.append(self)
+
+            def search(self, query, max_results):
+                self.query = query
+                self.max_results = max_results
+                return [
+                    _listing("Used laptop", 200, condition_raw="Used"),
+                    _listing("New laptop", 800, condition_raw="New"),
+                ]
+
+        CONFIG_PATH.write_text(
+            """
+default_condition: any
+default_limit: 2
+support_limit: 1
+sources:
+  ebay:
+    marketplace: EBAY_US
+""".strip(),
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "ThinkPad", "--config", str(CONFIG_PATH)]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        self.assertEqual(instances[0].marketplace, "EBAY_US")
+        self.assertEqual(instances[0].max_results, 2)
+        output = stdout.getvalue()
+        self.assertIn("Median price:      $500.00 CAD", output)
+        self.assertIn("Target condition:  any", output)
+        self.assertIn("Filtered out:      0", output)
+
+    def test_price_query_flags_override_config_defaults(self):
+        instances = []
+
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+                instances.append(self)
+
+            def search(self, _query, max_results):
+                self.max_results = max_results
+                return [
+                    _listing("Used laptop", 200, condition_raw="Used"),
+                    _listing("New laptop", 800, condition_raw="New"),
+                ]
+
+        CONFIG_PATH.write_text(
+            """
+default_condition: any
+default_limit: 9
+sources:
+  ebay:
+    marketplace: EBAY_US
+""".strip(),
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-query",
+            "ThinkPad",
+            "--config",
+            str(CONFIG_PATH),
+            "--condition",
+            "good",
+            "--limit",
+            "1",
+            "--marketplace",
+            "EBAY_CA",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        self.assertEqual(instances[0].marketplace, "EBAY_CA")
+        self.assertEqual(instances[0].max_results, 1)
+        output = stdout.getvalue()
+        self.assertIn("Median price:      $200.00 CAD", output)
         self.assertIn("Target condition:  good", output)
 
     def test_price_query_command_filters_condition_and_parts_by_default(self):
