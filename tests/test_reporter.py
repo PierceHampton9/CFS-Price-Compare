@@ -148,6 +148,8 @@ class ReporterTests(unittest.TestCase):
                 "source_counts": {"ebay": 2},
                 "query_tier": 2,
                 "pricing_basis": "asking_adjusted",
+                "asking_only_discount_low": 0.05,
+                "asking_only_discount_high": 0.10,
                 "confidence_flags": ["low_comparable_count"],
                 "pricing_limitations": ["asking_prices_only"],
                 "listing_warnings": ["unknown_shipping", "non_canadian_location"],
@@ -163,6 +165,65 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Listing warnings: Unknown shipping", report)
         self.assertIn("Non-Canadian location", report)
         self.assertNotIn("Sold / asking:", report)
+
+    def test_formats_configured_asking_adjustment_percentages(self):
+        report = format_price_report(
+            {
+                "count": 1,
+                "median_price_cad": 500,
+                "asking_median_price_cad": 500,
+                "conservative_low_cad": 400,
+                "conservative_high_cad": 450,
+                "iqr_low_cad": 500,
+                "iqr_high_cad": 500,
+                "sold_count": 0,
+                "asking_count": 1,
+                "source_counts": {"ebay": 1},
+                "query_tier": 2,
+                "pricing_basis": "asking_adjusted",
+                "asking_only_discount_low": 0.10,
+                "asking_only_discount_high": 0.20,
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Pricing basis:    active asking listings, discounted 10-20%", report)
+
+    def test_formats_mixed_and_unknown_pricing_basis(self):
+        mixed_report = format_price_report(
+            {
+                "count": 2,
+                "median_price_cad": 300,
+                "iqr_low_cad": 280,
+                "iqr_high_cad": 320,
+                "sold_count": 1,
+                "asking_count": 1,
+                "source_counts": {"ebay": 2},
+                "query_tier": 2,
+                "pricing_basis": "mixed",
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+        unknown_report = format_price_report(
+            {
+                "count": 1,
+                "median_price_cad": 300,
+                "iqr_low_cad": 300,
+                "iqr_high_cad": 300,
+                "sold_count": 0,
+                "asking_count": 0,
+                "source_counts": {"ebay": 1},
+                "query_tier": 2,
+                "pricing_basis": "unknown",
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Pricing basis:    sold and asking listings", mixed_report)
+        self.assertIn("Pricing basis:    unknown", unknown_report)
 
     def test_formats_no_comparables(self):
         report = format_price_report(

@@ -412,9 +412,14 @@ def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:
+    discount_low = _positive_float(config.get("asking_discount_low"), 0.05)
+    discount_high = _positive_float(config.get("asking_discount_high"), 0.10)
+    if discount_low > discount_high:
+        discount_low, discount_high = discount_high, discount_low
+
     return {
-        "asking_discount_low": _positive_float(config.get("asking_discount_low"), 0.05),
-        "asking_discount_high": _positive_float(config.get("asking_discount_high"), 0.10),
+        "asking_discount_low": discount_low,
+        "asking_discount_high": discount_high,
     }
 
 

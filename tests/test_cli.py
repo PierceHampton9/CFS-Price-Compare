@@ -295,6 +295,36 @@ sources:
         self.assertIn("Conservative est.: $180.00 CAD - $190.00 CAD", output)
         self.assertIn("Target condition:  good", output)
 
+    def test_price_query_sorts_misordered_asking_discount_config(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Used laptop", 200, condition_raw="Used")]
+
+        CONFIG_PATH.write_text(
+            """
+asking_discount_low: 0.20
+asking_discount_high: 0.10
+sources:
+  ebay:
+    marketplace: EBAY_CA
+""".strip(),
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "ThinkPad", "--config", str(CONFIG_PATH)]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Conservative est.: $160.00 CAD - $180.00 CAD", output)
+        self.assertIn("Pricing basis:    active asking listings, discounted 10-20%", output)
+
     def test_price_query_command_filters_condition_and_parts_by_default(self):
         class FakeEbaySource:
             def __init__(self, marketplace="EBAY_CA"):
