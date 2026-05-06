@@ -89,6 +89,32 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Queries used:", report)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", report)
 
+    def test_detected_specs_hide_machine_type_model(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 300,
+                "iqr_low_cad": 280,
+                "iqr_high_cad": 320,
+                "count": 2,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 3,
+                "specs": {
+                    "brand": "LENOVO",
+                    "model": "20W9S23S00",
+                    "model_is_machine_type": True,
+                    "cpu_short": "i7-1185G7",
+                    "ram_gb": 16,
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Detected specs:    LENOVO i7-1185G7 16GB", report)
+        self.assertNotIn("20W9S23S00", report)
+
     def test_formats_confidence_flags(self):
         report = format_price_report(
             {

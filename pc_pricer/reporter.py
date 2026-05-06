@@ -58,7 +58,7 @@ def _spec_lines(specs: Any) -> list[str]:
 
     parts = [
         specs.get("brand"),
-        specs.get("model"),
+        _display_model(specs),
         specs.get("cpu_short") or specs.get("cpu"),
         _ram_label(specs.get("ram_gb")),
     ]
@@ -66,6 +66,14 @@ def _spec_lines(specs: Any) -> list[str]:
     if not text:
         return []
     return [f"Detected specs:    {text}"]
+
+
+def _display_model(specs: dict[str, Any]) -> Any:
+    if specs.get("search_model"):
+        return specs.get("search_model")
+    if specs.get("model_is_machine_type"):
+        return None
+    return specs.get("model")
 
 
 def _query_lines(queries: Any) -> list[str]:

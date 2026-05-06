@@ -109,6 +109,8 @@ def specs_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         computer.get("Model"),
         product.get("Version"),
     )
+    model_is_machine_type = _looks_like_lenovo_machine_type(brand, model or "")
+    search_model = _search_model(model, model_is_machine_type)
     oem_sku = _first_clean(
         product.get("SKUNumber"),
     )
@@ -140,6 +142,8 @@ def specs_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "brand": brand,
         "model": model,
+        "search_model": search_model,
+        "model_is_machine_type": model_is_machine_type,
         "oem_sku": oem_sku,
         "serial_number": serial_number,
         "form_factor": _form_factor(computer, enclosure, model),
@@ -216,6 +220,24 @@ def _cpu_short_name(cpu_name: str | None) -> str | None:
         if match:
             return _clean_text(match.group(1))
     return cpu_name
+
+
+def _search_model(model: str | None, model_is_machine_type: bool) -> str | None:
+    model_text = _clean_text(model)
+    if not model_text:
+        return None
+
+    if model_is_machine_type:
+        return None
+
+    return model_text
+
+
+def _looks_like_lenovo_machine_type(brand: str | None, model: str) -> bool:
+    brand_text = (brand or "").lower()
+    if "lenovo" not in brand_text:
+        return False
+    return bool(re.fullmatch(r"[0-9A-Z]{4}[0-9A-Z]{4,6}", model.strip(), flags=re.IGNORECASE))
 
 
 def _first_clean(*values: Any) -> str | None:

@@ -38,6 +38,40 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(queries[0]["tier"], 2)
         self.assertEqual(queries[0]["text"], "Lenovo ThinkPad X1 Carbon i7-8650U 16GB")
 
+    def test_laptop_queries_prefer_search_model(self):
+        specs = {
+            "brand": "Lenovo",
+            "model": "20W9S23S00",
+            "search_model": "ThinkPad X1 Carbon Gen 9",
+            "form_factor": "laptop",
+            "cpu_short": "i7-1185G7",
+            "ram_gb": 16,
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB")
+        self.assertEqual(queries[1]["text"], "Lenovo ThinkPad X1 Carbon Gen 9")
+        self.assertNotIn("20W9S23S00", " ".join(query["text"] for query in queries))
+
+    def test_laptop_with_machine_type_model_falls_back_to_specs(self):
+        specs = {
+            "brand": "Lenovo",
+            "model": "20W9S23S00",
+            "search_model": None,
+            "model_is_machine_type": True,
+            "form_factor": "laptop",
+            "cpu_short": "i7-1185G7",
+            "ram_gb": 16,
+            "storage": [{"size_gb": 238, "type": "SSD"}],
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Lenovo i7-1185G7 16GB 256GB SSD laptop")
+        self.assertEqual(queries[0]["tier"], 3)
+        self.assertNotIn("20W9S23S00", queries[0]["text"])
+
     def test_all_in_one_uses_laptop_style_queries(self):
         specs = {
             "brand": "HP",

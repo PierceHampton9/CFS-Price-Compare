@@ -267,6 +267,7 @@ class CliTests(unittest.TestCase):
             "cpu": "Intel Core i5-1135G7",
             "cpu_short": "i5-1135G7",
             "ram_gb": 16,
+            "search_model": "ThinkPad X13 Yoga",
             "serial_number": "private-serial",
         }
 
@@ -374,12 +375,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("No usable comparable listings found.", output)
 
     def test_price_detect_command_reports_no_generated_queries(self):
+        searched = []
+
         class FakeEbaySource:
             def __init__(self, marketplace="EBAY_CA"):
                 self.marketplace = marketplace
 
             def search(self, _query, _max_results):
-                self.fail("No searches should run without generated queries.")
+                searched.append(True)
+                return []
 
         stdout = io.StringIO()
         argv = ["pc_pricer", "price-detect"]
@@ -390,6 +394,7 @@ class CliTests(unittest.TestCase):
             cli.main()
 
         output = stdout.getvalue()
+        self.assertEqual(searched, [])
         self.assertIn("No usable comparable listings found.", output)
         self.assertIn("No usable search queries", output)
 
