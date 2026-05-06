@@ -28,6 +28,33 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Sources:           ebay: 5, retailer: 2", report)
         self.assertIn("Confidence flags: none", report)
 
+    def test_formats_filter_summary_when_present(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 250,
+                "iqr_low_cad": 200,
+                "iqr_high_cad": 300,
+                "count": 3,
+                "sold_count": 0,
+                "asking_count": 3,
+                "source_counts": {"ebay": 3},
+                "query_tier": None,
+                "target_condition": "good",
+                "excluded_count": 2,
+                "excluded_reasons": {
+                    "condition_mismatch": 1,
+                    "parts_or_accessory": 1,
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Target condition:  good", report)
+        self.assertIn("Filtered out:      2", report)
+        self.assertIn("condition mismatch: 1", report)
+        self.assertIn("parts/accessory listing: 1", report)
+
     def test_formats_confidence_flags(self):
         report = format_price_report(
             {

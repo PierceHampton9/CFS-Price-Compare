@@ -175,6 +175,61 @@ class CliTests(unittest.TestCase):
         self.assertIn("Sold / asking:     1 sold, 1 asking", output)
         self.assertIn("Supporting listings", output)
         self.assertIn("Condition: good (Used)", output)
+        self.assertIn("Target condition:  good", output)
+
+    def test_price_query_command_filters_condition_and_parts_by_default(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [
+                    _listing("Used laptop", 200, condition_raw="Used"),
+                    _listing("New laptop", 800, condition_raw="New"),
+                    _listing("ThinkPad motherboard", 300, condition_raw="Used"),
+                ]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "ThinkPad"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Median price:      $200.00 CAD", output)
+        self.assertIn("Comparables:       1", output)
+        self.assertIn("Filtered out:      2", output)
+        self.assertIn("condition mismatch: 1", output)
+        self.assertIn("parts/accessory listing: 1", output)
+        self.assertIn("Used laptop", output)
+        self.assertNotIn("New laptop", output)
+        self.assertNotIn("ThinkPad motherboard", output)
+
+    def test_price_query_command_can_disable_condition_filter(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [
+                    _listing("Used laptop", 200, condition_raw="Used"),
+                    _listing("New laptop", 800, condition_raw="New"),
+                ]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "ThinkPad", "--condition", "any"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Median price:      $500.00 CAD", output)
+        self.assertIn("Target condition:  any", output)
+        self.assertIn("Filtered out:      0", output)
 
     def test_price_query_command_can_print_json(self):
         class FakeEbaySource:
@@ -195,7 +250,7 @@ class CliTests(unittest.TestCase):
         self.assertIn('"median_price_cad": 250.0', stdout.getvalue())
 
 
-def _listing(title, total_price, is_sold=False):
+def _listing(title, total_price, is_sold=False, condition_raw="Used"):
     return {
         "source": "ebay",
         "title": title,
@@ -203,7 +258,7 @@ def _listing(title, total_price, is_sold=False):
         "shipping_cad": 0,
         "total_price_cad": total_price,
         "shipping_is_estimated": False,
-        "condition_raw": "Used",
+        "condition_raw": condition_raw,
         "condition_norm": None,
         "is_sold": is_sold,
         "query_tier": 1,

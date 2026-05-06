@@ -10,6 +10,7 @@ from typing import Any
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import load_env_file
+from pc_pricer.listing_filter import filter_listings
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.sources.ebay import EbaySource
@@ -47,6 +48,12 @@ def main() -> None:
     price_query_parser.add_argument("query", nargs="+", help="Search terms to price.")
     price_query_parser.add_argument("--limit", type=int, default=10, help="Maximum listings to fetch.")
     price_query_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    price_query_parser.add_argument(
+        "--condition",
+        choices=["good", "excellent", "mint", "any"],
+        default="good",
+        help="Target listing condition for pricing.",
+    )
     price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     args = parser.parse_args()
@@ -91,7 +98,15 @@ def main() -> None:
         try:
             listings = EbaySource(marketplace=args.marketplace).search(query, args.limit)
             listings = normalize_listings(listings)
-            result = aggregate_listings(listings)
+            filtered = filter_listings(listings, target_condition=args.condition)
+            result = aggregate_listings(filtered["listings"])
+            result.update(
+                {
+                    "target_condition": filtered["target_condition"],
+                    "excluded_count": filtered["excluded_count"],
+                    "excluded_reasons": filtered["excluded_reasons"],
+                }
+            )
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc

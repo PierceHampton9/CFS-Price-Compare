@@ -11,6 +11,11 @@ FLAG_LABELS = {
     "wide_price_range": "Wide price range",
 }
 
+FILTER_LABELS = {
+    "condition_mismatch": "condition mismatch",
+    "parts_or_accessory": "parts/accessory listing",
+}
+
 
 def format_price_report(result: dict[str, Any]) -> str:
     """Format an aggregation result for human review."""
@@ -20,6 +25,7 @@ def format_price_report(result: dict[str, Any]) -> str:
     ]
 
     if not result.get("count"):
+        lines.extend(_filter_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
         return "\n".join(lines)
@@ -34,9 +40,35 @@ def format_price_report(result: dict[str, Any]) -> str:
             f"Sources:           {_format_source_counts(result.get('source_counts'))}",
         ]
     )
+    lines.extend(_filter_lines(result))
     lines.extend(_confidence_lines(result))
     lines.extend(_supporting_listing_lines(result.get("supporting_listings") or []))
     return "\n".join(lines)
+
+
+def _filter_lines(result: dict[str, Any]) -> list[str]:
+    if "excluded_count" not in result and "target_condition" not in result:
+        return []
+
+    lines = [f"Target condition:  {result.get('target_condition') or 'any'}"]
+    excluded_count = result.get("excluded_count", 0)
+    if not excluded_count:
+        lines.append("Filtered out:      0")
+        return lines
+
+    lines.append(f"Filtered out:      {excluded_count} ({_format_filter_reasons(result.get('excluded_reasons'))})")
+    return lines
+
+
+def _format_filter_reasons(reasons: Any) -> str:
+    if not isinstance(reasons, dict) or not reasons:
+        return "unknown reason"
+
+    parts = []
+    for reason, count in sorted(reasons.items()):
+        label = FILTER_LABELS.get(reason, str(reason))
+        parts.append(f"{label}: {count}")
+    return ", ".join(parts)
 
 
 def _confidence_lines(result: dict[str, Any]) -> list[str]:
