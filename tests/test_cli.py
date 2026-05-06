@@ -102,6 +102,52 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exc.exception.code, 1)
         self.assertIn("Missing eBay credentials", stderr.getvalue())
 
+    def test_ebay_check_command_reports_success(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+                self.checked = False
+
+            def check_credentials(self):
+                self.checked = True
+                return {
+                    "status": "oauth_token_minted",
+                    "message": "OAuth token request succeeded.",
+                }
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "ebay-check"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("eBay credential configuration found.", output)
+        self.assertIn("OAuth token request succeeded.", output)
+        self.assertIn("Marketplace: EBAY_CA", output)
+
+    def test_ebay_check_command_reports_runtime_errors(self):
+        class FailingEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def check_credentials(self):
+                raise RuntimeError("Missing eBay credentials")
+
+        stderr = io.StringIO()
+        argv = ["pc_pricer", "ebay-check"]
+
+        with patch("sys.argv", argv), patch("sys.stderr", stderr), patch(
+            "pc_pricer.cli.EbaySource", FailingEbaySource
+        ):
+            with self.assertRaises(SystemExit) as exc:
+                cli.main()
+
+        self.assertEqual(exc.exception.code, 1)
+        self.assertIn("Missing eBay credentials", stderr.getvalue())
+
     def test_price_query_command_prints_report(self):
         class FakeEbaySource:
             def __init__(self, marketplace="EBAY_CA"):

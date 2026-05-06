@@ -56,6 +56,54 @@ To run a draft active-listing price report from one search query:
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
 ```
 
+## Live eBay Validation
+
+Use this checklist when testing real eBay API access on a trusted machine.
+
+Set credentials for the current PowerShell session:
+
+```powershell
+$env:EBAY_CLIENT_ID="your-client-id"
+$env:EBAY_CLIENT_SECRET="your-client-secret"
+```
+
+Verify that PowerShell has the variables without printing the secret:
+
+```powershell
+if ($env:EBAY_CLIENT_ID) { "EBAY_CLIENT_ID set" }
+if ($env:EBAY_CLIENT_SECRET) { "EBAY_CLIENT_SECRET set" }
+```
+
+Check credential setup:
+
+```powershell
+pc_pricer ebay-check
+```
+
+If `EBAY_ACCESS_TOKEN` is set directly, `ebay-check` confirms the token is present but does not prove eBay accepts it. If `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set, it requests an OAuth token.
+
+Run a small active-listing search:
+
+```powershell
+pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 3
+```
+
+Then run a draft report:
+
+```powershell
+pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
+```
+
+For the first live pass, check:
+
+- whether credentials authenticate successfully
+- whether titles, prices, shipping, condition, URLs, and locations appear
+- whether missing shipping is shown as unknown shipping, not as a total
+- whether the query returns obviously wrong models or parts-only listings
+- whether the supporting listings look relevant enough for human review
+
+Do not paste real credentials into issues, pull requests, screenshots, logs, or committed files.
+
 ## Development
 
 Run tests with:
@@ -74,6 +122,6 @@ EBAY_CLIENT_SECRET
 EBAY_ACCESS_TOKEN
 ```
 
-For now, set these in your shell before live eBay testing. The project does not automatically load `.env` files yet.
+For now, set these in your shell before live eBay testing. `EBAY_ACCESS_TOKEN` is optional; when client ID and client secret are set, the program requests an access token automatically. The project does not automatically load `.env` files yet.
 
 `.env.example` is only a safe template for the names to use. Real values must stay out of committed files.

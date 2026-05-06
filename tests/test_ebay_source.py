@@ -141,11 +141,63 @@ class EbaySourceTests(unittest.TestCase):
         self.assertIn("/identity/v1/oauth2/token", posted["url"])
         self.assertEqual(posted["body"]["grant_type"], "client_credentials")
 
+    def test_check_credentials_uses_oauth_without_searching(self):
+        called = {"get": False, "post": False}
+
+        def fake_post(_url, _headers, _body):
+            called["post"] = True
+            return {"access_token": "minted-token", "expires_in": 7200}
+
+        def fake_get(_url, _headers):
+            called["get"] = True
+            return {"itemSummaries": []}
+
+        source = EbaySource(
+            credentials=EbayCredentials(client_id="client", client_secret="secret"),
+            http_get=fake_get,
+            http_post=fake_post,
+        )
+
+        result = source.check_credentials()
+
+        self.assertTrue(called["post"])
+        self.assertFalse(called["get"])
+        self.assertEqual(result["status"], "oauth_token_minted")
+
+    def test_check_credentials_reports_existing_access_token_without_network(self):
+        called = {"get": False, "post": False}
+
+        def fake_post(_url, _headers, _body):
+            called["post"] = True
+            return {"access_token": "minted-token", "expires_in": 7200}
+
+        def fake_get(_url, _headers):
+            called["get"] = True
+            return {"itemSummaries": []}
+
+        source = EbaySource(
+            credentials=EbayCredentials(access_token="existing-token"),
+            http_get=fake_get,
+            http_post=fake_post,
+        )
+
+        result = source.check_credentials()
+
+        self.assertFalse(called["post"])
+        self.assertFalse(called["get"])
+        self.assertEqual(result["status"], "token_present")
+
     def test_missing_credentials_raise_clear_error(self):
         source = EbaySource(credentials=EbayCredentials())
 
         with self.assertRaisesRegex(RuntimeError, "Missing eBay credentials"):
             source.search("laptop", max_results=1)
+
+    def test_check_credentials_raises_clear_error_when_missing_credentials(self):
+        source = EbaySource(credentials=EbayCredentials())
+
+        with self.assertRaisesRegex(RuntimeError, "Missing eBay credentials"):
+            source.check_credentials()
 
     def test_http_errors_are_wrapped(self):
         def fake_urlopen(_req, timeout):
