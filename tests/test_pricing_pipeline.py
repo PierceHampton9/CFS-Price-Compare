@@ -89,6 +89,29 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["deduped_listing_count"], 1)
         self.assertEqual(result["median_price_cad"], 500.00)
 
+    def test_passes_aggregation_options(self):
+        source = FakeSource(
+            {
+                "20XW004AUS": [
+                    _listing("Listing 1", 500, "https://www.ebay.ca/itm/1"),
+                    _listing("Listing 2", 520, "https://www.ebay.ca/itm/2"),
+                ],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            }
+        )
+
+        result = price_specs(
+            _laptop_specs(),
+            source,
+            limit_per_query=5,
+            warn_below_comparables=2,
+            support_limit=1,
+        )
+
+        self.assertEqual(result["confidence_flags"], [])
+        self.assertEqual(len(result["supporting_listings"]), 1)
+
 
 class FakeSource:
     def __init__(self, results):

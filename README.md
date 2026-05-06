@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated computers.
 
-Current status: Windows spec detection, initial query building, eBay active-listing search, basic listing condition normalization, standalone price aggregation, and report formatting work.
+Current status: Windows spec detection, initial query building, eBay active-listing search, basic listing condition normalization, standalone price aggregation, report formatting, and config-driven CLI defaults.
 
 ## Setup
 
@@ -62,6 +62,12 @@ To detect the current Windows PC and price it from generated tiered queries:
 
 ```powershell
 pc_pricer price-detect --limit-per-query 10
+```
+
+Search, pricing, and eBay credential-check commands read defaults from `config.yaml`. Command-line flags still win:
+
+```powershell
+pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
 ```
 
 ## Live eBay Validation

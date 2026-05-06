@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.config import load_config
 from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import load_env_file
 from pc_pricer.listing_filter import filter_listings
@@ -15,6 +16,9 @@ from pc_pricer.normalizer import normalize_listings
 from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.sources.ebay import EbaySource
+
+
+VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
 
 
 def main() -> None:
@@ -32,29 +36,32 @@ def main() -> None:
         help="Search active eBay listings for manual smoke testing.",
     )
     ebay_parser.add_argument("query", nargs="+", help="Search terms to send to eBay.")
-    ebay_parser.add_argument("--limit", type=int, default=5, help="Maximum listings to return.")
-    ebay_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    ebay_parser.add_argument("--limit", type=int, default=None, help="Maximum listings to return.")
+    ebay_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
+    ebay_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
     ebay_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     ebay_check_parser = subparsers.add_parser(
         "ebay-check",
         help="Validate eBay credentials without searching listings.",
     )
-    ebay_check_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    ebay_check_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
+    ebay_check_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
 
     price_query_parser = subparsers.add_parser(
         "price-query",
         help="Search active eBay listings and print a draft price report.",
     )
     price_query_parser.add_argument("query", nargs="+", help="Search terms to price.")
-    price_query_parser.add_argument("--limit", type=int, default=10, help="Maximum listings to fetch.")
-    price_query_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    price_query_parser.add_argument("--limit", type=int, default=None, help="Maximum listings to fetch.")
+    price_query_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
     price_query_parser.add_argument(
         "--condition",
         choices=["good", "excellent", "mint", "any"],
-        default="good",
+        default=None,
         help="Target listing condition for pricing.",
     )
+    price_query_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
     price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     price_detect_parser = subparsers.add_parser(
@@ -64,16 +71,17 @@ def main() -> None:
     price_detect_parser.add_argument(
         "--limit-per-query",
         type=int,
-        default=10,
+        default=None,
         help="Maximum listings to fetch for each generated query.",
     )
-    price_detect_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+    price_detect_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
     price_detect_parser.add_argument(
         "--condition",
         choices=["good", "excellent", "mint", "any"],
-        default="good",
+        default=None,
         help="Target listing condition for pricing.",
     )
+    price_detect_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
     price_detect_parser.add_argument("--raw", action="store_true", help="Include raw detected specs in JSON output.")
     price_detect_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
@@ -93,7 +101,9 @@ def main() -> None:
     elif args.command == "ebay-search":
         query = " ".join(args.query)
         try:
-            listings = EbaySource(marketplace=args.marketplace).search(query, args.limit)
+            config = load_config(args.config)
+            source = _ebay_source(config, args.marketplace)
+            listings = source.search(query, _limit(args.limit, config))
             listings = normalize_listings(listings)
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -104,8 +114,9 @@ def main() -> None:
         else:
             print_ebay_listings(query, listings)
     elif args.command == "ebay-check":
-        source = EbaySource(marketplace=args.marketplace)
         try:
+            config = load_config(args.config)
+            source = _ebay_source(config, args.marketplace)
             check_result = source.check_credentials()
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -117,10 +128,12 @@ def main() -> None:
     elif args.command == "price-query":
         query = " ".join(args.query)
         try:
-            listings = EbaySource(marketplace=args.marketplace).search(query, args.limit)
+            config = load_config(args.config)
+            source = _ebay_source(config, args.marketplace)
+            listings = source.search(query, _limit(args.limit, config))
             listings = normalize_listings(listings)
-            filtered = filter_listings(listings, target_condition=args.condition)
-            result = aggregate_listings(filtered["listings"])
+            filtered = filter_listings(listings, target_condition=_condition(args.condition, config))
+            result = aggregate_listings(filtered["listings"], **_aggregation_options(config))
             result.update(
                 {
                     "target_condition": filtered["target_condition"],
@@ -138,13 +151,15 @@ def main() -> None:
             print(format_price_report(result))
     elif args.command == "price-detect":
         try:
+            config = load_config(args.config)
             specs = detect_specs(include_raw=args.raw)
-            source = EbaySource(marketplace=args.marketplace)
+            source = _ebay_source(config, args.marketplace)
             result = price_specs(
                 specs,
                 source,
-                limit_per_query=args.limit_per_query,
-                target_condition=args.condition,
+                limit_per_query=_limit_per_query(args.limit_per_query, config),
+                target_condition=_condition(args.condition, config),
+                **_aggregation_options(config),
             )
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -216,6 +231,79 @@ def _format_storage(storage: Any) -> str:
             label = f"{label} ({model})"
         parts.append(label)
     return "; ".join(parts)
+
+
+def _ebay_source(config: dict[str, Any], marketplace_override: str | None = None) -> EbaySource:
+    ebay_config = _source_config(config, "ebay")
+    enabled = _bool_value(ebay_config.get("enabled"), True)
+    marketplace = marketplace_override or str(ebay_config.get("marketplace") or "EBAY_CA")
+    source = EbaySource(marketplace=marketplace)
+    source.enabled = enabled
+    return source
+
+
+def _source_config(config: dict[str, Any], source_name: str) -> dict[str, Any]:
+    sources = config.get("sources")
+    if not isinstance(sources, dict):
+        return {}
+    source = sources.get(source_name)
+    if not isinstance(source, dict):
+        return {}
+    return source
+
+
+def _limit(cli_value: int | None, config: dict[str, Any]) -> int:
+    return _positive_int(cli_value, _positive_int(config.get("default_limit"), 10))
+
+
+def _limit_per_query(cli_value: int | None, config: dict[str, Any]) -> int:
+    return _positive_int(cli_value, _positive_int(config.get("default_limit_per_query"), 10))
+
+
+def _condition(cli_value: str | None, config: dict[str, Any]) -> str:
+    value = cli_value or config.get("default_condition") or "good"
+    condition = str(value).strip().lower() or "good"
+    if condition not in VALID_CONDITIONS:
+        raise RuntimeError(
+            f"Invalid default_condition {condition!r}. Use good, excellent, mint, or any."
+        )
+    return condition
+
+
+def _aggregation_options(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "warn_below_comparables": _positive_int(config.get("warn_below_comparables"), 10),
+        "wide_iqr_ratio": _positive_float(config.get("wide_iqr_ratio"), 0.40),
+        "support_limit": _positive_int(config.get("support_limit"), 5),
+    }
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _positive_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    return default
 
 
 if __name__ == "__main__":

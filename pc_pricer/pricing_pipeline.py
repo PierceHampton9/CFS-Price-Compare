@@ -21,6 +21,9 @@ def price_specs(
     source: ListingSource,
     limit_per_query: int = 10,
     target_condition: str | None = "good",
+    warn_below_comparables: int = 10,
+    wide_iqr_ratio: float = 0.40,
+    support_limit: int = 5,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     queries = build_queries(specs)
@@ -29,7 +32,12 @@ def price_specs(
     normalized_listings = normalize_listings(deduped_listings)
     filtered = filter_listings(normalized_listings, target_condition=target_condition)
 
-    result = aggregate_listings(filtered["listings"])
+    result = aggregate_listings(
+        filtered["listings"],
+        warn_below_comparables=warn_below_comparables,
+        wide_iqr_ratio=wide_iqr_ratio,
+        support_limit=support_limit,
+    )
     result.update(
         {
             "specs": _public_specs(specs),
