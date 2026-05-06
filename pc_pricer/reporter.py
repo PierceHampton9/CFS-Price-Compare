@@ -8,6 +8,7 @@ from typing import Any
 FLAG_LABELS = {
     "no_comparables": "No usable comparable listings",
     "low_comparable_count": "Low comparable count",
+    "no_queries": "No usable search queries",
     "wide_price_range": "Wide price range",
 }
 
@@ -26,6 +27,8 @@ def format_price_report(result: dict[str, Any]) -> str:
     ]
 
     if not result.get("count"):
+        lines.extend(_spec_lines(result.get("specs")))
+        lines.extend(_query_lines(result.get("queries")))
         lines.extend(_filter_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
@@ -41,10 +44,43 @@ def format_price_report(result: dict[str, Any]) -> str:
             f"Sources:           {_format_source_counts(result.get('source_counts'))}",
         ]
     )
+    lines.extend(_spec_lines(result.get("specs")))
+    lines.extend(_query_lines(result.get("queries")))
     lines.extend(_filter_lines(result))
     lines.extend(_confidence_lines(result))
     lines.extend(_supporting_listing_lines(result.get("supporting_listings") or []))
     return "\n".join(lines)
+
+
+def _spec_lines(specs: Any) -> list[str]:
+    if not isinstance(specs, dict) or not specs:
+        return []
+
+    parts = [
+        specs.get("brand"),
+        specs.get("model"),
+        specs.get("cpu_short") or specs.get("cpu"),
+        _ram_label(specs.get("ram_gb")),
+    ]
+    text = " ".join(str(part) for part in parts if part)
+    if not text:
+        return []
+    return [f"Detected specs:    {text}"]
+
+
+def _query_lines(queries: Any) -> list[str]:
+    if not isinstance(queries, list) or not queries:
+        return []
+
+    lines = ["Queries used:"]
+    for query in queries:
+        if not isinstance(query, dict):
+            continue
+        text = query.get("text")
+        if not text:
+            continue
+        lines.append(f"  T{_format_query_tier(query.get('tier'))}: {text}")
+    return lines
 
 
 def _filter_lines(result: dict[str, Any]) -> list[str]:
@@ -137,6 +173,12 @@ def _format_query_tier(query_tier: Any) -> str:
     if query_tier is None:
         return "unknown"
     return str(query_tier)
+
+
+def _ram_label(ram_gb: Any) -> str | None:
+    if not ram_gb:
+        return None
+    return f"{ram_gb}GB"
 
 
 def _format_money(value: Any) -> str:

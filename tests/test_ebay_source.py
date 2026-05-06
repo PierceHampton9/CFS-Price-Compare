@@ -33,6 +33,7 @@ class EbaySourceTests(unittest.TestCase):
             return {
                 "itemSummaries": [
                     {
+                        "itemId": "v1|123|0",
                         "title": "Lenovo ThinkPad X13 Yoga Gen 2",
                         "price": {"value": "300.00", "currency": "CAD"},
                         "shippingOptions": [
@@ -62,6 +63,7 @@ class EbaySourceTests(unittest.TestCase):
         self.assertEqual(seen["headers"]["X-EBAY-C-MARKETPLACE-ID"], "EBAY_CA")
         self.assertEqual(len(listings), 1)
         self.assertEqual(listings[0]["source"], "ebay")
+        self.assertEqual(listings[0]["item_id"], "v1|123|0")
         self.assertEqual(listings[0]["item_price_cad"], 300.00)
         self.assertEqual(listings[0]["shipping_cad"], 25.00)
         self.assertEqual(listings[0]["total_price_cad"], 325.00)

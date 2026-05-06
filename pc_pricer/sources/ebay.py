@@ -148,6 +148,7 @@ def _listing_from_browse_item(item: dict[str, Any]) -> dict[str, Any] | None:
 
     return {
         "source": "ebay",
+        "item_id": _clean(item.get("itemId")),
         "title": _clean(item.get("title")) or "",
         "item_price_cad": item_price,
         "shipping_cad": shipping,

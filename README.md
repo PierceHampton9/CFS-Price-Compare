@@ -58,6 +58,12 @@ pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
 
 `price-query` defaults to pricing against `good` condition listings and filters obvious parts/accessory results. Use `--condition any` only when you want to inspect unfiltered condition results.
 
+To detect the current Windows PC and price it from generated tiered queries:
+
+```powershell
+pc_pricer price-detect --limit-per-query 10
+```
+
 ## Live eBay Validation
 
 Use this checklist when testing real eBay API access on a trusted machine.
