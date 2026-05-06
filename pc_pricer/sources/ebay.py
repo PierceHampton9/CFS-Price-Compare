@@ -24,23 +24,20 @@ JsonHttpPost = Callable[[str, dict[str, str], dict[str, str]], dict[str, Any]]
 class EbayCredentials:
     client_id: str | None = None
     client_secret: str | None = None
-    access_token: str | None = None
 
     @classmethod
     def from_env(
         cls,
         client_id_env: str = "EBAY_CLIENT_ID",
         client_secret_env: str = "EBAY_CLIENT_SECRET",
-        access_token_env: str = "EBAY_ACCESS_TOKEN",
     ) -> "EbayCredentials":
         return cls(
             client_id=os.getenv(client_id_env),
             client_secret=os.getenv(client_secret_env),
-            access_token=os.getenv(access_token_env),
         )
 
     def can_authenticate(self) -> bool:
-        return bool(self.access_token or (self.client_id and self.client_secret))
+        return bool(self.client_id and self.client_secret)
 
 
 class EbaySource:
@@ -59,7 +56,7 @@ class EbaySource:
         self.credentials = credentials or EbayCredentials.from_env()
         self._http_get = http_get or _http_get_json
         self._http_post = http_post or _http_post_json
-        self._token: str | None = self.credentials.access_token
+        self._token: str | None = None
         self._token_expires_at: datetime | None = None
 
     def search(self, query: str, max_results: int) -> list[dict]:
@@ -68,8 +65,7 @@ class EbaySource:
             return []
         if not self.credentials.can_authenticate():
             raise RuntimeError(
-                "Missing eBay credentials. Set EBAY_ACCESS_TOKEN or both "
-                "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
+                "Missing eBay credentials. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
             )
 
         params = {
@@ -91,16 +87,8 @@ class EbaySource:
         """Check whether eBay credentials are available for API use."""
         if not self.credentials.can_authenticate():
             raise RuntimeError(
-                "Missing eBay credentials. Set EBAY_ACCESS_TOKEN or both "
-                "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
+                "Missing eBay credentials. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
             )
-
-        if self.credentials.access_token:
-            self._access_token()
-            return {
-                "status": "token_present",
-                "message": "Access token is present. Run ebay-search to confirm eBay accepts it.",
-            }
 
         self._access_token()
         return {

@@ -60,11 +60,11 @@ pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
 
 Use this checklist when testing real eBay API access on a trusted machine.
 
-Set credentials for the current PowerShell session:
+Option 1: set credentials for the current PowerShell session:
 
 ```powershell
-$env:EBAY_CLIENT_ID="your-client-id"
-$env:EBAY_CLIENT_SECRET="your-client-secret"
+$env:EBAY_CLIENT_ID="your-production-app-id"
+$env:EBAY_CLIENT_SECRET="your-production-cert-id"
 ```
 
 Verify that PowerShell has the variables without printing the secret:
@@ -74,13 +74,30 @@ if ($env:EBAY_CLIENT_ID) { "EBAY_CLIENT_ID set" }
 if ($env:EBAY_CLIENT_SECRET) { "EBAY_CLIENT_SECRET set" }
 ```
 
+Option 2: create a local `.env` file in the repository root:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then edit `.env`:
+
+```text
+EBAY_CLIENT_ID=your-production-app-id
+EBAY_CLIENT_SECRET=your-production-cert-id
+```
+
+The CLI loads `.env` automatically. Shell variables still win if both are set.
+
+In eBay's developer portal, `EBAY_CLIENT_ID` is usually shown as the App ID or Client ID, and `EBAY_CLIENT_SECRET` is usually shown as the Cert ID or Client Secret. You do not need Dev ID, RuName, refresh token, or a user access token for the current active-listing search flow.
+
 Check credential setup:
 
 ```powershell
 pc_pricer ebay-check
 ```
 
-If `EBAY_ACCESS_TOKEN` is set directly, `ebay-check` confirms the token is present but does not prove eBay accepts it. If `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set, it requests an OAuth token.
+If `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set, `ebay-check` requests an OAuth token.
 
 Run a small active-listing search:
 
@@ -119,9 +136,10 @@ Do not commit real API credentials. The eBay source reads credentials from envir
 ```powershell
 EBAY_CLIENT_ID
 EBAY_CLIENT_SECRET
-EBAY_ACCESS_TOKEN
 ```
 
-For now, set these in your shell before live eBay testing. `EBAY_ACCESS_TOKEN` is optional; when client ID and client secret are set, the program requests an access token automatically. The project does not automatically load `.env` files yet.
+For live eBay testing, set these in your shell or in a local `.env` file. The program requests an access token automatically. Shell variables override `.env` values.
+
+For the current production eBay API setup, use the Production App ID and Production Cert ID. Sandbox keys require sandbox API endpoints, which this project does not use yet.
 
 `.env.example` is only a safe template for the names to use. Real values must stay out of committed files.

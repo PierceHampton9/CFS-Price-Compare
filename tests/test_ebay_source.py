@@ -17,14 +17,12 @@ class EbaySourceTests(unittest.TestCase):
             {
                 "EBAY_CLIENT_ID": "client-id",
                 "EBAY_CLIENT_SECRET": "client-secret",
-                "EBAY_ACCESS_TOKEN": "token",
             },
         ):
             credentials = EbayCredentials.from_env()
 
         self.assertEqual(credentials.client_id, "client-id")
         self.assertEqual(credentials.client_secret, "client-secret")
-        self.assertEqual(credentials.access_token, "token")
 
     def test_search_maps_browse_items_to_standard_listings(self):
         seen = {}
@@ -55,10 +53,7 @@ class EbaySourceTests(unittest.TestCase):
                 ]
             }
 
-        source = EbaySource(
-            credentials=EbayCredentials(access_token="test-token"),
-            http_get=fake_get,
-        )
+        source = _source_with_minted_token(fake_get)
 
         listings = source.search("ThinkPad X13 Yoga", max_results=5)
 
@@ -88,10 +83,7 @@ class EbaySourceTests(unittest.TestCase):
                 ]
             }
 
-        source = EbaySource(
-            credentials=EbayCredentials(access_token="test-token"),
-            http_get=fake_get,
-        )
+        source = _source_with_minted_token(fake_get)
 
         listing = source.search("Dell OptiPlex", max_results=1)[0]
 
@@ -110,10 +102,7 @@ class EbaySourceTests(unittest.TestCase):
                 ]
             }
 
-        source = EbaySource(
-            credentials=EbayCredentials(access_token="test-token"),
-            http_get=fake_get,
-        )
+        source = _source_with_minted_token(fake_get)
 
         self.assertEqual(source.search("laptop", max_results=1), [])
 
@@ -164,29 +153,6 @@ class EbaySourceTests(unittest.TestCase):
         self.assertFalse(called["get"])
         self.assertEqual(result["status"], "oauth_token_minted")
 
-    def test_check_credentials_reports_existing_access_token_without_network(self):
-        called = {"get": False, "post": False}
-
-        def fake_post(_url, _headers, _body):
-            called["post"] = True
-            return {"access_token": "minted-token", "expires_in": 7200}
-
-        def fake_get(_url, _headers):
-            called["get"] = True
-            return {"itemSummaries": []}
-
-        source = EbaySource(
-            credentials=EbayCredentials(access_token="existing-token"),
-            http_get=fake_get,
-            http_post=fake_post,
-        )
-
-        result = source.check_credentials()
-
-        self.assertFalse(called["post"])
-        self.assertFalse(called["get"])
-        self.assertEqual(result["status"], "token_present")
-
     def test_missing_credentials_raise_clear_error(self):
         source = EbaySource(credentials=EbayCredentials())
 
@@ -224,6 +190,17 @@ class EbaySourceTests(unittest.TestCase):
         with patch("pc_pricer.sources.ebay.request.urlopen", fake_urlopen):
             with self.assertRaisesRegex(RuntimeError, "network unavailable"):
                 ebay._http_get_json("https://api.ebay.com/example", {})
+
+
+def _source_with_minted_token(http_get):
+    def fake_post(_url, _headers, _body):
+        return {"access_token": "test-token", "expires_in": 7200}
+
+    return EbaySource(
+        credentials=EbayCredentials(client_id="client", client_secret="secret"),
+        http_get=http_get,
+        http_post=fake_post,
+    )
 
 
 if __name__ == "__main__":

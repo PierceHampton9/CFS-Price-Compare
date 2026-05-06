@@ -9,12 +9,15 @@ from typing import Any
 
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.detector import detect_specs
+from pc_pricer.env_loader import load_env_file
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.sources.ebay import EbaySource
 
 
 def main() -> None:
+    load_env_file()
+
     parser = argparse.ArgumentParser(prog="pc_pricer")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
