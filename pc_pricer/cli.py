@@ -31,6 +31,12 @@ def main() -> None:
     ebay_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
     ebay_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
+    ebay_check_parser = subparsers.add_parser(
+        "ebay-check",
+        help="Validate eBay credentials without searching listings.",
+    )
+    ebay_check_parser.add_argument("--marketplace", default="EBAY_CA", help="eBay marketplace ID.")
+
     price_query_parser = subparsers.add_parser(
         "price-query",
         help="Search active eBay listings and print a draft price report.",
@@ -66,6 +72,17 @@ def main() -> None:
             print(json.dumps(listings, indent=2, default=str))
         else:
             print_ebay_listings(query, listings)
+    elif args.command == "ebay-check":
+        source = EbaySource(marketplace=args.marketplace)
+        try:
+            source.check_credentials()
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        print("eBay credentials found.")
+        print("OAuth token check succeeded.")
+        print(f"Marketplace: {source.marketplace}")
     elif args.command == "price-query":
         query = " ".join(args.query)
         try:
