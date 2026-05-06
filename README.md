@@ -103,7 +103,7 @@ Search, pricing, and eBay credential-check commands read defaults from `config.y
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
 ```
 
-Reports show the median price, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, and up to 5 supporting listings. Current eBay pricing uses active asking listings, so treat the output as a draft human-reviewed estimate.
+Reports show the estimate, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. Current eBay pricing uses active asking listings; when no sold listings are available, the report shows the asking median plus a conservative estimate discounted 5-10%.
 
 ## eBay Smoke Test
 
@@ -173,7 +173,8 @@ For the first live pass, check:
 - whether credentials authenticate successfully
 - whether titles, prices, shipping, condition, URLs, and locations appear
 - whether missing shipping is shown as unknown shipping, not as a total
-- whether high/unknown shipping and non-Canadian locations are flagged
+- whether high/unknown shipping and non-Canadian locations appear under listing warnings
+- whether asking-only reports show both the asking median and conservative estimate
 - whether the query returns obviously wrong models or parts-only listings
 - whether the supporting listings look relevant enough for human review
 

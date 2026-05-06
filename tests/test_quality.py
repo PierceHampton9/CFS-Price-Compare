@@ -14,7 +14,8 @@ class QualityTests(unittest.TestCase):
             [_listing()],
         )
 
-        self.assertIn("asking_prices_only", result["confidence_flags"])
+        self.assertIn("asking_prices_only", result["pricing_limitations"])
+        self.assertEqual(result["confidence_flags"], [])
 
     def test_flags_unknown_and_high_shipping(self):
         result = add_listing_quality_flags(
@@ -31,8 +32,9 @@ class QualityTests(unittest.TestCase):
             high_shipping_ratio=0.25,
         )
 
-        self.assertIn("unknown_shipping", result["confidence_flags"])
-        self.assertIn("high_shipping", result["confidence_flags"])
+        self.assertIn("unknown_shipping", result["listing_warnings"])
+        self.assertIn("high_shipping", result["listing_warnings"])
+        self.assertEqual(result["confidence_flags"], [])
 
     def test_flags_non_canadian_locations(self):
         result = add_listing_quality_flags(
@@ -47,7 +49,7 @@ class QualityTests(unittest.TestCase):
             ],
         )
 
-        self.assertIn("non_canadian_location", result["confidence_flags"])
+        self.assertIn("non_canadian_location", result["listing_warnings"])
 
 
 def _listing(

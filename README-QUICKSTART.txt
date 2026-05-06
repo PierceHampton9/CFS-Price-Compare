@@ -42,4 +42,5 @@ Notes
 - The setup command creates a local .env file beside pc_pricer.exe.
 - The .env file contains credentials in plaintext. Keep the release folder on trusted pricing computers only.
 - config.yaml controls pricing defaults and can be edited without rebuilding the exe.
-- Current eBay pricing uses active asking listings, so treat the result as a draft estimate for human review.
+- Current eBay pricing uses active asking listings. When no sold listings are available, the report shows the asking median plus a conservative estimate discounted 5-10%.
+- Confidence flags are about estimate strength. Pricing limitations and listing warnings are shown separately.

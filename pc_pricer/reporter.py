@@ -10,7 +10,13 @@ FLAG_LABELS = {
     "low_comparable_count": "Low comparable count",
     "no_queries": "No usable search queries",
     "wide_price_range": "Wide price range",
-    "asking_prices_only": "Asking prices only",
+}
+
+LIMITATION_LABELS = {
+    "asking_prices_only": "Asking prices only; conservative estimate is discounted from active listings",
+}
+
+WARNING_LABELS = {
     "unknown_shipping": "Unknown shipping on one or more comparables",
     "high_shipping": "High shipping on one or more comparables",
     "non_canadian_location": "Non-Canadian location on one or more comparables",
@@ -37,25 +43,40 @@ def format_price_report(result: dict[str, Any]) -> str:
         lines.extend(_filter_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
+        lines.extend(_limitation_lines(result))
+        lines.extend(_warning_lines(result))
         return "\n".join(lines)
 
-    lines.extend(
-        [
-            f"Median price:      {_format_money(result.get('median_price_cad'))}",
-            f"Comparable range:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}",
-            f"Comparables:       {result.get('count')}",
-            f"Query tier:        {_format_query_tier(result.get('query_tier'))}",
-            f"Sold / asking:     {result.get('sold_count', 0)} sold, {result.get('asking_count', 0)} asking",
-            f"Sources:           {_format_source_counts(result.get('source_counts'))}",
-        ]
-    )
+    lines.extend(_price_lines(result))
     lines.extend(_search_count_lines(result))
+    lines.extend(_pricing_basis_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
     lines.extend(_query_lines(result.get("queries")))
     lines.extend(_filter_lines(result))
     lines.extend(_confidence_lines(result))
+    lines.extend(_limitation_lines(result))
+    lines.extend(_warning_lines(result))
     lines.extend(_supporting_listing_lines(result.get("supporting_listings") or []))
     return "\n".join(lines)
+
+
+def _price_lines(result: dict[str, Any]) -> list[str]:
+    lines = []
+    if result.get("pricing_basis") == "asking_adjusted":
+        lines.append(
+            f"Conservative est.: {_format_money(result.get('conservative_low_cad'))} - {_format_money(result.get('conservative_high_cad'))}"
+        )
+        lines.append(f"Asking median:     {_format_money(result.get('asking_median_price_cad'))}")
+    else:
+        lines.append(f"Median price:      {_format_money(result.get('median_price_cad'))}")
+
+    lines.append(f"Comparable range:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}")
+    lines.append(f"Comparables:       {result.get('count')}")
+    lines.append(f"Query tier:        {_format_query_tier(result.get('query_tier'))}")
+    if result.get("pricing_basis") != "asking_adjusted":
+        lines.append(f"Sold / asking:     {result.get('sold_count', 0)} sold, {result.get('asking_count', 0)} asking")
+    lines.append(f"Sources:           {_format_source_counts(result.get('source_counts'))}")
+    return lines
 
 
 def _spec_lines(specs: Any) -> list[str]:
@@ -114,6 +135,35 @@ def _search_count_lines(result: dict[str, Any]) -> list[str]:
     return [f"Search results:    {raw_count} raw, {deduped_count} after dedupe"]
 
 
+def _pricing_basis_lines(result: dict[str, Any]) -> list[str]:
+    basis = result.get("pricing_basis")
+    if not basis:
+        return []
+
+    return [f"Pricing basis:    {_format_pricing_basis(result)}"]
+
+
+def _format_pricing_basis(result: dict[str, Any]) -> str:
+    value = result.get("pricing_basis")
+    if value == "sold":
+        return "sold listings"
+    if value == "asking_adjusted":
+        return f"active asking listings, discounted {_discount_percent_range(result)}"
+    if value == "mixed":
+        return "sold and asking listings"
+    if value == "unknown":
+        return "unknown"
+    return str(value)
+
+
+def _discount_percent_range(result: dict[str, Any]) -> str:
+    low = _safe_percent(result.get("asking_only_discount_low"))
+    high = _safe_percent(result.get("asking_only_discount_high"))
+    if low is None or high is None:
+        return "5-10%"
+    return f"{low}-{high}%"
+
+
 def _filter_lines(result: dict[str, Any]) -> list[str]:
     if "excluded_count" not in result and "target_condition" not in result:
         return []
@@ -146,6 +196,24 @@ def _confidence_lines(result: dict[str, Any]) -> list[str]:
 
     labels = [FLAG_LABELS.get(flag, str(flag)) for flag in flags]
     return [f"Confidence flags: {', '.join(labels)}"]
+
+
+def _limitation_lines(result: dict[str, Any]) -> list[str]:
+    limitations = result.get("pricing_limitations") or []
+    if not limitations:
+        return []
+
+    labels = [LIMITATION_LABELS.get(limitation, str(limitation)) for limitation in limitations]
+    return [f"Pricing limits:   {', '.join(labels)}"]
+
+
+def _warning_lines(result: dict[str, Any]) -> list[str]:
+    warnings = result.get("listing_warnings") or []
+    if not warnings:
+        return []
+
+    labels = [WARNING_LABELS.get(warning, str(warning)) for warning in warnings]
+    return [f"Listing warnings: {', '.join(labels)}"]
 
 
 def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
@@ -220,3 +288,10 @@ def _format_money(value: Any) -> str:
         return f"${float(value):,.2f} CAD"
     except (TypeError, ValueError):
         return "Unknown"
+
+
+def _safe_percent(value: Any) -> int | None:
+    try:
+        return round(float(value) * 100)
+    except (TypeError, ValueError):
+        return None

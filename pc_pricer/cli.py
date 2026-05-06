@@ -13,6 +13,7 @@ from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import load_env_file
 from pc_pricer.listing_filter import filter_listings
 from pc_pricer.normalizer import normalize_listings
+from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
@@ -185,6 +186,7 @@ def main() -> None:
             listings = normalize_listings(listings)
             filtered = filter_listings(listings, target_condition=_condition(args.condition, config))
             result = aggregate_listings(filtered["listings"], **_aggregation_options(config))
+            result = apply_pricing_basis(result, **_asking_adjustment_options(config))
             result.update(
                 {
                     "queries": [{"text": query, "tier": None, "reason": "manual query"}],
@@ -402,7 +404,23 @@ def _quality_options(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
-    return {**_aggregation_options(config), **_quality_options(config)}
+    return {
+        **_aggregation_options(config),
+        **_quality_options(config),
+        **_asking_adjustment_options(config),
+    }
+
+
+def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:
+    discount_low = _positive_float(config.get("asking_discount_low"), 0.05)
+    discount_high = _positive_float(config.get("asking_discount_high"), 0.10)
+    if discount_low > discount_high:
+        discount_low, discount_high = discount_high, discount_low
+
+    return {
+        "asking_discount_low": discount_low,
+        "asking_discount_high": discount_high,
+    }
 
 
 def _positive_int_or_none(value: Any) -> int | None:
