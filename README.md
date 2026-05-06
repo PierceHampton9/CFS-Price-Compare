@@ -6,7 +6,36 @@ A command-line tool for estimating fair resale prices for donated computers.
 
 Current status: Windows spec detection, manual spec entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, and config-driven CLI defaults.
 
-## Setup
+## Windows Release Setup
+
+For normal use on pricing computers, use a Windows release zip from GitHub Releases.
+
+1. Download the latest Windows release zip.
+2. Extract the whole folder.
+3. Open PowerShell in the extracted folder.
+4. Run setup:
+
+```powershell
+.\pc_pricer.exe setup
+```
+
+The setup command asks for the eBay App ID / Client ID and Cert ID / Client Secret, then writes a local `.env` file beside `pc_pricer.exe`. The secret is stored in plaintext, so keep the release folder on trusted pricing computers only.
+
+Check that credentials work:
+
+```powershell
+.\pc_pricer.exe ebay-check
+```
+
+Then run pricing commands:
+
+```powershell
+.\pc_pricer.exe price-manual --form-factor laptop --brand Lenovo --model "ThinkPad X13 Yoga" --cpu "i5-1135G7" --ram 16 --storage 512 --condition good
+```
+
+Keep the whole extracted release folder together, including the `_internal` folder. `config.yaml` can be edited beside the exe without rebuilding.
+
+## Developer Setup
 
 Requires Python 3.11 or newer.
 
@@ -157,6 +186,14 @@ Run tests with:
 ```powershell
 python -m unittest discover -s tests
 ```
+
+Build a Windows release zip from a development machine:
+
+```powershell
+.\scripts\build-windows.ps1
+```
+
+The build script installs `requirements-build.txt`, runs PyInstaller, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates `dist\CFS-Price-Compare-v0.1.0-windows.zip`.
 
 ## Local Credentials
 

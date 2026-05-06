@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import sys
 from typing import Any
 
 
@@ -31,10 +32,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
-def load_config(path: str | Path = "config.yaml") -> dict[str, Any]:
+def default_config_path() -> Path:
+    """Return config.yaml beside the exe when packaged, otherwise in the working directory."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "config.yaml"
+    return Path.cwd() / "config.yaml"
+
+
+def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Load config.yaml, falling back to defaults when the file is absent."""
     config = deepcopy(DEFAULT_CONFIG)
-    config_path = Path(path)
+    config_path = Path(path) if path is not None else default_config_path()
     if not config_path.exists():
         return config
 

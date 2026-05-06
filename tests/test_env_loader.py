@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pc_pricer.env_loader import load_env_file
+from pc_pricer.env_loader import default_env_path, load_env_file
 
 
 class EnvLoaderTests(unittest.TestCase):
@@ -49,6 +49,17 @@ class EnvLoaderTests(unittest.TestCase):
             load_env_file(env_path)
 
             self.assertEqual(dict(os.environ), {})
+
+    def test_default_env_path_uses_working_directory_for_source_runs(self):
+        with patch("pc_pricer.env_loader.sys.frozen", False, create=True):
+            self.assertEqual(default_env_path(), Path.cwd() / ".env")
+
+    def test_default_env_path_uses_exe_directory_for_packaged_runs(self):
+        exe_path = Path("C:/release/pc_pricer.exe")
+        with patch("pc_pricer.env_loader.sys.frozen", True, create=True), patch(
+            "pc_pricer.env_loader.sys.executable", str(exe_path)
+        ):
+            self.assertEqual(default_env_path(), exe_path.parent / ".env")
 
 
 def _test_env_path() -> Path:

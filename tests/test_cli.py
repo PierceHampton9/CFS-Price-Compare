@@ -13,6 +13,20 @@ class CliTests(unittest.TestCase):
     def tearDown(self):
         CONFIG_PATH.unlink(missing_ok=True)
 
+    def test_setup_command_writes_credentials(self):
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "setup", "--env-file", str(CONFIG_PATH)]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.run_setup", return_value=CONFIG_PATH
+        ) as setup:
+            cli.main()
+
+        setup.assert_called_once_with(str(CONFIG_PATH))
+        output = stdout.getvalue()
+        self.assertIn("Saved eBay credentials to:", output)
+        self.assertIn("pc_pricer ebay-check", output)
+
     def test_ebay_search_command_prints_listings(self):
         instances = []
 

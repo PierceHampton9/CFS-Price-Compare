@@ -1,7 +1,8 @@
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
-from pc_pricer.config import load_config
+from pc_pricer.config import default_config_path, load_config
 
 
 CONFIG_PATH = Path("tests/config_test.yaml")
@@ -46,6 +47,17 @@ sources:
 
         with self.assertRaises(RuntimeError):
             load_config(CONFIG_PATH)
+
+    def test_default_config_path_uses_working_directory_for_source_runs(self):
+        with patch("pc_pricer.config.sys.frozen", False, create=True):
+            self.assertEqual(default_config_path(), Path.cwd() / "config.yaml")
+
+    def test_default_config_path_uses_exe_directory_for_packaged_runs(self):
+        exe_path = Path("C:/release/pc_pricer.exe")
+        with patch("pc_pricer.config.sys.frozen", True, create=True), patch(
+            "pc_pricer.config.sys.executable", str(exe_path)
+        ):
+            self.assertEqual(default_config_path(), exe_path.parent / "config.yaml")
 
 
 if __name__ == "__main__":
