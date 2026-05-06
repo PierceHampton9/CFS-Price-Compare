@@ -8,7 +8,7 @@ First-time setup
 
 1. Extract the release zip.
 2. Keep the whole extracted folder together. Do not delete the _internal folder.
-3. Open PowerShell in the extracted folder.
+3. Open PowerShell in the extracted folder (into the directory which directly contains pc_pricer.exe).
 4. Run:
 
    .\pc_pricer.exe setup
@@ -36,6 +36,29 @@ Run this on the computer being inspected:
 
    .\pc_pricer.exe price-detect --condition good
 
+Reading the report (Line-By-Line):
+----------------------------------
+
+The price estimate reads as follows...
+
+Conservative est.: <A range of prices which account for asking prices possibly being inflated compared to sold prices>
+Asking median:     <The value of the median listing price in the extracted listing set>
+Comparable range:  <The range of prices in the exstracted listing set>
+Comparables:       <The number of comparable listings extracted>
+Query tier:        <Rank which represents the specificity of the query used to extract comparable listings with 1 as best, 3 as worst>
+Sources:           <[Source] : [The number of extracted comparable listings from the respective source], ...>
+Search results:    <[The number of total comparable listings extracted (raw)], [the number of comparable listings remaining after duplicates where removed]>
+Pricing basis:    <An brief explanation of why the given price range isn't the pure median of the set of extracted comparable listings>
+Manual specs:    <The list of specs given after being stripped of irrelevant characters>
+Queries used:
+  <[Query tier]: [Query details such as specs and model]
+  ...>
+Target condition: <The condition of the device. From best to worst mint (which is essentially new), excellent (like new, probably no visibl damage or hardware decay), good (most used devices, not destroyed but doesn't look or act new), parts (good only for parts or at best very, very short remaining lifespan)>
+Filtered out:      <[Number of listings filtered out] [(condition mismatch: [X], parts/accessory listing: [Y])]
+Confidence flags: <Reasons for why listings aren't sufficient to provide a confident set of comparisons>
+Pricing limits:   Asking prices only; conservative estimate is discounted from active listings
+Listing warnings: Unknown shipping on one or more comparables, High shipping on one or more comparables, Non-Canadian location on one or more comparables
+
 Sanity-check the report
 -----------------------
 
@@ -54,4 +77,4 @@ Notes
 - The setup command creates a local .env file beside pc_pricer.exe.
 - The .env file contains credentials in plaintext. Keep the release folder on trusted pricing computers only.
 - config.yaml controls pricing defaults and can be edited without rebuilding the exe.
-- Current eBay pricing uses active asking listings. When no sold listings are available, the report shows the asking median plus a conservative estimate discounted 5-10%.
+- Current eBay pricing uses active asking listings. When no sold listings are available, the report shows the asking median plus a conservative estimate discounted 0-5%.
