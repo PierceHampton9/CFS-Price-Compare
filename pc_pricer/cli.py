@@ -14,6 +14,7 @@ from pc_pricer.env_loader import load_env_file
 from pc_pricer.listing_filter import filter_listings
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.pricing_pipeline import price_specs
+from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.sources.ebay import EbaySource
 
@@ -63,6 +64,40 @@ def main() -> None:
     )
     price_query_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
     price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    price_manual_parser = subparsers.add_parser(
+        "price-manual",
+        help="Enter specs manually, search tiered eBay queries, and print a draft price report.",
+    )
+    price_manual_parser.add_argument("--brand", help="Computer brand, such as Lenovo or Dell.")
+    price_manual_parser.add_argument("--model", help="Computer model or model family.")
+    price_manual_parser.add_argument("--oem-sku", help="Exact OEM model identifier when available.")
+    price_manual_parser.add_argument(
+        "--form-factor",
+        required=True,
+        choices=["laptop", "desktop", "all-in-one"],
+        help="Computer form factor.",
+    )
+    price_manual_parser.add_argument("--cpu", help="CPU model, preferably the short form such as i5-1135G7.")
+    price_manual_parser.add_argument("--ram", type=int, help="RAM in GB.")
+    price_manual_parser.add_argument("--storage", type=int, help="Primary storage size in GB.")
+    price_manual_parser.add_argument("--storage-type", default="SSD", help="Primary storage type, such as SSD or HDD.")
+    price_manual_parser.add_argument("--gpu", help="Dedicated GPU model when present.")
+    price_manual_parser.add_argument(
+        "--limit-per-query",
+        type=int,
+        default=None,
+        help="Maximum listings to fetch for each generated query.",
+    )
+    price_manual_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
+    price_manual_parser.add_argument(
+        "--condition",
+        choices=["good", "excellent", "mint", "any"],
+        default=None,
+        help="Target listing condition for pricing.",
+    )
+    price_manual_parser.add_argument("--config", default="config.yaml", help="Path to config file.")
+    price_manual_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     price_detect_parser = subparsers.add_parser(
         "price-detect",
@@ -136,10 +171,34 @@ def main() -> None:
             result = aggregate_listings(filtered["listings"], **_aggregation_options(config))
             result.update(
                 {
+                    "queries": [{"text": query, "tier": None, "reason": "manual query"}],
+                    "raw_listing_count": len(listings),
+                    "deduped_listing_count": len(listings),
                     "target_condition": filtered["target_condition"],
                     "excluded_count": filtered["excluded_count"],
                     "excluded_reasons": filtered["excluded_reasons"],
                 }
+            )
+            result = add_listing_quality_flags(result, filtered["listings"], **_quality_options(config))
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            print(format_price_report(result))
+    elif args.command == "price-manual":
+        try:
+            config = load_config(args.config)
+            specs = _manual_specs(args)
+            source = _ebay_source(config, args.marketplace)
+            result = price_specs(
+                specs,
+                source,
+                limit_per_query=_limit_per_query(args.limit_per_query, config),
+                target_condition=_condition(args.condition, config),
+                **_pricing_options(config),
             )
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -159,7 +218,7 @@ def main() -> None:
                 source,
                 limit_per_query=_limit_per_query(args.limit_per_query, config),
                 target_condition=_condition(args.condition, config),
-                **_aggregation_options(config),
+                **_pricing_options(config),
             )
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -233,6 +292,47 @@ def _format_storage(storage: Any) -> str:
     return "; ".join(parts)
 
 
+def _manual_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = {
+        "brand": _clean_text(args.brand),
+        "model": _clean_text(args.model),
+        "search_model": _clean_text(args.model),
+        "oem_sku": _clean_text(args.oem_sku),
+        "form_factor": args.form_factor,
+        "cpu": _clean_text(args.cpu),
+        "cpu_short": _clean_text(args.cpu),
+        "ram_gb": _positive_int_or_none(args.ram),
+        "storage": _manual_storage(args.storage, args.storage_type),
+        "gpu": _clean_text(args.gpu),
+        "input_method": "manual",
+    }
+    return {key: value for key, value in specs.items() if value not in (None, [], "")}
+
+
+def _manual_storage(size_gb: Any, drive_type: Any) -> list[dict[str, Any]]:
+    size = _positive_int_or_none(size_gb)
+    if not size:
+        return []
+    return [
+        {
+            "size_gb": size,
+            "type": _storage_type(drive_type),
+        }
+    ]
+
+
+def _storage_type(value: Any) -> str:
+    text = _clean_text(value) or "SSD"
+    return text.upper() if text.lower() in {"ssd", "hdd", "nvme", "emmc"} else text
+
+
+def _clean_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _ebay_source(config: dict[str, Any], marketplace_override: str | None = None) -> EbaySource:
     ebay_config = _source_config(config, "ebay")
     enabled = _bool_value(ebay_config.get("enabled"), True)
@@ -276,6 +376,25 @@ def _aggregation_options(config: dict[str, Any]) -> dict[str, Any]:
         "wide_iqr_ratio": _positive_float(config.get("wide_iqr_ratio"), 0.40),
         "support_limit": _positive_int(config.get("support_limit"), 5),
     }
+
+
+def _quality_options(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "high_shipping_cad": _positive_float(config.get("high_shipping_cad"), 75.0),
+        "high_shipping_ratio": _positive_float(config.get("high_shipping_ratio"), 0.25),
+    }
+
+
+def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
+    return {**_aggregation_options(config), **_quality_options(config)}
+
+
+def _positive_int_or_none(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _positive_int(value: Any, default: int) -> int:

@@ -10,6 +10,10 @@ FLAG_LABELS = {
     "low_comparable_count": "Low comparable count",
     "no_queries": "No usable search queries",
     "wide_price_range": "Wide price range",
+    "asking_prices_only": "Asking prices only",
+    "unknown_shipping": "Unknown shipping on one or more comparables",
+    "high_shipping": "High shipping on one or more comparables",
+    "non_canadian_location": "Non-Canadian location on one or more comparables",
 }
 
 FILTER_LABELS = {
@@ -29,6 +33,7 @@ def format_price_report(result: dict[str, Any]) -> str:
     if not result.get("count"):
         lines.extend(_spec_lines(result.get("specs")))
         lines.extend(_query_lines(result.get("queries")))
+        lines.extend(_search_count_lines(result))
         lines.extend(_filter_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
@@ -44,6 +49,7 @@ def format_price_report(result: dict[str, Any]) -> str:
             f"Sources:           {_format_source_counts(result.get('source_counts'))}",
         ]
     )
+    lines.extend(_search_count_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
     lines.extend(_query_lines(result.get("queries")))
     lines.extend(_filter_lines(result))
@@ -65,7 +71,13 @@ def _spec_lines(specs: Any) -> list[str]:
     text = " ".join(str(part) for part in parts if part)
     if not text:
         return []
-    return [f"Detected specs:    {text}"]
+    return [f"{_spec_label(specs)}:    {text}"]
+
+
+def _spec_label(specs: dict[str, Any]) -> str:
+    if specs.get("input_method") == "manual":
+        return "Manual specs"
+    return "Detected specs"
 
 
 def _display_model(specs: dict[str, Any]) -> Any:
@@ -87,8 +99,19 @@ def _query_lines(queries: Any) -> list[str]:
         text = query.get("text")
         if not text:
             continue
-        lines.append(f"  T{_format_query_tier(query.get('tier'))}: {text}")
+        if query.get("tier") is None:
+            lines.append(f"  {text}")
+        else:
+            lines.append(f"  T{_format_query_tier(query.get('tier'))}: {text}")
     return lines
+
+
+def _search_count_lines(result: dict[str, Any]) -> list[str]:
+    raw_count = result.get("raw_listing_count")
+    deduped_count = result.get("deduped_listing_count")
+    if raw_count is None or deduped_count is None:
+        return []
+    return [f"Search results:    {raw_count} raw, {deduped_count} after dedupe"]
 
 
 def _filter_lines(result: dict[str, Any]) -> list[str]:
@@ -141,6 +164,9 @@ def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
         lines.append(f"   Status:    {_format_listing_status(listing)}")
         lines.append(f"   Condition: {format_condition(listing)}")
         lines.append(f"   Tier:      {_format_query_tier(listing.get('query_tier'))}")
+        if listing.get("query_text"):
+            lines.append(f"   Query:     {listing.get('query_text')}")
+        lines.append(f"   Location:  {listing.get('location') or 'Unknown'}")
         lines.append(f"   URL:       {listing.get('url') or 'Unknown'}")
     return lines
 
