@@ -35,6 +35,19 @@ Then run pricing commands:
 
 Keep the whole extracted release folder together, including the `_internal` folder. `config.yaml` can be edited beside the exe without rebuilding.
 
+## Sanity-Check a Price
+
+Treat the report as a pricing aid, not an automatic sale price.
+
+- Start with `Conservative est.` when the report is based on active asking listings.
+- Check the supporting listings before trusting the number.
+- Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
+- Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
+- `Confidence flags` are about estimate strength, such as too few comparables or a wide price range.
+- `Pricing limits` explain what the data can and cannot prove, such as asking-only pricing.
+- `Listing warnings` point out listing-level concerns, such as unknown shipping, high shipping, or non-Canadian locations.
+- When shipping or location warnings dominate the supporting listings, use the lower end of the conservative estimate or review more listings manually.
+
 ## Developer Setup
 
 Requires Python 3.11 or newer.
@@ -195,6 +208,16 @@ Build a Windows release zip from a development machine:
 ```
 
 The build script installs `requirements-build.txt`, runs PyInstaller, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates `dist\CFS-Price-Compare-v0.1.0-windows.zip`.
+
+Release checklist:
+
+1. Merge the PR to `main`.
+2. Run `git switch main` and `git pull --ff-only`.
+3. Run `python -m unittest discover -s tests`.
+4. Run `.\scripts\build-windows.ps1 -Version 0.1.1`, using the release version you want.
+5. Verify `dist\CFS-Price-Compare-v0.1.1-windows\pc_pricer.exe --help`.
+6. Upload only the generated zip from `dist\` to GitHub Releases.
+7. Do not upload `.env`, `build/`, or the unzipped release folder.
 
 ## Local Credentials
 
