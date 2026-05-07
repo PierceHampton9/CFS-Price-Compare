@@ -106,6 +106,87 @@ class ListingFilterTests(unittest.TestCase):
         )
         self.assertEqual(result["excluded_count"], 0)
 
+    def test_phone_filter_excludes_unrequested_model_variants(self):
+        listings = [
+            _listing("Apple iPhone 13 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 mini 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 13"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPhone 13 128GB Unlocked"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 3})
+
+    def test_phone_filter_keeps_requested_variant(self):
+        listings = [
+            _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro 128GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 13", "variant": "Pro Max"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPhone 13 Pro Max 128GB Unlocked"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_phone_filter_keeps_generic_listing_when_target_has_variant(self):
+        listings = [
+            _listing("Apple iPhone 13 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 13", "variant": "Pro Max"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            [
+                "Apple iPhone 13 128GB Unlocked",
+                "Apple iPhone 13 Pro Max 128GB Unlocked",
+            ],
+        )
+        self.assertEqual(result["excluded_count"], 0)
+
+    def test_phone_filter_handles_plus_symbol_variant_on_listing(self):
+        listings = [
+            _listing("Apple iPhone 8 64GB Unlocked", "good"),
+            _listing("Apple iPhone 8+ 64GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 8"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPhone 8 64GB Unlocked"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
     def test_tablet_filter_excludes_common_accessories(self):
         listings = [
             _listing("Samsung Galaxy Tab S7 256GB Wi-Fi", "good"),
@@ -120,6 +201,119 @@ class ListingFilterTests(unittest.TestCase):
             ["Samsung Galaxy Tab S7 256GB Wi-Fi"],
         )
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 2})
+
+    def test_tablet_filter_excludes_unrequested_variants_and_screen_sizes(self):
+        listings = [
+            _listing('Samsung Galaxy Tab S7 11" 128GB Wi-Fi', "good"),
+            _listing('Samsung Galaxy Tab S7 FE 12.4" 128GB Wi-Fi', "good"),
+            _listing('Samsung Galaxy Tab S7+ 12.4" 128GB Wi-Fi', "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="tablet",
+            target_specs={
+                "device_type": "tablet",
+                "model": "Galaxy Tab S7",
+                "screen_size": '11"',
+            },
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ['Samsung Galaxy Tab S7 11" 128GB Wi-Fi'],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 2})
+
+    def test_screen_size_filter_only_fires_when_listing_exposes_size(self):
+        listings = [
+            _listing("Samsung Galaxy Tab S7 128GB Wi-Fi", "good"),
+            _listing('Samsung Galaxy Tab S7 12.4" 128GB Wi-Fi', "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="tablet",
+            target_specs={
+                "device_type": "tablet",
+                "model": "Galaxy Tab S7",
+                "screen_size": '11"',
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung Galaxy Tab S7 128GB Wi-Fi"])
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_computer_filter_excludes_obvious_screen_size_mismatches(self):
+        listings = [
+            _listing('Apple MacBook Pro 14" M1 Pro 16GB', "good"),
+            _listing('Apple MacBook Pro 16" M1 Pro 16GB', "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "form_factor": "laptop",
+                "model": "MacBook Pro",
+                "screen_size": '14"',
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ['Apple MacBook Pro 14" M1 Pro 16GB'])
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_computer_filter_handles_hyphenated_screen_size(self):
+        listings = [
+            _listing("Apple MacBook Pro 14-inch M1 Pro 16GB", "good"),
+            _listing("Apple MacBook Pro 16-inch M1 Pro 16GB", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "form_factor": "laptop",
+                "model": "MacBook Pro",
+                "screen_size": '14"',
+            },
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple MacBook Pro 14-inch M1 Pro 16GB"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_screen_size_filter_keeps_listing_without_size(self):
+        listings = [
+            _listing("Apple MacBook Pro M1 Pro 16GB", "good"),
+            _listing("Apple MacBook Pro 16-inch M1 Pro 16GB", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "form_factor": "laptop",
+                "model": "MacBook Pro",
+                "screen_size": '14"',
+            },
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple MacBook Pro M1 Pro 16GB"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
     def test_monitor_filter_excludes_mounts_and_parts(self):
         listings = [

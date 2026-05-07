@@ -100,10 +100,30 @@ DEVICE_PARTS_TITLE_PATTERNS = {
     ],
 }
 
+DEVICE_VARIANT_PATTERNS = {
+    # Keep variant-token filtering limited to devices with stable resale variant words.
+    # Laptop titles use words like Pro/Air/Plus too loosely, so laptops rely on model and screen size.
+    "phone": {
+        "pro max": [r"\bpro\s+max\b"],
+        "pro": [r"\bpro\b"],
+        "mini": [r"\bmini\b"],
+        "plus": [r"\bplus\b", r"(?<=\d)\+"],
+        "max": [r"\bmax\b"],
+    },
+    "tablet": {
+        "pro": [r"\bpro\b"],
+        "mini": [r"\bmini\b"],
+        "plus": [r"\bplus\b", r"(?<=\d)\+"],
+        "fe": [r"\bfe\b"],
+        "air": [r"\bair\b"],
+    },
+}
+
 def filter_listings(
     listings: list[dict[str, Any]],
     target_condition: str | None = "good",
     device_type: str | None = None,
+    target_specs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return listings suitable for aggregation plus simple exclusion counts."""
     condition = _clean_condition(target_condition)
@@ -112,7 +132,12 @@ def filter_listings(
     excluded_reasons: Counter[str] = Counter()
 
     for listing in listings:
-        reason = exclusion_reason(listing, condition, device_type=clean_device_type)
+        reason = exclusion_reason(
+            listing,
+            condition,
+            device_type=clean_device_type,
+            target_specs=target_specs,
+        )
         if reason:
             excluded_reasons[reason] += 1
             continue
@@ -130,10 +155,13 @@ def exclusion_reason(
     listing: dict[str, Any],
     target_condition: str | None = "good",
     device_type: str | None = None,
+    target_specs: dict[str, Any] | None = None,
 ) -> str | None:
     """Return a short reason if a listing should not be used as a comparable."""
     if _looks_like_parts_listing(listing, device_type=device_type):
         return "parts_or_accessory"
+    if _looks_like_variant_mismatch(listing, device_type=device_type, target_specs=target_specs):
+        return "variant_mismatch"
 
     condition = _clean_condition(target_condition)
     listing_condition = _clean_condition(listing.get("condition_norm"))
@@ -156,6 +184,97 @@ def _looks_like_parts_listing(listing: dict[str, Any], device_type: str | None =
         *DEVICE_PARTS_TITLE_PATTERNS.get(clean_device_type, []),
     ]
     return any(re.search(pattern, title) for pattern in patterns)
+
+
+def _looks_like_variant_mismatch(
+    listing: dict[str, Any],
+    device_type: str | None = None,
+    target_specs: dict[str, Any] | None = None,
+) -> bool:
+    if not isinstance(target_specs, dict):
+        return False
+
+    clean_device_type = _clean_device_type(device_type or target_specs.get("device_type"))
+    title = str(listing.get("title") or "").lower()
+    if not title:
+        return False
+
+    if clean_device_type in DEVICE_VARIANT_PATTERNS and _has_conflicting_variant(
+        title,
+        clean_device_type,
+        target_specs,
+    ):
+        return True
+
+    return _has_conflicting_screen_size(title, target_specs)
+
+
+def _has_conflicting_variant(
+    title: str,
+    device_type: str,
+    target_specs: dict[str, Any],
+) -> bool:
+    target_text = " ".join(
+        str(part)
+        for part in [
+            target_specs.get("model"),
+            target_specs.get("search_model"),
+            target_specs.get("variant"),
+        ]
+        if part
+    ).lower()
+    if not target_text:
+        return False
+
+    target_variants = _detected_variants(target_text, device_type)
+    listing_variants = _detected_variants(title, device_type)
+    if not listing_variants:
+        return False
+
+    if not target_variants:
+        return True
+
+    return bool(listing_variants - target_variants)
+
+
+def _detected_variants(text: str, device_type: str) -> set[str]:
+    variants = set()
+    for variant, patterns in DEVICE_VARIANT_PATTERNS.get(device_type, {}).items():
+        if any(re.search(pattern, text) for pattern in patterns):
+            variants.add(variant)
+
+    if "pro max" in variants:
+        variants.discard("pro")
+        variants.discard("max")
+    return variants
+
+
+def _has_conflicting_screen_size(title: str, target_specs: dict[str, Any]) -> bool:
+    target_size = _screen_size_number(target_specs.get("screen_size"))
+    if not target_size:
+        return False
+
+    listing_sizes = set()
+    for match in re.finditer(r'(?<![\d.])(\d{1,2}(?:\.\d)?)\s*-?\s*(?:"|inch(?:es)?\b|in\b)', title):
+        listing_size = _screen_size_number(match.group(1))
+        if listing_size:
+            listing_sizes.add(listing_size)
+
+    if not listing_sizes:
+        return False
+    return target_size not in listing_sizes
+
+
+def _screen_size_number(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    text = re.sub(r'\s*(inch(?:es)?|in|")\s*$', "", text).strip()
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return f"{number:g}"
 
 
 def _clean_condition(value: Any) -> str | None:

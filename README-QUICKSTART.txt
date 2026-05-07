@@ -35,9 +35,17 @@ Phone example:
 
    .\pc_pricer.exe price-manual --device-type phone --brand Apple --model "iPhone 13" --storage 128 --carrier unlocked --condition good
 
+Phone variant example:
+
+   .\pc_pricer.exe price-manual --device-type phone --brand Apple --model "iPhone 13" --variant "Pro Max" --screen-size 6.7 --storage 128 --carrier unlocked --condition good
+
 Tablet example:
 
-   .\pc_pricer.exe price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --storage 256 --connectivity "Wi-Fi" --condition good
+   .\pc_pricer.exe price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --screen-size 11 --storage 256 --connectivity "Wi-Fi" --condition good
+
+Tablet variant example:
+
+   .\pc_pricer.exe price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --variant FE --screen-size 12.4 --storage 128 --connectivity "Wi-Fi" --condition good
 
 Monitor example:
 
@@ -52,6 +60,8 @@ Storage example:
    .\pc_pricer.exe price-manual --device-type storage --brand Samsung --model "970 EVO Plus" --capacity 1TB --drive-type ssd --drive-form-factor m.2 --interface nvme --condition good
 
 For storage devices, drive form factor can be 1.8, 2.5, 3.5, m.2, or msata. Common aliases like m2, M.2, 2.5in, 3.5", and mSATA also work.
+
+For phones and tablets, include variant and screen size when they distinguish meaningfully different models, such as mini, Pro, Pro Max, Plus, FE, 11", or 12.9".
 
 Price the current Windows PC
 ----------------------------

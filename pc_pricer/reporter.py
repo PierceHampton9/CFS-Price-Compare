@@ -25,6 +25,7 @@ WARNING_LABELS = {
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
     "parts_or_accessory": "parts/accessory listing",
+    "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
 }
 
@@ -93,9 +94,23 @@ def _spec_lines(specs: Any) -> list[str]:
 def _spec_parts(specs: dict[str, Any]) -> list[Any]:
     device_type = str(specs.get("device_type") or "computer").lower()
     if device_type == "phone":
-        return [specs.get("brand"), _display_model(specs), specs.get("storage_capacity"), specs.get("carrier")]
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("variant"),
+            specs.get("screen_size"),
+            specs.get("storage_capacity"),
+            specs.get("carrier"),
+        ]
     if device_type == "tablet":
-        return [specs.get("brand"), _display_model(specs), specs.get("storage_capacity"), specs.get("connectivity")]
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("variant"),
+            specs.get("screen_size"),
+            specs.get("storage_capacity"),
+            specs.get("connectivity"),
+        ]
     if device_type == "monitor":
         return [
             specs.get("brand"),
@@ -119,6 +134,8 @@ def _spec_parts(specs: dict[str, Any]) -> list[Any]:
         return [
             specs.get("brand"),
             _display_model(specs),
+            specs.get("variant"),
+            specs.get("screen_size"),
             specs.get("cpu_short") or specs.get("cpu"),
             _ram_label(specs.get("ram_gb")),
         ]

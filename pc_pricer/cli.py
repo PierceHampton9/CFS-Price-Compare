@@ -93,6 +93,8 @@ def main() -> None:
     )
     price_manual_parser.add_argument("--brand", help="Device brand, such as Lenovo, Apple, Dell, or Brother.")
     price_manual_parser.add_argument("--model", help="Device model or model family.")
+    price_manual_parser.add_argument("--variant", help="Device variant, such as mini, Pro, Pro Max, Plus, FE, or Air.")
+    price_manual_parser.add_argument("--screen-size", help='Screen size for phones, tablets, or laptops, such as 6.1, 11, 12.9, or 14".')
     price_manual_parser.add_argument("--oem-sku", help="Exact computer OEM model identifier when available.")
     price_manual_parser.add_argument(
         "--form-factor",
@@ -369,6 +371,8 @@ def _manual_computer_specs(args: argparse.Namespace) -> dict[str, Any]:
         "search_model": _clean_text(args.model),
         "oem_sku": _clean_text(args.oem_sku),
         "form_factor": args.form_factor,
+        "variant": _variant(args.variant),
+        "screen_size": _screen_size(args.screen_size),
         "cpu": _clean_text(args.cpu),
         "cpu_short": _clean_text(args.cpu),
         "ram_gb": _positive_int_or_none(args.ram),
@@ -384,6 +388,8 @@ def _manual_phone_specs(args: argparse.Namespace) -> dict[str, Any]:
     specs.update(
         {
             "storage_capacity": _capacity_from_gb(args.storage),
+            "variant": _variant(args.variant),
+            "screen_size": _screen_size(args.screen_size),
             "carrier": _clean_text(args.carrier),
         }
     )
@@ -395,6 +401,8 @@ def _manual_tablet_specs(args: argparse.Namespace) -> dict[str, Any]:
     specs.update(
         {
             "storage_capacity": _capacity_from_gb(args.storage),
+            "variant": _variant(args.variant),
+            "screen_size": _screen_size(args.screen_size),
             "connectivity": _clean_text(args.connectivity),
         }
     )
@@ -547,6 +555,26 @@ def _screen_size(value: Any) -> str | None:
         return None
     normalized = re.sub(r'\s*(inch|in|")\s*$', "", text, flags=re.IGNORECASE).strip()
     return f'{normalized}"' if normalized else None
+
+
+def _variant(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    normalized = re.sub(r"\s+", " ", text).strip()
+    aliases = {
+        "promax": "Pro Max",
+        "pro max": "Pro Max",
+        "pro-max": "Pro Max",
+        "plus": "Plus",
+        "+": "Plus",
+        "mini": "mini",
+        "fe": "FE",
+        "air": "Air",
+        "pro": "Pro",
+        "max": "Max",
+    }
+    return aliases.get(normalized.lower(), normalized)
 
 
 def _refresh_rate(value: Any) -> str | None:

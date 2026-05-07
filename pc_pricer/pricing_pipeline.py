@@ -40,6 +40,7 @@ def price_specs(
         normalized_listings,
         target_condition=target_condition,
         device_type=specs.get("device_type"),
+        target_specs=specs,
     )
 
     result = aggregate_listings(

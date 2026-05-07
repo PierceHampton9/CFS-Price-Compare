@@ -134,6 +134,24 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 400)
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 1})
 
+    def test_filters_phone_variant_mismatches_from_pipeline(self):
+        source = FakeSource(
+            {
+                "Apple iPhone 13 128GB unlocked": [
+                    _listing("Apple iPhone 13 128GB Unlocked", 400, "https://www.ebay.ca/itm/phone"),
+                    _listing("Apple iPhone 13 mini 128GB Unlocked", 300, "https://www.ebay.ca/itm/mini"),
+                ],
+                "Apple iPhone 13 128GB": [],
+                "Apple iPhone 13": [],
+            }
+        )
+
+        result = price_specs(_phone_specs(), source, limit_per_query=5, target_condition="any")
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["median_price_cad"], 400)
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
 
 class FakeSource:
     def __init__(self, results):

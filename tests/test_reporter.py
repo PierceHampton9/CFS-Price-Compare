@@ -116,6 +116,34 @@ class ReporterTests(unittest.TestCase):
 
         self.assertIn('Manual monitor:    Dell U2419H 24" 1080p 60Hz', report)
 
+    def test_formats_manual_phone_variant_and_screen_size(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 650,
+                "iqr_low_cad": 620,
+                "iqr_high_cad": 680,
+                "count": 2,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 1,
+                "specs": {
+                    "device_type": "phone",
+                    "brand": "Apple",
+                    "model": "iPhone 13",
+                    "variant": "Pro Max",
+                    "screen_size": '6.7"',
+                    "storage_capacity": "128GB",
+                    "carrier": "unlocked",
+                    "input_method": "manual",
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn('Manual phone:    Apple iPhone 13 Pro Max 6.7" 128GB unlocked', report)
+
     def test_unknown_device_type_does_not_render_as_computer(self):
         report = format_price_report(
             {
