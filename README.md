@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated devices.
 
-Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, and config-driven CLI defaults.
+Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, and an initial GUI skeleton.
 
 ## Windows Release Setup
 
@@ -183,6 +183,13 @@ For the first live pass, check:
 Do not paste real credentials into issues, pull requests, screenshots, logs, or committed files.
 
 ## Development
+
+For GUI development, install the optional GUI dependency and launch the current skeleton:
+
+```powershell
+python -m pip install -e ".[gui]"
+pc_pricer_gui
+```
 
 Run tests with:
 
