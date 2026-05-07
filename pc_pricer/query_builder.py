@@ -8,6 +8,18 @@ from typing import Any
 
 def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     """Return search queries ordered from most specific to broadest."""
+    device_type = _device_type(specs)
+    if device_type == "phone":
+        return _dedupe_queries(_phone_queries(specs))
+    if device_type == "tablet":
+        return _dedupe_queries(_tablet_queries(specs))
+    if device_type == "monitor":
+        return _dedupe_queries(_monitor_queries(specs))
+    if device_type == "printer":
+        return _dedupe_queries(_printer_queries(specs))
+    if device_type == "storage":
+        return _dedupe_queries(_storage_device_queries(specs))
+
     form_factor = _clean(specs.get("form_factor"))
 
     if form_factor in {"laptop", "all-in-one"}:
@@ -16,6 +28,10 @@ def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
         queries = _desktop_queries(specs)
 
     return _dedupe_queries(queries)
+
+
+def _device_type(specs: dict[str, Any]) -> str:
+    return (_clean(specs.get("device_type")) or "computer").lower()
 
 
 def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, Any]]:
@@ -41,6 +57,74 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
         queries.append(_query(_join_terms(brand, cpu, ram, storage, form_factor), 3, f"{form_factor} spec fallback"))
 
     return queries
+
+
+def _phone_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
+    brand = _clean(specs.get("brand"))
+    model = _model_term(specs)
+    storage = _clean(specs.get("storage_capacity"))
+    carrier = _clean(specs.get("carrier"))
+
+    return [
+        _query(_join_terms(brand, model, storage, carrier), 1, "phone brand/model/storage/carrier match"),
+        _query(_join_terms(brand, model, storage), 2, "phone brand/model/storage match"),
+        _query(_join_terms(brand, model), 3, "phone brand/model fallback"),
+    ]
+
+
+def _tablet_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
+    brand = _clean(specs.get("brand"))
+    model = _model_term(specs)
+    storage = _clean(specs.get("storage_capacity"))
+    connectivity = _clean(specs.get("connectivity"))
+
+    return [
+        _query(_join_terms(brand, model, storage, connectivity), 1, "tablet brand/model/storage/connectivity match"),
+        _query(_join_terms(brand, model, storage), 2, "tablet brand/model/storage match"),
+        _query(_join_terms(brand, model), 3, "tablet brand/model fallback"),
+    ]
+
+
+def _monitor_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
+    brand = _clean(specs.get("brand"))
+    model = _model_term(specs)
+    size = _screen_size_term(specs.get("size"))
+    resolution = _clean(specs.get("resolution"))
+    refresh_rate = _refresh_rate_term(specs.get("refresh_rate"))
+
+    return [
+        _query(_join_terms(brand, model, size, resolution, refresh_rate, "monitor"), 1, "monitor exact spec match"),
+        _query(_join_terms(brand, model, size, resolution, "monitor"), 2, "monitor brand/model/display match"),
+        _query(_join_terms(brand, model, "monitor"), 3, "monitor brand/model fallback"),
+    ]
+
+
+def _printer_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
+    brand = _clean(specs.get("brand"))
+    model = _model_term(specs)
+    printer_type = _clean(specs.get("printer_type"))
+    color = _clean(specs.get("color"))
+
+    return [
+        _query(_join_terms(brand, model, printer_type, color, "printer"), 1, "printer exact spec match"),
+        _query(_join_terms(brand, model, printer_type, "printer"), 2, "printer type match"),
+        _query(_join_terms(brand, model, "printer"), 3, "printer brand/model fallback"),
+    ]
+
+
+def _storage_device_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
+    brand = _clean(specs.get("brand"))
+    model = _model_term(specs)
+    capacity = _clean(specs.get("capacity"))
+    drive_type = _clean(specs.get("drive_type"))
+    form_factor = _storage_form_factor_term(specs.get("drive_form_factor"))
+    interface = _clean(specs.get("interface"))
+
+    return [
+        _query(_join_terms(brand, model, capacity, drive_type, form_factor, interface), 1, "storage exact spec match"),
+        _query(_join_terms(brand, model, capacity, drive_type), 2, "storage brand/model/capacity match"),
+        _query(_join_terms(capacity, drive_type, form_factor, interface), 3, "storage spec fallback"),
+    ]
 
 
 def _desktop_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -165,6 +249,29 @@ def _marketed_storage_size(size_gb: Any) -> str | None:
     if size >= 1000:
         return f"{round(size / 1024)}TB"
     return f"{size}GB"
+
+
+def _screen_size_term(value: Any) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+    lowered = text.lower().replace("inch", "").replace("in", "").replace('"', "").strip()
+    return f'{lowered}"' if lowered else None
+
+
+def _refresh_rate_term(value: Any) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+    lowered = text.lower()
+    return text if lowered.endswith("hz") else f"{text}Hz"
+
+
+def _storage_form_factor_term(value: Any) -> str | None:
+    text = _clean(value)
+    if not text:
+        return None
+    return "mSATA" if text.lower() == "msata" else text
 
 
 def _dedicated_gpu_term(specs: dict[str, Any]) -> str | None:

@@ -28,8 +28,8 @@ def price_specs(
     support_limit: int = 5,
     high_shipping_cad: float = 75.0,
     high_shipping_ratio: float = 0.25,
-    asking_discount_low: float = 0.05,
-    asking_discount_high: float = 0.10,
+    asking_discount_low: float = 0.00,
+    asking_discount_high: float = 0.05,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     queries = build_queries(specs)

@@ -2,9 +2,9 @@
 
 Repository/folder name: `CFS-Price-Compare`.
 
-A command-line tool for estimating fair resale prices for donated computers.
+A command-line tool for estimating fair resale prices for donated devices.
 
-Current status: Windows spec detection, manual spec entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, and config-driven CLI defaults.
+Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, and config-driven CLI defaults.
 
 ## Windows Release Setup
 
@@ -46,13 +46,15 @@ To include the raw Windows hardware data:
 pc_pricer detect --json --raw
 ```
 
-## Price a Computer
+## Price a Device
 
 To price the current Windows PC from detected specs:
 
 ```powershell
 pc_pricer price-detect --condition good --limit-per-query 10
 ```
+
+Auto-detection is only for Windows computers. Phones, tablets, monitors, printers, and storage devices are priced by typing the identifying details from a computer that has the program installed.
 
 To price a computer by typing the specs:
 
@@ -65,6 +67,18 @@ For desktops, include the specs which may contribute more to value than brand or
 ```powershell
 pc_pricer price-manual --form-factor desktop --brand Dell --model "OptiPlex 7050" --cpu "i5-7500" --ram 16 --storage 256 --condition good
 ```
+
+Other device examples:
+
+```powershell
+pc_pricer price-manual --device-type phone --brand Apple --model "iPhone 13" --storage 128 --carrier unlocked --condition good
+pc_pricer price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --storage 256 --connectivity "Wi-Fi" --condition good
+pc_pricer price-manual --device-type monitor --brand Dell --model "U2419H" --size 24 --resolution 1080p --refresh-rate 60Hz --condition good
+pc_pricer price-manual --device-type printer --brand Brother --model "HL-L2390DW" --printer-type laser --color mono --condition good
+pc_pricer price-manual --device-type storage --brand Samsung --model "970 EVO Plus" --capacity 1TB --drive-type ssd --drive-form-factor m.2 --interface nvme --condition good
+```
+
+For storage devices, `--drive-form-factor` accepts the internal values `1.8`, `2.5`, `3.5`, `m.2`, and `msata`, plus common aliases like `m2`, `M.2`, `2.5in`, `3.5"`, and `mSATA`.
 
 To test one manually written search query without tiered query building:
 

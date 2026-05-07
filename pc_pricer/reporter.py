@@ -83,19 +83,52 @@ def _spec_lines(specs: Any) -> list[str]:
     if not isinstance(specs, dict) or not specs:
         return []
 
-    parts = [
-        specs.get("brand"),
-        _display_model(specs),
-        specs.get("cpu_short") or specs.get("cpu"),
-        _ram_label(specs.get("ram_gb")),
-    ]
+    parts = _spec_parts(specs)
     text = " ".join(str(part) for part in parts if part)
     if not text:
         return []
     return [f"{_spec_label(specs)}:    {text}"]
 
 
+def _spec_parts(specs: dict[str, Any]) -> list[Any]:
+    device_type = str(specs.get("device_type") or "computer").lower()
+    if device_type == "phone":
+        return [specs.get("brand"), _display_model(specs), specs.get("storage_capacity"), specs.get("carrier")]
+    if device_type == "tablet":
+        return [specs.get("brand"), _display_model(specs), specs.get("storage_capacity"), specs.get("connectivity")]
+    if device_type == "monitor":
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("size"),
+            specs.get("resolution"),
+            specs.get("refresh_rate"),
+        ]
+    if device_type == "printer":
+        return [specs.get("brand"), _display_model(specs), specs.get("printer_type"), specs.get("color")]
+    if device_type == "storage":
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("capacity"),
+            specs.get("drive_type"),
+            specs.get("drive_form_factor"),
+            specs.get("interface"),
+        ]
+    if device_type == "computer":
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("cpu_short") or specs.get("cpu"),
+            _ram_label(specs.get("ram_gb")),
+        ]
+    return []
+
+
 def _spec_label(specs: dict[str, Any]) -> str:
+    device_type = str(specs.get("device_type") or "computer").lower()
+    if specs.get("input_method") == "manual" and device_type != "computer":
+        return f"Manual {device_type}"
     if specs.get("input_method") == "manual":
         return "Manual specs"
     return "Detected specs"
@@ -160,7 +193,7 @@ def _discount_percent_range(result: dict[str, Any]) -> str:
     low = _safe_percent(result.get("asking_only_discount_low"))
     high = _safe_percent(result.get("asking_only_discount_high"))
     if low is None or high is None:
-        return "5-10%"
+        return "0-5%"
     return f"{low}-{high}%"
 
 
