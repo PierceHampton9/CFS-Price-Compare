@@ -83,6 +83,8 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
             self.stack.addWidget(page)
 
         load_env_file()
+
+
         if credentials_present():
             self.show_device_type()
         else:
