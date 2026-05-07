@@ -6,6 +6,7 @@ import os
 import sys
 from typing import Any
 
+from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import default_env_path, load_env_file
 from pc_pricer.gui_forms import (
     DEVICE_TYPES,
@@ -15,7 +16,9 @@ from pc_pricer.gui_forms import (
     validate_device_type,
     validate_specs,
 )
+from pc_pricer.gui_pricing import price_gui_values
 from pc_pricer.setup_credentials import write_credentials_env
+from pc_pricer.spec_builder import gui_values_from_detected_specs
 
 LOADING_DELAY_MS = 700
 
@@ -37,6 +40,7 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
         QRadioButton,
         QScrollArea,
         QStackedWidget,
+        QTextEdit,
         QVBoxLayout,
         QWidget,
     )
@@ -45,7 +49,7 @@ except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     Qt = type("Qt", (), {"AlignCenter": 0})  # type: ignore[assignment]
     QButtonGroup = QComboBox = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
     QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
-    QScrollArea = QStackedWidget = QVBoxLayout = QWidget = object  # type: ignore[assignment]
+    QScrollArea = QStackedWidget = QTextEdit = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     QTimer = type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)})  # type: ignore[assignment]
 
 
@@ -54,6 +58,8 @@ class GuiState:
         self.device_type: str | None = None
         self.computer_mode: str | None = None
         self.specs: dict[str, Any] = {}
+        self.report_text: str = ""
+        self.report_error: str = ""
 
 
 class MainWindow(QMainWindow):  # type: ignore[misc]
@@ -83,6 +89,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
             self.stack.addWidget(page)
 
         load_env_file()
+
         if credentials_present():
             self.show_device_type()
         else:
@@ -107,7 +114,23 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
     def show_loading(self) -> None:
         self.loading_page.refresh()
         self.stack.setCurrentWidget(self.loading_page)
-        QTimer.singleShot(LOADING_DELAY_MS, self.show_report)
+        QTimer.singleShot(LOADING_DELAY_MS, self.price_current_specs)
+
+    def price_current_specs(self) -> None:
+        try:
+            _result, report = price_gui_values(
+                self.state.device_type or "computer",
+                self.state.specs,
+            )
+            self.state.report_text = report
+            self.state.report_error = ""
+        except RuntimeError as exc:
+            self.state.report_text = ""
+            self.state.report_error = str(exc)
+        except Exception as exc:  # pragma: no cover - defensive GUI boundary.
+            self.state.report_text = ""
+            self.state.report_error = f"Unexpected pricing error: {exc}"
+        self.show_report()
 
     def show_report(self) -> None:
         self.report_page.refresh()
@@ -236,7 +259,7 @@ class ComputerModePage(Page):
         self.group.addButton(manual)
         self.root.addWidget(auto)
         self.root.addWidget(manual)
-        self.note = QLabel("Auto-detect will prefill editable specs in the next PR.")
+        self.note = QLabel("Auto-detect will prefill editable specs before pricing.")
         self.note.setObjectName("statusText")
         self.root.addWidget(self.note)
         self.error = QLabel()
@@ -258,6 +281,18 @@ class ComputerModePage(Page):
         if errors:
             self.error.setText(errors[0])
             return
+        if self.main_window.state.computer_mode == "auto":
+            try:
+                detected = detect_specs()
+            except RuntimeError as exc:
+                self.error.setText(str(exc))
+                return
+
+            condition = self.main_window.state.specs.get("condition")
+            self.main_window.state.specs = gui_values_from_detected_specs(detected)
+            self.main_window.state.specs["input_method"] = "detected"
+            if condition:
+                self.main_window.state.specs["condition"] = condition
         self.main_window.show_specs()
 
 
@@ -294,7 +329,7 @@ class SpecsPage(Page):
             self.form.addRow(f"{field.label}{suffix}", widget)
 
         if device_type == "computer" and self.main_window.state.computer_mode == "auto":
-            self.error.setText("Auto-detected specs will appear here after the next GUI PR.")
+            self.error.setText("Auto-detected specs are editable before pricing.")
 
     def back_page(self) -> None:
         self._store_values()
@@ -313,16 +348,23 @@ class SpecsPage(Page):
         self.main_window.show_loading()
 
     def _store_values(self) -> None:
-        self.main_window.state.specs = {
+        values = {
             name: widget_value(widget)
             for name, widget in self.inputs.items()
             if widget_value(widget) != ""
         }
+        if (
+            self.main_window.state.device_type == "computer"
+            and self.main_window.state.computer_mode == "auto"
+            and self.main_window.state.specs.get("input_method") == "detected"
+        ):
+            values["input_method"] = "detected"
+        self.main_window.state.specs = values
 
 
 class LoadingPage(Page):
     def __init__(self, window: MainWindow) -> None:
-        super().__init__(window, "Searching", "Pricing will be wired in the next PR.")
+        super().__init__(window, "Searching", "Searching eBay and preparing the price report.")
         self.message = QLabel()
         self.message.setAlignment(Qt.AlignCenter)
         self.root.addStretch()
@@ -337,12 +379,12 @@ class ReportPage(Page):
     def __init__(self, window: MainWindow) -> None:
         super().__init__(
             window,
-            "Report Preview",
-            "This placeholder will become the real pricing report in the next PR.",
+            "Price Report",
+            "Review the estimate and supporting listings. Go back to specs if the comparables look off.",
         )
-        self.summary = QLabel()
-        self.summary.setWordWrap(True)
-        self.root.addWidget(self.summary)
+        self.summary = QTextEdit()
+        self.summary.setReadOnly(True)
+        self.root.addWidget(self.summary, 1)
         self.root.addStretch()
         buttons = QHBoxLayout()
         back = QPushButton("Back to Specs")
@@ -358,9 +400,10 @@ class ReportPage(Page):
         self.root.addLayout(buttons)
 
     def refresh(self) -> None:
-        device = self.main_window.state.device_type or "device"
-        parts = [f"{key}: {value}" for key, value in sorted(self.main_window.state.specs.items())]
-        self.summary.setText(f"{device.title()} specs accepted.\n\n" + "\n".join(parts))
+        if self.main_window.state.report_error:
+            self.summary.setPlainText(f"Pricing failed\n\n{self.main_window.state.report_error}")
+            return
+        self.summary.setPlainText(self.main_window.state.report_text or "No report generated.")
 
 
 def credentials_present() -> bool:

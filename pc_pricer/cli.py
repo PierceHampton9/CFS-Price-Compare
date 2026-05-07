@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from typing import Any
 
@@ -19,11 +18,13 @@ from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.setup_credentials import run_setup
+from pc_pricer.spec_builder import (
+    VALID_CONDITIONS,
+    VALID_DEVICE_TYPES,
+    build_manual_specs,
+    manual_device_type,
+)
 from pc_pricer.sources.ebay import EbaySource
-
-
-VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
-VALID_DEVICE_TYPES = {"computer", "phone", "tablet", "monitor", "printer", "storage"}
 
 
 def main() -> None:
@@ -344,252 +345,11 @@ def _format_storage(storage: Any) -> str:
 
 
 def _manual_specs(args: argparse.Namespace) -> dict[str, Any]:
-    device_type = _manual_device_type(args.device_type)
-    if device_type == "computer":
-        return _manual_computer_specs(args)
-    if device_type == "phone":
-        return _manual_phone_specs(args)
-    if device_type == "tablet":
-        return _manual_tablet_specs(args)
-    if device_type == "monitor":
-        return _manual_monitor_specs(args)
-    if device_type == "printer":
-        return _manual_printer_specs(args)
-    if device_type == "storage":
-        return _manual_storage_device_specs(args)
-    raise RuntimeError(f"Invalid device type {device_type!r}.")
-
-
-def _manual_computer_specs(args: argparse.Namespace) -> dict[str, Any]:
-    if not args.form_factor:
-        raise RuntimeError("Computer pricing requires --form-factor laptop, desktop, or all-in-one.")
-
-    specs = {
-        "device_type": "computer",
-        "brand": _clean_text(args.brand),
-        "model": _clean_text(args.model),
-        "search_model": _clean_text(args.model),
-        "oem_sku": _clean_text(args.oem_sku),
-        "form_factor": args.form_factor,
-        "variant": _variant(args.variant),
-        "screen_size": _screen_size(args.screen_size),
-        "cpu": _clean_text(args.cpu),
-        "cpu_short": _clean_text(args.cpu),
-        "ram_gb": _positive_int_or_none(args.ram),
-        "storage": _manual_storage(args.storage, args.storage_type),
-        "gpu": _clean_text(args.gpu),
-        "input_method": "manual",
-    }
-    return {key: value for key, value in specs.items() if value not in (None, [], "")}
-
-
-def _manual_phone_specs(args: argparse.Namespace) -> dict[str, Any]:
-    specs = _manual_base_specs(args, "phone")
-    specs.update(
-        {
-            "storage_capacity": _capacity_from_gb(args.storage),
-            "variant": _variant(args.variant),
-            "screen_size": _screen_size(args.screen_size),
-            "carrier": _clean_text(args.carrier),
-        }
-    )
-    return _without_empty_values(specs)
-
-
-def _manual_tablet_specs(args: argparse.Namespace) -> dict[str, Any]:
-    specs = _manual_base_specs(args, "tablet")
-    specs.update(
-        {
-            "storage_capacity": _capacity_from_gb(args.storage),
-            "variant": _variant(args.variant),
-            "screen_size": _screen_size(args.screen_size),
-            "connectivity": _clean_text(args.connectivity),
-        }
-    )
-    return _without_empty_values(specs)
-
-
-def _manual_monitor_specs(args: argparse.Namespace) -> dict[str, Any]:
-    specs = _manual_base_specs(args, "monitor")
-    specs.update(
-        {
-            "size": _screen_size(args.size),
-            "resolution": _clean_text(args.resolution),
-            "refresh_rate": _refresh_rate(args.refresh_rate),
-        }
-    )
-    return _without_empty_values(specs)
-
-
-def _manual_printer_specs(args: argparse.Namespace) -> dict[str, Any]:
-    specs = _manual_base_specs(args, "printer")
-    specs.update(
-        {
-            "printer_type": _clean_text(args.printer_type),
-            "color": _clean_text(args.color),
-        }
-    )
-    return _without_empty_values(specs)
-
-
-def _manual_storage_device_specs(args: argparse.Namespace) -> dict[str, Any]:
-    specs = _manual_base_specs(args, "storage")
-    specs.update(
-        {
-            "capacity": _clean_text(args.capacity) or _capacity_from_gb(args.storage),
-            "drive_type": _drive_type(args.drive_type),
-            "drive_form_factor": _drive_form_factor(args.drive_form_factor),
-            "interface": _storage_interface(args.interface),
-        }
-    )
-    return _without_empty_values(specs)
-
-
-def _manual_base_specs(args: argparse.Namespace, device_type: str) -> dict[str, Any]:
-    return {
-        "device_type": device_type,
-        "brand": _clean_text(args.brand),
-        "model": _clean_text(args.model),
-        "search_model": _clean_text(args.model),
-        "input_method": "manual",
-    }
-
-
-def _without_empty_values(specs: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in specs.items() if value not in (None, [], "")}
-
-
-def _manual_storage(size_gb: Any, drive_type: Any) -> list[dict[str, Any]]:
-    size = _positive_int_or_none(size_gb)
-    if not size:
-        return []
-    return [
-        {
-            "size_gb": size,
-            "type": _storage_type(drive_type),
-        }
-    ]
-
-
-def _storage_type(value: Any) -> str:
-    text = _clean_text(value) or "SSD"
-    return text.upper() if text.lower() in {"ssd", "hdd", "nvme", "emmc"} else text
+    return build_manual_specs(args.device_type, vars(args))
 
 
 def _manual_device_type(value: Any) -> str:
-    text = (_clean_text(value) or "computer").lower()
-    if text not in VALID_DEVICE_TYPES:
-        raise RuntimeError(
-            "Invalid device type. Use computer, phone, tablet, monitor, printer, or storage."
-        )
-    return text
-
-
-def _capacity_from_gb(value: Any) -> str | None:
-    size = _positive_int_or_none(value)
-    if not size:
-        return None
-    if size >= 1024 and size % 1024 == 0:
-        return f"{size // 1024}TB"
-    if size >= 1000:
-        divisor = 1000 if size % 1000 == 0 else 1024
-        tb = round(size / divisor, 1)
-        return f"{tb:g}TB"
-    return f"{size}GB"
-
-
-def _drive_form_factor(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-
-    normalized = re.sub(r"\s+", "", text.lower()).replace('"', "")
-    aliases = {
-        "1.8": "1.8",
-        "1.8in": "1.8",
-        "1.8inch": "1.8",
-        "2.5": "2.5",
-        "2.5in": "2.5",
-        "2.5inch": "2.5",
-        "3.5": "3.5",
-        "3.5in": "3.5",
-        "3.5inch": "3.5",
-        "m.2": "m.2",
-        "m2": "m.2",
-        "msata": "msata",
-    }
-    return aliases.get(normalized, text)
-
-
-def _drive_type(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    lowered = text.lower()
-    if lowered == "ssd":
-        return "SSD"
-    if lowered == "hdd":
-        return "HDD"
-    return text
-
-
-def _storage_interface(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    normalized = re.sub(r"[\s_-]+", "", text.lower())
-    aliases = {
-        "nvme": "NVMe",
-        "sata": "SATA",
-        "usb": "USB",
-        "sas": "SAS",
-        "pcie": "PCIe",
-        "pciexpress": "PCIe",
-    }
-    return aliases.get(normalized, text)
-
-
-def _screen_size(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    normalized = re.sub(r'\s*(inch|in|")\s*$', "", text, flags=re.IGNORECASE).strip()
-    return f'{normalized}"' if normalized else None
-
-
-def _variant(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    normalized = re.sub(r"\s+", " ", text).strip()
-    aliases = {
-        "promax": "Pro Max",
-        "pro max": "Pro Max",
-        "pro-max": "Pro Max",
-        "plus": "Plus",
-        "+": "Plus",
-        "mini": "mini",
-        "fe": "FE",
-        "air": "Air",
-        "pro": "Pro",
-        "max": "Max",
-    }
-    return aliases.get(normalized.lower(), normalized)
-
-
-def _refresh_rate(value: Any) -> str | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    normalized = re.sub(r"\s*hz\s*$", "", text, flags=re.IGNORECASE).strip()
-    return f"{normalized}Hz" if normalized else None
-
-
-def _clean_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
+    return manual_device_type(value)
 
 
 def _ebay_source(config: dict[str, Any], marketplace_override: str | None = None) -> EbaySource:

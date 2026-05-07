@@ -630,7 +630,7 @@ sources:
                 cli.main()
 
         self.assertEqual(exc.exception.code, 1)
-        self.assertIn("Computer pricing requires --form-factor", stderr.getvalue())
+        self.assertIn("Computer pricing requires a form factor", stderr.getvalue())
 
     def test_price_manual_command_can_print_json(self):
         class FakeEbaySource:
