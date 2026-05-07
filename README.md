@@ -20,6 +20,12 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
+Launch the GUI skeleton during development with:
+
+```powershell
+pc_pricer_gui
+```
+
 ## Detect Specs
 
 Run this on the computer you want to inspect:
