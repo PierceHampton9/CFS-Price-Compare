@@ -7,8 +7,8 @@ from typing import Any
 
 def apply_pricing_basis(
     result: dict[str, Any],
-    asking_discount_low: float = 0.05,
-    asking_discount_high: float = 0.10,
+    asking_discount_low: float = 0.00,
+    asking_discount_high: float = 0.05,
 ) -> dict[str, Any]:
     """Return a copy of an aggregate result with asking-only adjustment fields."""
     updated = dict(result)

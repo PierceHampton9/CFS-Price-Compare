@@ -18,8 +18,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "support_limit": 5,
     "high_shipping_cad": 75,
     "high_shipping_ratio": 0.25,
-    "asking_discount_low": 0.05,
-    "asking_discount_high": 0.10,
+    "asking_discount_low": 0.00,
+    "asking_discount_high": 0.05,
     "max_sold_listing_age_days": 90,
     "max_asking_listing_age_days": 30,
     "sources": {

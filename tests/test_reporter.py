@@ -89,6 +89,33 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Queries used:", report)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", report)
 
+    def test_formats_manual_non_computer_specs(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 420,
+                "iqr_low_cad": 400,
+                "iqr_high_cad": 450,
+                "count": 2,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 1,
+                "specs": {
+                    "device_type": "monitor",
+                    "brand": "Dell",
+                    "model": "U2419H",
+                    "size": "24",
+                    "resolution": "1080p",
+                    "refresh_rate": "60Hz",
+                    "input_method": "manual",
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Manual monitor:    Dell U2419H 24 1080p 60Hz", report)
+
     def test_detected_specs_hide_machine_type_model(self):
         report = format_price_report(
             {

@@ -22,6 +22,7 @@ from pc_pricer.sources.ebay import EbaySource
 
 
 VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
+VALID_DEVICE_TYPES = {"computer", "phone", "tablet", "monitor", "printer", "storage"}
 
 
 def main() -> None:
@@ -77,20 +78,39 @@ def main() -> None:
         "price-manual",
         help="Enter specs manually, search tiered eBay queries, and print a draft price report.",
     )
-    price_manual_parser.add_argument("--brand", help="Computer brand, such as Lenovo or Dell.")
-    price_manual_parser.add_argument("--model", help="Computer model or model family.")
-    price_manual_parser.add_argument("--oem-sku", help="Exact OEM model identifier when available.")
+    price_manual_parser.add_argument(
+        "--device-type",
+        choices=sorted(VALID_DEVICE_TYPES),
+        default="computer",
+        help="Type of device to price. Defaults to computer.",
+    )
+    price_manual_parser.add_argument("--brand", help="Device brand, such as Lenovo, Apple, Dell, or Brother.")
+    price_manual_parser.add_argument("--model", help="Device model or model family.")
+    price_manual_parser.add_argument("--oem-sku", help="Exact computer OEM model identifier when available.")
     price_manual_parser.add_argument(
         "--form-factor",
-        required=True,
         choices=["laptop", "desktop", "all-in-one"],
-        help="Computer form factor.",
+        help="Computer form factor. Required for device-type computer.",
     )
     price_manual_parser.add_argument("--cpu", help="CPU model, preferably the short form such as i5-1135G7.")
     price_manual_parser.add_argument("--ram", type=int, help="RAM in GB.")
-    price_manual_parser.add_argument("--storage", type=int, help="Primary storage size in GB.")
-    price_manual_parser.add_argument("--storage-type", default="SSD", help="Primary storage type, such as SSD or HDD.")
+    price_manual_parser.add_argument("--storage", type=int, help="Computer/phone/tablet storage size in GB.")
+    price_manual_parser.add_argument("--storage-type", default="SSD", help="Computer primary storage type, such as SSD or HDD.")
     price_manual_parser.add_argument("--gpu", help="Dedicated GPU model when present.")
+    price_manual_parser.add_argument("--carrier", help="Phone carrier or unlocked status.")
+    price_manual_parser.add_argument("--connectivity", help="Tablet connectivity, such as Wi-Fi or cellular.")
+    price_manual_parser.add_argument("--size", help='Monitor size, such as 24 or 27".')
+    price_manual_parser.add_argument("--resolution", help="Monitor resolution, such as 1080p, 1440p, or 4K.")
+    price_manual_parser.add_argument("--refresh-rate", help="Monitor refresh rate, such as 60 or 144Hz.")
+    price_manual_parser.add_argument("--printer-type", help="Printer type, such as laser, inkjet, or label.")
+    price_manual_parser.add_argument("--color", help="Printer color support, such as color or mono.")
+    price_manual_parser.add_argument("--capacity", help="Storage-device capacity, such as 512GB, 1TB, or 4TB.")
+    price_manual_parser.add_argument("--drive-type", choices=["hdd", "ssd"], help="Storage-device drive type.")
+    price_manual_parser.add_argument(
+        "--drive-form-factor",
+        help="Storage-device form factor. Accepts 1.8, 2.5, 3.5, m.2, msata, and common aliases.",
+    )
+    price_manual_parser.add_argument("--interface", help="Storage-device interface, such as SATA, NVMe, USB, or SAS.")
     price_manual_parser.add_argument(
         "--limit-per-query",
         type=int,
@@ -311,7 +331,28 @@ def _format_storage(storage: Any) -> str:
 
 
 def _manual_specs(args: argparse.Namespace) -> dict[str, Any]:
+    device_type = _manual_device_type(args.device_type)
+    if device_type == "computer":
+        return _manual_computer_specs(args)
+    if device_type == "phone":
+        return _manual_phone_specs(args)
+    if device_type == "tablet":
+        return _manual_tablet_specs(args)
+    if device_type == "monitor":
+        return _manual_monitor_specs(args)
+    if device_type == "printer":
+        return _manual_printer_specs(args)
+    if device_type == "storage":
+        return _manual_storage_device_specs(args)
+    raise RuntimeError(f"Invalid device type {device_type!r}.")
+
+
+def _manual_computer_specs(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.form_factor:
+        raise RuntimeError("Computer pricing requires --form-factor laptop, desktop, or all-in-one.")
+
     specs = {
+        "device_type": "computer",
         "brand": _clean_text(args.brand),
         "model": _clean_text(args.model),
         "search_model": _clean_text(args.model),
@@ -324,6 +365,78 @@ def _manual_specs(args: argparse.Namespace) -> dict[str, Any]:
         "gpu": _clean_text(args.gpu),
         "input_method": "manual",
     }
+    return {key: value for key, value in specs.items() if value not in (None, [], "")}
+
+
+def _manual_phone_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = _manual_base_specs(args, "phone")
+    specs.update(
+        {
+            "storage_capacity": _capacity_from_gb(args.storage),
+            "carrier": _clean_text(args.carrier),
+        }
+    )
+    return _without_empty_values(specs)
+
+
+def _manual_tablet_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = _manual_base_specs(args, "tablet")
+    specs.update(
+        {
+            "storage_capacity": _capacity_from_gb(args.storage),
+            "connectivity": _clean_text(args.connectivity),
+        }
+    )
+    return _without_empty_values(specs)
+
+
+def _manual_monitor_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = _manual_base_specs(args, "monitor")
+    specs.update(
+        {
+            "size": _clean_text(args.size),
+            "resolution": _clean_text(args.resolution),
+            "refresh_rate": _clean_text(args.refresh_rate),
+        }
+    )
+    return _without_empty_values(specs)
+
+
+def _manual_printer_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = _manual_base_specs(args, "printer")
+    specs.update(
+        {
+            "printer_type": _clean_text(args.printer_type),
+            "color": _clean_text(args.color),
+        }
+    )
+    return _without_empty_values(specs)
+
+
+def _manual_storage_device_specs(args: argparse.Namespace) -> dict[str, Any]:
+    specs = _manual_base_specs(args, "storage")
+    specs.update(
+        {
+            "capacity": _clean_text(args.capacity) or _capacity_from_gb(args.storage),
+            "drive_type": _clean_lower(args.drive_type),
+            "drive_form_factor": _drive_form_factor(args.drive_form_factor),
+            "interface": _clean_upper(args.interface),
+        }
+    )
+    return _without_empty_values(specs)
+
+
+def _manual_base_specs(args: argparse.Namespace, device_type: str) -> dict[str, Any]:
+    return {
+        "device_type": device_type,
+        "brand": _clean_text(args.brand),
+        "model": _clean_text(args.model),
+        "search_model": _clean_text(args.model),
+        "input_method": "manual",
+    }
+
+
+def _without_empty_values(specs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in specs.items() if value not in (None, [], "")}
 
 
@@ -342,6 +455,57 @@ def _manual_storage(size_gb: Any, drive_type: Any) -> list[dict[str, Any]]:
 def _storage_type(value: Any) -> str:
     text = _clean_text(value) or "SSD"
     return text.upper() if text.lower() in {"ssd", "hdd", "nvme", "emmc"} else text
+
+
+def _manual_device_type(value: Any) -> str:
+    text = (_clean_text(value) or "computer").lower()
+    if text not in VALID_DEVICE_TYPES:
+        raise RuntimeError(
+            "Invalid device type. Use computer, phone, tablet, monitor, printer, or storage."
+        )
+    return text
+
+
+def _capacity_from_gb(value: Any) -> str | None:
+    size = _positive_int_or_none(value)
+    if not size:
+        return None
+    if size >= 1024 and size % 1024 == 0:
+        return f"{size // 1024}TB"
+    return f"{size}GB"
+
+
+def _drive_form_factor(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+
+    normalized = (
+        text.lower()
+        .replace('"', "")
+        .replace("inch", "")
+        .replace("in", "")
+        .replace(" ", "")
+    )
+    aliases = {
+        "1.8": "1.8",
+        "2.5": "2.5",
+        "3.5": "3.5",
+        "m.2": "m.2",
+        "m2": "m.2",
+        "msata": "msata",
+    }
+    return aliases.get(normalized, text)
+
+
+def _clean_lower(value: Any) -> str | None:
+    text = _clean_text(value)
+    return text.lower() if text else None
+
+
+def _clean_upper(value: Any) -> str | None:
+    text = _clean_text(value)
+    return text.upper() if text else None
 
 
 def _clean_text(value: Any) -> str | None:
@@ -412,8 +576,8 @@ def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:
-    discount_low = _positive_float(config.get("asking_discount_low"), 0.05)
-    discount_high = _positive_float(config.get("asking_discount_high"), 0.10)
+    discount_low = _non_negative_float(config.get("asking_discount_low"), 0.00)
+    discount_high = _non_negative_float(config.get("asking_discount_high"), 0.05)
     if discount_low > discount_high:
         discount_low, discount_high = discount_high, discount_low
 
@@ -445,6 +609,14 @@ def _positive_float(value: Any, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _non_negative_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
 
 
 def _bool_value(value: Any, default: bool) -> bool:

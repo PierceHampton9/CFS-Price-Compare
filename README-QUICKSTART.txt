@@ -20,8 +20,8 @@ First-time setup
 
    .\pc_pricer.exe ebay-check
 
-Price a computer by typing specs
---------------------------------
+Price a device by typing specs
+------------------------------
 
 Laptop example:
 
@@ -31,10 +31,32 @@ Desktop example:
 
    .\pc_pricer.exe price-manual --form-factor desktop --brand Dell --model "OptiPlex 7050" --cpu "i5-7500" --ram 16 --storage 256 --condition good
 
+Phone example:
+
+   .\pc_pricer.exe price-manual --device-type phone --brand Apple --model "iPhone 13" --storage 128 --carrier unlocked --condition good
+
+Tablet example:
+
+   .\pc_pricer.exe price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --storage 256 --connectivity "Wi-Fi" --condition good
+
+Monitor example:
+
+   .\pc_pricer.exe price-manual --device-type monitor --brand Dell --model "U2419H" --size 24 --resolution 1080p --refresh-rate 60Hz --condition good
+
+Printer example:
+
+   .\pc_pricer.exe price-manual --device-type printer --brand Brother --model "HL-L2390DW" --printer-type laser --color mono --condition good
+
+Storage example:
+
+   .\pc_pricer.exe price-manual --device-type storage --brand Samsung --model "970 EVO Plus" --capacity 1TB --drive-type ssd --drive-form-factor m.2 --interface nvme --condition good
+
+For storage devices, drive form factor can be 1.8, 2.5, 3.5, m.2, or msata. Common aliases like m2, M.2, 2.5in, 3.5", and mSATA also work.
+
 Price the current Windows PC
 ----------------------------
 
-Run this on the computer being inspected:
+Auto-detection is only for Windows computers. Run this on the computer being inspected:
 
    .\pc_pricer.exe price-detect --condition good
 

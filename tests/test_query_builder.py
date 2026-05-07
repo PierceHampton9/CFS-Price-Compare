@@ -154,6 +154,98 @@ class QueryBuilderTests(unittest.TestCase):
 
         self.assertEqual(queries, [])
 
+    def test_phone_queries_use_model_storage_and_carrier(self):
+        specs = {
+            "device_type": "phone",
+            "brand": "Apple",
+            "model": "iPhone 13",
+            "storage_capacity": "128GB",
+            "carrier": "unlocked",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Apple iPhone 13 128GB unlocked")
+        self.assertEqual(queries[0]["tier"], 1)
+        self.assertEqual(queries[1]["text"], "Apple iPhone 13 128GB")
+        self.assertEqual(queries[2]["text"], "Apple iPhone 13")
+
+    def test_tablet_queries_use_connectivity(self):
+        specs = {
+            "device_type": "tablet",
+            "brand": "Samsung",
+            "model": "Galaxy Tab S7",
+            "storage_capacity": "256GB",
+            "connectivity": "Wi-Fi",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Samsung Galaxy Tab S7 256GB Wi-Fi")
+        self.assertEqual(queries[1]["text"], "Samsung Galaxy Tab S7 256GB")
+
+    def test_monitor_queries_include_display_specs(self):
+        specs = {
+            "device_type": "monitor",
+            "brand": "Dell",
+            "model": "U2419H",
+            "size": "24",
+            "resolution": "1080p",
+            "refresh_rate": "60",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], 'Dell U2419H 24" 1080p 60Hz monitor')
+        self.assertEqual(queries[1]["text"], 'Dell U2419H 24" 1080p monitor')
+        self.assertEqual(queries[2]["text"], "Dell U2419H monitor")
+
+    def test_printer_queries_include_printer_type(self):
+        specs = {
+            "device_type": "printer",
+            "brand": "Brother",
+            "model": "HL-L2390DW",
+            "printer_type": "laser",
+            "color": "mono",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Brother HL-L2390DW laser mono printer")
+        self.assertEqual(queries[1]["text"], "Brother HL-L2390DW laser printer")
+
+    def test_storage_device_queries_separate_form_factor_and_interface(self):
+        specs = {
+            "device_type": "storage",
+            "brand": "Samsung",
+            "model": "970 EVO Plus",
+            "capacity": "1TB",
+            "drive_type": "ssd",
+            "drive_form_factor": "m.2",
+            "interface": "NVMe",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Samsung 970 EVO Plus 1TB ssd m.2 NVMe")
+        self.assertEqual(queries[1]["text"], "Samsung 970 EVO Plus 1TB ssd")
+        self.assertEqual(queries[2]["text"], "1TB ssd m.2 NVMe")
+
+    def test_storage_device_queries_display_msata_alias_cleanly(self):
+        specs = {
+            "device_type": "storage",
+            "brand": "Kingston",
+            "model": "SSDNow",
+            "capacity": "240GB",
+            "drive_type": "ssd",
+            "drive_form_factor": "msata",
+            "interface": "SATA",
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Kingston SSDNow 240GB ssd mSATA SATA")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -112,8 +112,8 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["confidence_flags"], [])
         self.assertEqual(result["pricing_limitations"], ["asking_prices_only"])
         self.assertEqual(result["pricing_basis"], "asking_adjusted")
-        self.assertEqual(result["conservative_low_cad"], 459.0)
-        self.assertEqual(result["conservative_high_cad"], 484.5)
+        self.assertEqual(result["conservative_low_cad"], 484.5)
+        self.assertEqual(result["conservative_high_cad"], 510.0)
         self.assertEqual(len(result["supporting_listings"]), 1)
 
 

@@ -239,7 +239,7 @@ sources:
         self.assertEqual(instances[0].marketplace, "EBAY_US")
         self.assertEqual(instances[0].max_results, 2)
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", output)
+        self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
         self.assertIn("Asking median:     $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
@@ -292,7 +292,7 @@ sources:
         self.assertEqual(instances[0].marketplace, "EBAY_CA")
         self.assertEqual(instances[0].max_results, 1)
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $180.00 CAD - $190.00 CAD", output)
+        self.assertIn("Conservative est.: $190.00 CAD - $200.00 CAD", output)
         self.assertIn("Target condition:  good", output)
 
     def test_price_query_sorts_misordered_asking_discount_config(self):
@@ -346,7 +346,7 @@ sources:
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $180.00 CAD - $190.00 CAD", output)
+        self.assertIn("Conservative est.: $190.00 CAD - $200.00 CAD", output)
         self.assertIn("Comparables:       1", output)
         self.assertIn("Filtered out:      2", output)
         self.assertIn("condition mismatch: 1", output)
@@ -375,7 +375,7 @@ sources:
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", output)
+        self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
         self.assertIn("Asking median:     $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
@@ -437,9 +437,99 @@ sources:
         self.assertIn("Manual specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
         self.assertIn("Queries used:", output)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
-        self.assertIn("Conservative est.: $270.00 CAD - $285.00 CAD", output)
+        self.assertIn("Conservative est.: $285.00 CAD - $300.00 CAD", output)
         self.assertIn("Asking median:     $300.00 CAD", output)
         self.assertIn("Asking prices only", output)
+
+    def test_price_manual_command_prices_phone_specs(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, query, max_results):
+                self.query = query
+                self.max_results = max_results
+                return [_listing("iPhone 13 128GB unlocked", 420)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--device-type",
+            "phone",
+            "--brand",
+            "Apple",
+            "--model",
+            "iPhone 13",
+            "--storage",
+            "128",
+            "--carrier",
+            "unlocked",
+            "--limit-per-query",
+            "4",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Manual phone:    Apple iPhone 13 128GB unlocked", output)
+        self.assertIn("T1: Apple iPhone 13 128GB unlocked", output)
+        self.assertIn("T2: Apple iPhone 13 128GB", output)
+        self.assertIn("Conservative est.: $399.00 CAD - $420.00 CAD", output)
+
+    def test_price_manual_command_normalizes_storage_form_factor_alias(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Samsung 970 EVO Plus 1TB NVMe", 70)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--device-type",
+            "storage",
+            "--brand",
+            "Samsung",
+            "--model",
+            "970 EVO Plus",
+            "--capacity",
+            "1TB",
+            "--drive-type",
+            "ssd",
+            "--drive-form-factor",
+            "m2",
+            "--interface",
+            "nvme",
+            "--json",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('"device_type": "storage"', output)
+        self.assertIn('"drive_form_factor": "m.2"', output)
+        self.assertIn('"interface": "NVME"', output)
+        self.assertIn('"text": "Samsung 970 EVO Plus 1TB ssd m.2 NVME"', output)
+
+    def test_price_manual_command_requires_form_factor_for_computers(self):
+        stderr = io.StringIO()
+        argv = ["pc_pricer", "price-manual", "--brand", "Lenovo", "--model", "ThinkPad"]
+
+        with patch("sys.argv", argv), patch("sys.stderr", stderr):
+            with self.assertRaises(SystemExit) as exc:
+                cli.main()
+
+        self.assertEqual(exc.exception.code, 1)
+        self.assertIn("Computer pricing requires --form-factor", stderr.getvalue())
 
     def test_price_manual_command_can_print_json(self):
         class FakeEbaySource:
@@ -508,7 +598,7 @@ sources:
         self.assertIn("Detected specs:    Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
         self.assertIn("Queries used:", output)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
-        self.assertIn("Conservative est.: $270.00 CAD - $285.00 CAD", output)
+        self.assertIn("Conservative est.: $285.00 CAD - $300.00 CAD", output)
         self.assertNotIn("private-serial", output)
 
     def test_price_detect_command_can_print_json_with_raw_specs(self):
