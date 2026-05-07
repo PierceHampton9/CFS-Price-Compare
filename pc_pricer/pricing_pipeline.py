@@ -36,7 +36,11 @@ def price_specs(
     raw_listings = _search_queries(source, queries, limit_per_query)
     deduped_listings = _dedupe_listings(raw_listings)
     normalized_listings = normalize_listings(deduped_listings)
-    filtered = filter_listings(normalized_listings, target_condition=target_condition)
+    filtered = filter_listings(
+        normalized_listings,
+        target_condition=target_condition,
+        device_type=specs.get("device_type"),
+    )
 
     result = aggregate_listings(
         filtered["listings"],

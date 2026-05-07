@@ -86,6 +86,12 @@ To test one manually written search query without tiered query building:
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --limit 10
 ```
 
+For direct non-computer searches, include `--device-type` so the accessory/parts filter uses the right rules:
+
+```powershell
+pc_pricer price-query "iPhone 13 128GB unlocked" --device-type phone --limit 10
+```
+
 Search, pricing, and eBay credential-check commands read defaults from `config.yaml`. Command-line flags still win:
 
 ```powershell
