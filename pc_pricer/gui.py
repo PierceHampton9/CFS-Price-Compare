@@ -1,4 +1,3 @@
-# pyright: reportMissingImports=false
 """PySide6 GUI entry point."""
 
 from __future__ import annotations
@@ -18,9 +17,12 @@ from pc_pricer.gui_forms import (
 )
 from pc_pricer.setup_credentials import write_credentials_env
 
+LOADING_DELAY_MS = 700
+
+
 try:  # pragma: no cover - exercised only when PySide6 is installed.
-    from PySide6.QtCore import Qt, QTimer
-    from PySide6.QtWidgets import (
+    from PySide6.QtCore import Qt, QTimer  # type: ignore[import-not-found]
+    from PySide6.QtWidgets import (  # type: ignore[import-not-found]
         QApplication,
         QButtonGroup,
         QComboBox,
@@ -81,7 +83,10 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
             self.stack.addWidget(page)
 
         load_env_file()
-        self.show_device_type() if credentials_present() else self.show_credentials()
+        if credentials_present():
+            self.show_device_type()
+        else:
+            self.show_credentials()
 
     def show_credentials(self) -> None:
         self.credentials_page.refresh()
@@ -102,7 +107,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
     def show_loading(self) -> None:
         self.loading_page.refresh()
         self.stack.setCurrentWidget(self.loading_page)
-        QTimer.singleShot(700, self.show_report)
+        QTimer.singleShot(LOADING_DELAY_MS, self.show_report)
 
     def show_report(self) -> None:
         self.report_page.refresh()
@@ -116,7 +121,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
 class Page(QWidget):  # type: ignore[misc]
     def __init__(self, window: MainWindow, title: str, subtitle: str = "") -> None:
         super().__init__()
-        self.window = window
+        self.main_window = window
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(34, 28, 34, 28)
         self.root.setSpacing(18)
@@ -175,7 +180,7 @@ class CredentialsPage(Page):
         write_credentials_env(default_env_path(), client_id, client_secret)
         os.environ["EBAY_CLIENT_ID"] = client_id
         os.environ["EBAY_CLIENT_SECRET"] = client_secret
-        self.window.show_device_type()
+        self.main_window.show_device_type()
 
 
 class DeviceTypePage(Page):
@@ -198,21 +203,21 @@ class DeviceTypePage(Page):
     def refresh(self) -> None:
         self.error.clear()
         for button in self.group.buttons():
-            if button.property("device_type") == self.window.state.device_type:
+            if button.property("device_type") == self.main_window.state.device_type:
                 button.setChecked(True)
 
     def next_page(self) -> None:
         checked = self.group.checkedButton()
-        self.window.state.device_type = checked.property("device_type") if checked else None
-        errors = validate_device_type(self.window.state.device_type)
+        self.main_window.state.device_type = checked.property("device_type") if checked else None
+        errors = validate_device_type(self.main_window.state.device_type)
         if errors:
             self.error.setText(errors[0])
             return
-        if self.window.state.device_type == "computer":
-            self.window.show_computer_mode()
+        if self.main_window.state.device_type == "computer":
+            self.main_window.show_computer_mode()
         else:
-            self.window.state.computer_mode = None
-            self.window.show_specs()
+            self.main_window.state.computer_mode = None
+            self.main_window.show_specs()
 
 
 class ComputerModePage(Page):
@@ -238,22 +243,22 @@ class ComputerModePage(Page):
         self.error.setObjectName("errorText")
         self.root.addWidget(self.error)
         self.root.addStretch()
-        self.root.addLayout(nav_row("Back", self.window.show_device_type, "Next", self.next_page))
+        self.root.addLayout(nav_row("Back", self.main_window.show_device_type, "Next", self.next_page))
 
     def refresh(self) -> None:
         self.error.clear()
         for button in self.group.buttons():
-            if button.property("mode") == self.window.state.computer_mode:
+            if button.property("mode") == self.main_window.state.computer_mode:
                 button.setChecked(True)
 
     def next_page(self) -> None:
         checked = self.group.checkedButton()
-        self.window.state.computer_mode = checked.property("mode") if checked else None
-        errors = validate_computer_mode(self.window.state.computer_mode)
+        self.main_window.state.computer_mode = checked.property("mode") if checked else None
+        errors = validate_computer_mode(self.main_window.state.computer_mode)
         if errors:
             self.error.setText(errors[0])
             return
-        self.window.show_specs()
+        self.main_window.show_specs()
 
 
 class SpecsPage(Page):
@@ -281,34 +286,34 @@ class SpecsPage(Page):
         clear_form(self.form)
         self.inputs.clear()
         self.error.clear()
-        device_type = self.window.state.device_type or "computer"
+        device_type = self.main_window.state.device_type or "computer"
         for field in fields_for_device(device_type):
-            widget = field_widget(field, self.window.state.specs.get(field.name))
+            widget = field_widget(field, self.main_window.state.specs.get(field.name))
             self.inputs[field.name] = widget
-            suffix = " *" if field.required or field.name in {"brand", "model"} and device_type != "storage" else " (optional)"
+            suffix = " *" if field.required else ""
             self.form.addRow(f"{field.label}{suffix}", widget)
 
-        if device_type == "computer" and self.window.state.computer_mode == "auto":
+        if device_type == "computer" and self.main_window.state.computer_mode == "auto":
             self.error.setText("Auto-detected specs will appear here after the next GUI PR.")
 
     def back_page(self) -> None:
         self._store_values()
-        if self.window.state.device_type == "computer":
-            self.window.show_computer_mode()
+        if self.main_window.state.device_type == "computer":
+            self.main_window.show_computer_mode()
         else:
-            self.window.show_device_type()
+            self.main_window.show_device_type()
 
     def price(self) -> None:
         self._store_values()
-        device_type = self.window.state.device_type or "computer"
-        errors = validate_specs(device_type, self.window.state.specs)
+        device_type = self.main_window.state.device_type or "computer"
+        errors = validate_specs(device_type, self.main_window.state.specs)
         if errors:
             self.error.setText(" ".join(errors))
             return
-        self.window.show_loading()
+        self.main_window.show_loading()
 
     def _store_values(self) -> None:
-        self.window.state.specs = {
+        self.main_window.state.specs = {
             name: widget_value(widget)
             for name, widget in self.inputs.items()
             if widget_value(widget) != ""
@@ -341,11 +346,11 @@ class ReportPage(Page):
         self.root.addStretch()
         buttons = QHBoxLayout()
         back = QPushButton("Back to Specs")
-        back.clicked.connect(self.window.show_specs)
+        back.clicked.connect(self.main_window.show_specs)
         another = QPushButton("Price Another Device")
-        another.clicked.connect(self.window.reset_for_new_device)
+        another.clicked.connect(self.main_window.reset_for_new_device)
         finish = QPushButton("Finish")
-        finish.clicked.connect(self.window.close)
+        finish.clicked.connect(self.main_window.close)
         buttons.addWidget(back)
         buttons.addStretch()
         buttons.addWidget(another)
@@ -353,8 +358,8 @@ class ReportPage(Page):
         self.root.addLayout(buttons)
 
     def refresh(self) -> None:
-        device = self.window.state.device_type or "device"
-        parts = [f"{key}: {value}" for key, value in sorted(self.window.state.specs.items())]
+        device = self.main_window.state.device_type or "device"
+        parts = [f"{key}: {value}" for key, value in sorted(self.main_window.state.specs.items())]
         self.summary.setText(f"{device.title()} specs accepted.\n\n" + "\n".join(parts))
 
 

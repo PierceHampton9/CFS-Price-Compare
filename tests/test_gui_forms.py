@@ -13,6 +13,8 @@ class GuiFormsTests(unittest.TestCase):
         fields = fields_for_device("phone")
         required = {field.name for field in fields if field.required}
 
+        self.assertIn("brand", required)
+        self.assertIn("model", required)
         self.assertIn("condition", required)
         self.assertIn("storage", required)
 

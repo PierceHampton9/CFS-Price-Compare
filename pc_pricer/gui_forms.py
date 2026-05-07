@@ -22,8 +22,8 @@ class FieldSpec:
 
 
 COMMON_FIELDS = [
-    FieldSpec("brand", "Brand", placeholder="Apple, Dell, Lenovo, Brother"),
-    FieldSpec("model", "Model", placeholder="iPhone 13, U2419H, ThinkPad T14"),
+    FieldSpec("brand", "Brand", required=True, placeholder="Apple, Dell, Lenovo, Brother"),
+    FieldSpec("model", "Model", required=True, placeholder="iPhone 13, U2419H, ThinkPad T14"),
     FieldSpec("condition", "Condition", required=True, options=tuple(CONDITIONS)),
 ]
 
@@ -103,11 +103,6 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
         for field in fields
         if field.required and not _present(values.get(field.name))
     ]
-
-    if device_type != "storage" and not _present(values.get("brand")):
-        errors.append("Brand is required.")
-    if device_type != "storage" and not _present(values.get("model")):
-        errors.append("Model is required.")
 
     if device_type == "computer" and not (
         _present(values.get("model")) or _present(values.get("cpu"))
