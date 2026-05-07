@@ -58,7 +58,7 @@ class AggregatorTests(unittest.TestCase):
 
         self.assertIn("wide_price_range", result["confidence_flags"])
 
-    def test_supporting_listings_are_limited_and_near_median(self):
+    def test_supporting_listings_are_limited_and_near_median_within_tier(self):
         listings = [_listing(price, title=f"Listing {price}") for price in [100, 200, 300, 400, 500, 600]]
 
         result = aggregate_listings(listings, warn_below_comparables=1, support_limit=3)
@@ -69,6 +69,37 @@ class AggregatorTests(unittest.TestCase):
             ["Listing 300", "Listing 400", "Listing 200"],
         )
         self.assertNotIn("_price", result["supporting_listings"][0])
+
+    def test_supporting_listings_prioritize_better_query_tiers(self):
+        listings = [
+            _listing(300, query_tier=3, title="Tier 3 near median"),
+            _listing(100, query_tier=1, title="Tier 1 farther from median"),
+            _listing(500, query_tier=2, title="Tier 2 farther from median"),
+        ]
+
+        result = aggregate_listings(listings, warn_below_comparables=1, support_limit=3)
+
+        self.assertEqual(
+            [listing["title"] for listing in result["supporting_listings"]],
+            [
+                "Tier 1 farther from median",
+                "Tier 2 farther from median",
+                "Tier 3 near median",
+            ],
+        )
+
+    def test_supporting_listings_put_unknown_tiers_last(self):
+        listings = [
+            _listing(300, query_tier=None, title="Unknown tier near median"),
+            _listing(100, query_tier=1, title="Known tier farther from median"),
+        ]
+
+        result = aggregate_listings(listings, warn_below_comparables=1, support_limit=2)
+
+        self.assertEqual(
+            [listing["title"] for listing in result["supporting_listings"]],
+            ["Known tier farther from median", "Unknown tier near median"],
+        )
 
     def test_supports_string_prices_and_query_tiers(self):
         result = aggregate_listings(

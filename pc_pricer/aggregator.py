@@ -102,7 +102,10 @@ def _supporting_listings(
 ) -> list[dict[str, Any]]:
     sorted_listings = sorted(
         listings,
-        key=lambda listing: abs((listing["_price"] or 0) - median),
+        key=lambda listing: (
+            _supporting_tier_rank(listing.get("query_tier")),
+            abs((listing["_price"] or 0) - median),
+        ),
     )
     return [_public_listing(listing) for listing in sorted_listings[:support_limit]]
 
@@ -126,6 +129,11 @@ def _query_tier(listings: list[dict[str, Any]]) -> int | None:
     if not tiers:
         return None
     return min(tiers)
+
+
+def _supporting_tier_rank(value: Any) -> int:
+    tier = _safe_int(value)
+    return tier if tier > 0 else 999
 
 
 def _safe_float(value: Any) -> float | None:
