@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfs-price-compare"
-version = "0.1.1"
+version = "0.3.0"
 description = "Command-line pricing helper for donated devices."
 readme = "README.md"
 requires-python = ">=3.11"
