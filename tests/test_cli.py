@@ -505,6 +505,45 @@ sources:
         self.assertIn("T2: Apple iPhone 13 128GB", output)
         self.assertIn("Conservative est.: $399.00 CAD - $420.00 CAD", output)
 
+    def test_price_manual_command_accepts_variant_and_screen_size(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("iPhone 13 Pro Max 128GB unlocked", 650)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--device-type",
+            "phone",
+            "--brand",
+            "Apple",
+            "--model",
+            "iPhone 13",
+            "--variant",
+            "pro max",
+            "--screen-size",
+            "6.7",
+            "--storage",
+            "128",
+            "--carrier",
+            "unlocked",
+            "--json",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('"variant": "Pro Max"', output)
+        self.assertIn('"screen_size": "6.7\\""', output)
+        self.assertIn('"text": "Apple iPhone 13 Pro Max 6.7\\" 128GB unlocked"', output)
+
     def test_price_manual_command_normalizes_storage_form_factor_alias(self):
         class FakeEbaySource:
             def __init__(self, marketplace="EBAY_CA"):

@@ -38,6 +38,8 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
     brand = _clean(specs.get("brand"))
     model = _model_term(specs)
     oem_sku = _clean(specs.get("oem_sku"))
+    variant = _clean(specs.get("variant"))
+    screen_size = _screen_size_term(specs.get("screen_size"))
     cpu = _cpu_term(specs)
     ram = _ram_term(specs)
     storage = _storage_term(specs)
@@ -47,10 +49,10 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
         queries.append(_query(oem_sku, 1, f"exact {form_factor} OEM SKU"))
 
     if model:
-        spec_query = _join_terms(brand, model, cpu, ram)
+        spec_query = _join_terms(brand, model, variant, screen_size, cpu, ram)
         queries.append(_query(spec_query, 2, f"{form_factor} brand/model/spec fallback"))
 
-        family_query = _join_terms(brand, model)
+        family_query = _join_terms(brand, model, variant, screen_size)
         if family_query:
             queries.append(_query(family_query, 3, f"{form_factor} brand/model family fallback"))
     elif cpu and ram:
@@ -62,26 +64,30 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
 def _phone_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
     model = _model_term(specs)
+    variant = _clean(specs.get("variant"))
+    screen_size = _screen_size_term(specs.get("screen_size"))
     storage = _clean(specs.get("storage_capacity"))
     carrier = _clean(specs.get("carrier"))
 
     return [
-        _query(_join_terms(brand, model, storage, carrier), 1, "phone brand/model/storage/carrier match"),
-        _query(_join_terms(brand, model, storage), 2, "phone brand/model/storage match"),
-        _query(_join_terms(brand, model), 3, "phone brand/model fallback"),
+        _query(_join_terms(brand, model, variant, screen_size, storage, carrier), 1, "phone brand/model/variant/storage/carrier match"),
+        _query(_join_terms(brand, model, variant, screen_size, storage), 2, "phone brand/model/variant/storage match"),
+        _query(_join_terms(brand, model, variant, screen_size), 3, "phone brand/model/variant fallback"),
     ]
 
 
 def _tablet_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
     model = _model_term(specs)
+    variant = _clean(specs.get("variant"))
+    screen_size = _screen_size_term(specs.get("screen_size"))
     storage = _clean(specs.get("storage_capacity"))
     connectivity = _clean(specs.get("connectivity"))
 
     return [
-        _query(_join_terms(brand, model, storage, connectivity), 1, "tablet brand/model/storage/connectivity match"),
-        _query(_join_terms(brand, model, storage), 2, "tablet brand/model/storage match"),
-        _query(_join_terms(brand, model), 3, "tablet brand/model fallback"),
+        _query(_join_terms(brand, model, variant, screen_size, storage, connectivity), 1, "tablet brand/model/variant/storage/connectivity match"),
+        _query(_join_terms(brand, model, variant, screen_size, storage), 2, "tablet brand/model/variant/storage match"),
+        _query(_join_terms(brand, model, variant, screen_size), 3, "tablet brand/model/variant fallback"),
     ]
 
 

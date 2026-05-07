@@ -72,11 +72,15 @@ Other device examples:
 
 ```powershell
 pc_pricer price-manual --device-type phone --brand Apple --model "iPhone 13" --storage 128 --carrier unlocked --condition good
-pc_pricer price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --storage 256 --connectivity "Wi-Fi" --condition good
+pc_pricer price-manual --device-type phone --brand Apple --model "iPhone 13" --variant "Pro Max" --screen-size 6.7 --storage 128 --carrier unlocked --condition good
+pc_pricer price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --screen-size 11 --storage 256 --connectivity "Wi-Fi" --condition good
+pc_pricer price-manual --device-type tablet --brand Samsung --model "Galaxy Tab S7" --variant FE --screen-size 12.4 --storage 128 --connectivity "Wi-Fi" --condition good
 pc_pricer price-manual --device-type monitor --brand Dell --model "U2419H" --size 24 --resolution 1080p --refresh-rate 60Hz --condition good
 pc_pricer price-manual --device-type printer --brand Brother --model "HL-L2390DW" --printer-type laser --color mono --condition good
 pc_pricer price-manual --device-type storage --brand Samsung --model "970 EVO Plus" --capacity 1TB --drive-type ssd --drive-form-factor m.2 --interface nvme --condition good
 ```
+
+For phones and tablets, use `--variant` and `--screen-size` when those details distinguish meaningfully different models. The filter excludes obvious variant/screen-size mismatches from comparable listings when those details are provided.
 
 For storage devices, `--drive-form-factor` accepts the internal values `1.8`, `2.5`, `3.5`, `m.2`, and `msata`, plus common aliases like `m2`, `M.2`, `2.5in`, `3.5"`, and `mSATA`.
 

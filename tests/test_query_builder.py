@@ -38,6 +38,21 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(queries[0]["tier"], 2)
         self.assertEqual(queries[0]["text"], "Lenovo ThinkPad X1 Carbon i7-8650U 16GB")
 
+    def test_laptop_queries_include_optional_screen_size(self):
+        specs = {
+            "brand": "Apple",
+            "model": "MacBook Pro",
+            "form_factor": "laptop",
+            "screen_size": '14"',
+            "cpu_short": "M1 Pro",
+            "ram_gb": 16,
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], 'Apple MacBook Pro 14" M1 Pro 16GB')
+        self.assertEqual(queries[1]["text"], 'Apple MacBook Pro 14"')
+
     def test_laptop_queries_prefer_search_model(self):
         specs = {
             "brand": "Lenovo",
@@ -159,30 +174,34 @@ class QueryBuilderTests(unittest.TestCase):
             "device_type": "phone",
             "brand": "Apple",
             "model": "iPhone 13",
+            "variant": "mini",
+            "screen_size": '5.4"',
             "storage_capacity": "128GB",
             "carrier": "unlocked",
         }
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "Apple iPhone 13 128GB unlocked")
+        self.assertEqual(queries[0]["text"], 'Apple iPhone 13 mini 5.4" 128GB unlocked')
         self.assertEqual(queries[0]["tier"], 1)
-        self.assertEqual(queries[1]["text"], "Apple iPhone 13 128GB")
-        self.assertEqual(queries[2]["text"], "Apple iPhone 13")
+        self.assertEqual(queries[1]["text"], 'Apple iPhone 13 mini 5.4" 128GB')
+        self.assertEqual(queries[2]["text"], 'Apple iPhone 13 mini 5.4"')
 
     def test_tablet_queries_use_connectivity(self):
         specs = {
             "device_type": "tablet",
             "brand": "Samsung",
             "model": "Galaxy Tab S7",
+            "variant": "FE",
+            "screen_size": '12.4"',
             "storage_capacity": "256GB",
             "connectivity": "Wi-Fi",
         }
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "Samsung Galaxy Tab S7 256GB Wi-Fi")
-        self.assertEqual(queries[1]["text"], "Samsung Galaxy Tab S7 256GB")
+        self.assertEqual(queries[0]["text"], 'Samsung Galaxy Tab S7 FE 12.4" 256GB Wi-Fi')
+        self.assertEqual(queries[1]["text"], 'Samsung Galaxy Tab S7 FE 12.4" 256GB')
 
     def test_monitor_queries_include_display_specs(self):
         specs = {
