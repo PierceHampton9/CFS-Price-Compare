@@ -35,6 +35,24 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
+    def test_main_window_records_pricing_failure_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.device_type = "phone"
+        window.state.specs = {"brand": "Apple", "model": "iPhone 13"}
+        FakePricingThread.created.clear()
+        FakePricingThread.next_error = "credentials failed"
+
+        with patch("pc_pricer.gui.PricingThread", FakePricingThread):
+            window.price_current_specs()
+
+        self.assertEqual(window.state.report_text, "")
+        self.assertEqual(window.state.report_error, "credentials failed")
+        self.assertIsNone(window.pricing_thread)
+
+        FakePricingThread.next_error = None
+        window.close()
+
     def _qt_app(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         try:
@@ -59,6 +77,7 @@ class FakeSignal:
 
 class FakePricingThread:
     created = []
+    next_error = None
 
     def __init__(self, device_type, specs, _parent=None) -> None:
         self.device_type = device_type
@@ -69,8 +88,14 @@ class FakePricingThread:
         FakePricingThread.created.append(self)
 
     def start(self) -> None:
-        self.completed.emit("report text")
+        if self.next_error:
+            self.failed.emit(self.next_error)
+        else:
+            self.completed.emit("report text")
         self.finished.emit()
+
+    def isRunning(self) -> bool:
+        return False
 
     def deleteLater(self) -> None:
         pass

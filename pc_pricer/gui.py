@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import os
 import sys
 from typing import Any
@@ -60,7 +61,9 @@ except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
     QScrollArea = QStackedWidget = QTextEdit = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     QTimer = type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)})  # type: ignore[assignment]
-    Signal = lambda *_args: _MissingSignal()  # type: ignore[assignment]
+
+    def Signal(*_args: Any) -> _MissingSignal:  # type: ignore[assignment]
+        return _MissingSignal()
 
 
 class GuiState:
@@ -79,7 +82,7 @@ class PricingThread(QThread):  # type: ignore[misc]
     def __init__(self, device_type: str, specs: dict[str, Any], parent: QWidget | None = None) -> None:  # type: ignore[misc]
         super().__init__(parent)
         self.device_type = device_type
-        self.specs = dict(specs)
+        self.specs = deepcopy(specs)
 
     def run(self) -> None:
         try:
@@ -182,6 +185,17 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
     def reset_for_new_device(self) -> None:
         self.state = GuiState()
         self.show_device_type()
+
+    def closeEvent(self, event: Any) -> None:
+        if self.pricing_thread is not None and self.pricing_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Pricing in progress",
+                "Wait for the current price search to finish before closing.",
+            )
+            event.ignore()
+            return
+        super().closeEvent(event)
 
 
 class Page(QWidget):  # type: ignore[misc]

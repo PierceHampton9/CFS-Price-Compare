@@ -42,6 +42,10 @@ if (Test-Path $ReleaseDir) {
 
 New-Item -ItemType Directory -Path $ReleaseDir | Out-Null
 Copy-Item -Path (Join-Path $PyInstallerGuiOutput "*") -Destination $ReleaseDir -Recurse
+$CliInternal = Join-Path $PyInstallerCliOutput "_internal"
+if (Test-Path $CliInternal) {
+    Copy-Item -Path (Join-Path $CliInternal "*") -Destination (Join-Path $ReleaseDir "_internal") -Recurse -Force
+}
 Copy-Item -Path (Join-Path $PyInstallerCliOutput "pc_pricer.exe") -Destination $ReleaseDir -Force
 Copy-Item -Path "config.yaml" -Destination $ReleaseDir
 Copy-Item -Path ".env.example" -Destination $ReleaseDir
