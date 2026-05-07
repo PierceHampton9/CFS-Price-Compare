@@ -31,6 +31,21 @@ class GuiPricingTests(unittest.TestCase):
         self.assertIn("Manual phone:    Apple iPhone 13 128GB unlocked", report)
         self.assertEqual(source.calls[0], ("Apple iPhone 13 128GB unlocked", 10))
 
+    def test_invalid_gui_condition_uses_neutral_error_message(self):
+        with self.assertRaises(RuntimeError) as exc:
+            price_gui_values(
+                "phone",
+                {
+                    "brand": "Apple",
+                    "model": "iPhone 13",
+                    "storage": "128",
+                    "condition": "broken",
+                },
+                source=FakeSource({}),
+            )
+
+        self.assertIn("Invalid condition 'broken'", str(exc.exception))
+
 
 class FakeSource:
     def __init__(self, results):

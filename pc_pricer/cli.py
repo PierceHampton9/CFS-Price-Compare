@@ -18,11 +18,13 @@ from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
 from pc_pricer.setup_credentials import run_setup
-from pc_pricer.spec_builder import VALID_DEVICE_TYPES, build_manual_specs, manual_device_type
+from pc_pricer.spec_builder import (
+    VALID_CONDITIONS,
+    VALID_DEVICE_TYPES,
+    build_manual_specs,
+    manual_device_type,
+)
 from pc_pricer.sources.ebay import EbaySource
-
-
-VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
 
 
 def main() -> None:

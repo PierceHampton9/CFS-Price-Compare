@@ -8,7 +8,7 @@ from pc_pricer.config import load_config
 from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
 from pc_pricer.sources.ebay import EbaySource
-from pc_pricer.spec_builder import build_manual_specs
+from pc_pricer.spec_builder import VALID_CONDITIONS, build_manual_specs
 
 
 def price_gui_values(
@@ -56,10 +56,8 @@ def _limit_per_query(config: dict[str, Any]) -> int:
 def _condition(gui_value: Any, config: dict[str, Any]) -> str:
     value = gui_value or config.get("default_condition") or "good"
     condition = str(value).strip().lower() or "good"
-    if condition not in {"good", "excellent", "mint", "any"}:
-        raise RuntimeError(
-            f"Invalid default_condition {condition!r}. Use good, excellent, mint, or any."
-        )
+    if condition not in VALID_CONDITIONS:
+        raise RuntimeError(f"Invalid condition {condition!r}. Use good, excellent, mint, or any.")
     return condition
 
 

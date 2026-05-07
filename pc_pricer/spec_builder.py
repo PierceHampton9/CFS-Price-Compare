@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 
+VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
 VALID_DEVICE_TYPES = {"computer", "phone", "tablet", "monitor", "printer", "storage"}
 
 
@@ -62,7 +63,7 @@ def manual_device_type(value: Any) -> str:
 def _manual_computer_specs(values: dict[str, Any]) -> dict[str, Any]:
     form_factor = _clean_text(values.get("form_factor"))
     if not form_factor:
-        raise RuntimeError("Computer pricing requires --form-factor laptop, desktop, or all-in-one.")
+        raise RuntimeError("Computer pricing requires a form factor: laptop, desktop, or all-in-one.")
 
     specs = {
         "device_type": "computer",
