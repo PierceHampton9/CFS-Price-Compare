@@ -8,45 +8,7 @@ Current status: Windows spec detection, manual spec entry, tiered query building
 
 ## Windows Release Setup
 
-For normal use on pricing computers, use a Windows release zip from GitHub Releases.
-
-1. Download the latest Windows release zip.
-2. Extract the whole folder.
-3. Open PowerShell in the extracted folder.
-4. Run setup:
-
-```powershell
-.\pc_pricer.exe setup
-```
-
-The setup command asks for the eBay App ID / Client ID and Cert ID / Client Secret, then writes a local `.env` file beside `pc_pricer.exe`. The secret is stored in plaintext, so keep the release folder on trusted pricing computers only.
-
-Check that credentials work:
-
-```powershell
-.\pc_pricer.exe ebay-check
-```
-
-Then run pricing commands:
-
-```powershell
-.\pc_pricer.exe price-manual --form-factor laptop --brand Lenovo --model "ThinkPad X13 Yoga" --cpu "i5-1135G7" --ram 16 --storage 512 --condition good
-```
-
-Keep the whole extracted release folder together, including the `_internal` folder. `config.yaml` can be edited beside the exe without rebuilding.
-
-## Sanity-Check a Price
-
-Treat the report as a pricing aid, not an automatic sale price.
-
-- Start with `Conservative est.` when the report is based on active asking listings.
-- Check the supporting listings before trusting the number.
-- Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
-- Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
-- `Confidence flags` are about estimate strength, such as too few comparables or a wide price range.
-- `Pricing limits` explain what the data can and cannot prove, such as asking-only pricing.
-- `Listing warnings` point out listing-level concerns, such as unknown shipping, high shipping, or non-Canadian locations.
-- When shipping or location warnings dominate the supporting listings, use the lower end of the conservative estimate or review more listings manually.
+For normal use on pricing computers, just download the Windows release zip folder and reference the README-QUICKSTART.txt file within to setup and use the program.
 
 ## Developer Setup
 
@@ -98,7 +60,7 @@ To price a computer by typing the specs:
 pc_pricer price-manual --form-factor laptop --brand Lenovo --model "ThinkPad X13 Yoga" --cpu "i5-1135G7" --ram 16 --storage 512 --condition good
 ```
 
-For desktops, include the specs that actually drive value:
+For desktops, include the specs which may contribute more to value than brand or model names on their own:
 
 ```powershell
 pc_pricer price-manual --form-factor desktop --brand Dell --model "OptiPlex 7050" --cpu "i5-7500" --ram 16 --storage 256 --condition good
@@ -116,7 +78,7 @@ Search, pricing, and eBay credential-check commands read defaults from `config.y
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
 ```
 
-Reports show the estimate, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. Current eBay pricing uses active asking listings; when no sold listings are available, the report shows the asking median plus a conservative estimate discounted 5-10%.
+Reports show the estimate, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. Current eBay pricing uses active asking listings; when no sold listings are available, the report shows the asking median plus a conservative estimate discounted 0-5%.
 
 ## eBay Smoke Test
 
@@ -129,6 +91,9 @@ pc_pricer ebay-search "ThinkPad X13 Yoga" --limit 5
 ## Live eBay Validation
 
 Use this checklist when testing real eBay API access on a trusted machine.
+
+eBay Credentials Note:
+For the eBay API setup, use the Production App ID and Production Cert ID. Sandbox keys require sandbox API endpoints, which this project does not use.
 
 Option 1: set credentials for the current PowerShell session:
 
@@ -157,7 +122,7 @@ EBAY_CLIENT_ID=your-production-app-id
 EBAY_CLIENT_SECRET=your-production-cert-id
 ```
 
-The CLI loads `.env` automatically. Shell variables still win if both are set.
+The CLI loads `.env` automatically. Shell variables take priority if both are set.
 
 In eBay's developer portal, `EBAY_CLIENT_ID` is usually shown as the App ID or Client ID, and `EBAY_CLIENT_SECRET` is usually shown as the Cert ID or Client Secret. You do not need Dev ID, RuName, refresh token, or a user access token for the current active-listing search flow.
 
@@ -218,18 +183,3 @@ Release checklist:
 5. Verify `dist\CFS-Price-Compare-v<version>-windows\pc_pricer.exe --help`.
 6. Upload only the generated zip from `dist\` to GitHub Releases.
 7. Do not upload `.env`, `build/`, or the unzipped release folder.
-
-## Local Credentials
-
-Do not commit real API credentials. The eBay source reads credentials from environment variables:
-
-```powershell
-EBAY_CLIENT_ID
-EBAY_CLIENT_SECRET
-```
-
-For live eBay testing, set these in your shell or in a local `.env` file. The program requests an access token automatically. Shell variables override `.env` values.
-
-For the current production eBay API setup, use the Production App ID and Production Cert ID. Sandbox keys require sandbox API endpoints, which this project does not use yet.
-
-`.env.example` is only a safe template for the names to use. Real values must stay out of committed files.
