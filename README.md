@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A command-line tool for estimating fair resale prices for donated devices.
 
-Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, and GUI pricing flow wiring.
+Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, GUI pricing flow wiring, and GUI release packaging.
 
 ## Windows Release Setup
 
@@ -203,7 +203,7 @@ Build a Windows release zip from a development machine:
 .\scripts\build-windows.ps1
 ```
 
-The build script installs `requirements-build.txt`, runs PyInstaller, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates a release zip under `dist\`.
+The build script installs build dependencies and the GUI extra, builds `pc_pricer_gui.exe` and `pc_pricer.exe`, copies `config.yaml`, `.env.example`, and `README-QUICKSTART.txt`, then creates a release zip under `dist\`.
 
 Release checklist:
 
@@ -211,6 +211,7 @@ Release checklist:
 2. Run `git switch main` and `git pull --ff-only`.
 3. Run `python -m unittest discover -s tests`.
 4. Run `.\scripts\build-windows.ps1 -Version <version>`, using the release version you want.
-5. Verify `dist\CFS-Price-Compare-v<version>-windows\pc_pricer.exe --help`.
-6. Upload only the generated zip from `dist\` to GitHub Releases.
-7. Do not upload `.env`, `build/`, or the unzipped release folder.
+5. Verify `dist\CFS-Price-Compare-v<version>-windows\pc_pricer_gui.exe` opens.
+6. Verify `dist\CFS-Price-Compare-v<version>-windows\pc_pricer.exe --help`.
+7. Upload only the generated zip from `dist\` to GitHub Releases.
+8. Do not upload `.env`, `build/`, or the unzipped release folder.

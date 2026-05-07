@@ -23,8 +23,16 @@ from pc_pricer.spec_builder import gui_values_from_detected_specs
 LOADING_DELAY_MS = 700
 
 
+class _MissingSignal:
+    def connect(self, *_args: Any) -> None:
+        pass
+
+    def emit(self, *_args: Any) -> None:
+        pass
+
+
 try:  # pragma: no cover - exercised only when PySide6 is installed.
-    from PySide6.QtCore import Qt, QTimer  # type: ignore[import-not-found]
+    from PySide6.QtCore import QThread, Qt, QTimer, Signal  # type: ignore[import-not-found]
     from PySide6.QtWidgets import (  # type: ignore[import-not-found]
         QApplication,
         QButtonGroup,
@@ -46,11 +54,13 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
     )
 except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QApplication = None  # type: ignore[assignment]
+    QThread = object  # type: ignore[assignment]
     Qt = type("Qt", (), {"AlignCenter": 0})  # type: ignore[assignment]
     QButtonGroup = QComboBox = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
     QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
     QScrollArea = QStackedWidget = QTextEdit = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     QTimer = type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)})  # type: ignore[assignment]
+    Signal = lambda *_args: _MissingSignal()  # type: ignore[assignment]
 
 
 class GuiState:
@@ -62,12 +72,33 @@ class GuiState:
         self.report_error: str = ""
 
 
+class PricingThread(QThread):  # type: ignore[misc]
+    completed = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, device_type: str, specs: dict[str, Any], parent: QWidget | None = None) -> None:  # type: ignore[misc]
+        super().__init__(parent)
+        self.device_type = device_type
+        self.specs = dict(specs)
+
+    def run(self) -> None:
+        try:
+            _result, report = price_gui_values(self.device_type, self.specs)
+        except RuntimeError as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:  # pragma: no cover - defensive GUI boundary.
+            self.failed.emit(f"Unexpected pricing error: {exc}")
+        else:
+            self.completed.emit(report)
+
+
 class MainWindow(QMainWindow):  # type: ignore[misc]
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CFS Price Compare")
         self.resize(940, 680)
         self.state = GuiState()
+        self.pricing_thread: PricingThread | None = None
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
@@ -117,20 +148,32 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         QTimer.singleShot(LOADING_DELAY_MS, self.price_current_specs)
 
     def price_current_specs(self) -> None:
-        try:
-            _result, report = price_gui_values(
-                self.state.device_type or "computer",
-                self.state.specs,
-            )
-            self.state.report_text = report
-            self.state.report_error = ""
-        except RuntimeError as exc:
-            self.state.report_text = ""
-            self.state.report_error = str(exc)
-        except Exception as exc:  # pragma: no cover - defensive GUI boundary.
-            self.state.report_text = ""
-            self.state.report_error = f"Unexpected pricing error: {exc}"
+        if self.pricing_thread is not None:
+            return
+
+        self.pricing_thread = PricingThread(
+            self.state.device_type or "computer",
+            self.state.specs,
+            self,
+        )
+        self.pricing_thread.completed.connect(self.pricing_succeeded)
+        self.pricing_thread.failed.connect(self.pricing_failed)
+        self.pricing_thread.finished.connect(self.pricing_finished)
+        self.pricing_thread.finished.connect(self.pricing_thread.deleteLater)
+        self.pricing_thread.start()
+
+    def pricing_succeeded(self, report: str) -> None:
+        self.state.report_text = report
+        self.state.report_error = ""
         self.show_report()
+
+    def pricing_failed(self, message: str) -> None:
+        self.state.report_text = ""
+        self.state.report_error = message
+        self.show_report()
+
+    def pricing_finished(self) -> None:
+        self.pricing_thread = None
 
     def show_report(self) -> None:
         self.report_page.refresh()

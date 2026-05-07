@@ -10,18 +10,24 @@ First-time setup
 
 1. Extract the release zip.
 2. Keep the whole extracted folder together. Do not delete the _internal folder.
-3. Open PowerShell in the extracted folder (into the directory which directly contains pc_pricer.exe).
-4. Run:
-
-   .\pc_pricer.exe setup
-
+3. Open the extracted folder.
+4. Double-click pc_pricer_gui.exe.
 5. Enter the eBay App ID / Client ID and Cert ID / Client Secret when prompted.
-6. Run:
+6. Follow the screens to choose device type, enter specs, and review the report.
+
+The setup screen creates a local .env file beside pc_pricer_gui.exe. The .env file contains credentials in plaintext, so keep the release folder in a trusted place.
+
+Optional command-line check
+---------------------------
+
+The GUI is the normal user path. If you need to verify credentials from PowerShell, open PowerShell in the extracted folder and run:
 
    .\pc_pricer.exe ebay-check
 
-Price a device by typing specs
-------------------------------
+Optional command-line pricing
+-----------------------------
+
+Most users should price devices through pc_pricer_gui.exe. The command-line examples below are kept for troubleshooting and repeatable checks.
 
 Laptop example:
 

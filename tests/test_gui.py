@@ -22,13 +22,16 @@ class GuiImportTests(unittest.TestCase):
         window = gui.MainWindow()
         window.state.device_type = "phone"
         window.state.specs = {"brand": "Apple", "model": "iPhone 13"}
+        FakePricingThread.created.clear()
 
-        with patch("pc_pricer.gui.price_gui_values", return_value=({}, "report text")) as price:
+        with patch("pc_pricer.gui.PricingThread", FakePricingThread):
             window.price_current_specs()
 
-        price.assert_called_once_with("phone", {"brand": "Apple", "model": "iPhone 13"})
+        self.assertEqual(FakePricingThread.created[-1].device_type, "phone")
+        self.assertEqual(FakePricingThread.created[-1].specs, {"brand": "Apple", "model": "iPhone 13"})
         self.assertEqual(window.state.report_text, "report text")
         self.assertEqual(window.state.report_error, "")
+        self.assertIsNone(window.pricing_thread)
 
         window.close()
 
@@ -40,6 +43,37 @@ class GuiImportTests(unittest.TestCase):
             self.skipTest("PySide6 is not installed")
 
         return QApplication.instance() or QApplication([])
+
+
+class FakeSignal:
+    def __init__(self) -> None:
+        self.callbacks = []
+
+    def connect(self, callback) -> None:
+        self.callbacks.append(callback)
+
+    def emit(self, *args) -> None:
+        for callback in self.callbacks:
+            callback(*args)
+
+
+class FakePricingThread:
+    created = []
+
+    def __init__(self, device_type, specs, _parent=None) -> None:
+        self.device_type = device_type
+        self.specs = dict(specs)
+        self.completed = FakeSignal()
+        self.failed = FakeSignal()
+        self.finished = FakeSignal()
+        FakePricingThread.created.append(self)
+
+    def start(self) -> None:
+        self.completed.emit("report text")
+        self.finished.emit()
+
+    def deleteLater(self) -> None:
+        pass
 
 
 if __name__ == "__main__":
