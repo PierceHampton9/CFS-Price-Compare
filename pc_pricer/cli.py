@@ -451,7 +451,6 @@ def _manual_base_specs(args: argparse.Namespace, device_type: str) -> dict[str, 
         "brand": _clean_text(args.brand),
         "model": _clean_text(args.model),
         "search_model": _clean_text(args.model),
-        "variant": _variant(args.variant),
         "input_method": "manual",
     }
 

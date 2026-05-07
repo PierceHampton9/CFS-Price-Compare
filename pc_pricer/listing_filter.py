@@ -101,6 +101,8 @@ DEVICE_PARTS_TITLE_PATTERNS = {
 }
 
 DEVICE_VARIANT_PATTERNS = {
+    # Keep variant-token filtering limited to devices with stable resale variant words.
+    # Laptop titles use words like Pro/Air/Plus too loosely, so laptops rely on model and screen size.
     "phone": {
         "pro max": [r"\bpro\s+max\b"],
         "pro": [r"\bpro\b"],
@@ -253,7 +255,7 @@ def _has_conflicting_screen_size(title: str, target_specs: dict[str, Any]) -> bo
         return False
 
     listing_sizes = set()
-    for match in re.finditer(r'(?<![\d.])(\d{1,2}(?:\.\d)?)\s*(?:"|inch(?:es)?\b|in\b)', title):
+    for match in re.finditer(r'(?<![\d.])(\d{1,2}(?:\.\d)?)\s*-?\s*(?:"|inch(?:es)?\b|in\b)', title):
         listing_size = _screen_size_number(match.group(1))
         if listing_size:
             listing_sizes.add(listing_size)
