@@ -72,6 +72,12 @@ def main() -> None:
         default=None,
         help="Target listing condition for pricing.",
     )
+    price_query_parser.add_argument(
+        "--device-type",
+        choices=sorted(VALID_DEVICE_TYPES),
+        default="computer",
+        help="Device type for parts/accessory filtering. Defaults to computer.",
+    )
     price_query_parser.add_argument("--config", default=None, help="Path to config file.")
     price_query_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
@@ -205,7 +211,11 @@ def main() -> None:
             source = _ebay_source(config, args.marketplace)
             listings = source.search(query, _limit(args.limit, config))
             listings = normalize_listings(listings)
-            filtered = filter_listings(listings, target_condition=_condition(args.condition, config))
+            filtered = filter_listings(
+                listings,
+                target_condition=_condition(args.condition, config),
+                device_type=_manual_device_type(args.device_type),
+            )
             result = aggregate_listings(filtered["listings"], **_aggregation_options(config))
             result = apply_pricing_basis(result, **_asking_adjustment_options(config))
             result.update(

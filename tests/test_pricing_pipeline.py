@@ -116,6 +116,24 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["conservative_high_cad"], 510.0)
         self.assertEqual(len(result["supporting_listings"]), 1)
 
+    def test_passes_device_type_to_listing_filter(self):
+        source = FakeSource(
+            {
+                "Apple iPhone 13 128GB unlocked": [
+                    _listing("Apple iPhone 13 128GB Unlocked", 400, "https://www.ebay.ca/itm/phone"),
+                    _listing("For iPhone 13 case shockproof cover", 20, "https://www.ebay.ca/itm/case"),
+                ],
+                "Apple iPhone 13 128GB": [],
+                "Apple iPhone 13": [],
+            }
+        )
+
+        result = price_specs(_phone_specs(), source, limit_per_query=5, target_condition="any")
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["median_price_cad"], 400)
+        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 1})
+
 
 class FakeSource:
     def __init__(self, results):
@@ -138,6 +156,17 @@ def _laptop_specs():
         "ram_gb": 16,
         "serial_number": "not reported",
         "raw": {"secret": "not reported"},
+    }
+
+
+def _phone_specs():
+    return {
+        "device_type": "phone",
+        "brand": "Apple",
+        "model": "iPhone 13",
+        "search_model": "iPhone 13",
+        "storage_capacity": "128GB",
+        "carrier": "unlocked",
     }
 
 

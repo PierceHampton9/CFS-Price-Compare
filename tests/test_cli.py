@@ -355,6 +355,31 @@ sources:
         self.assertNotIn("New laptop", output)
         self.assertNotIn("ThinkPad motherboard", output)
 
+    def test_price_query_command_uses_device_type_for_accessory_filtering(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [
+                    _listing("Apple iPhone 13 128GB Unlocked", 400),
+                    _listing("For iPhone 13 case shockproof cover", 20),
+                ]
+
+        stdout = io.StringIO()
+        argv = ["pc_pricer", "price-query", "iPhone", "13", "--device-type", "phone", "--condition", "any"]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn("Comparables:       1", output)
+        self.assertIn("parts/accessory listing: 1", output)
+        self.assertIn("Apple iPhone 13 128GB Unlocked", output)
+        self.assertNotIn("For iPhone 13 case", output)
+
     def test_price_query_command_can_disable_condition_filter(self):
         class FakeEbaySource:
             def __init__(self, marketplace="EBAY_CA"):
