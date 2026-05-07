@@ -3,6 +3,8 @@ CFS Price Compare - Windows Quickstart
 
 This release is meant for Windows pricing computers. You do not need Python, Git, or developer tools on this computer.
 
+The eBay credentials needed for to run the program can be created by registering an "eBay Developer Program" account. Once your account is activated navigate to the "Application Keys" page and create a "Production" keyset. You can apply to be exempt from marketplace deletion requirements as long as you are using the keyset strictly for this program without further functional modifications. You can do this by choosing the "Not Persisting eBay data setting" in the marketplace deletion exemption form.
+
 First-time setup
 ----------------
 
@@ -55,15 +57,27 @@ Queries used:
   ...>
 Target condition: <The condition of the device. From best to worst mint (which is essentially new), excellent (like new, probably no visibl damage or hardware decay), good (most used devices, not destroyed but doesn't look or act new), parts (good only for parts or at best very, very short remaining lifespan)>
 Filtered out:      <[Number of listings filtered out] [(condition mismatch: [X], parts/accessory listing: [Y])]
-Confidence flags: <Reasons for why listings aren't sufficient to provide a confident set of comparisons>
-Pricing limits:   Asking prices only; conservative estimate is discounted from active listings
-Listing warnings: Unknown shipping on one or more comparables, High shipping on one or more comparables, Non-Canadian location on one or more comparables
+Confidence flags: <Indicators which can be used to evaluate the strength of the estimates>
+Pricing limits:   <Indicators which explain what limitations exist when evaluating prices>
+Listing warnings: <Reasons for why the details of the provided listings might be incomplete>
+
+The supporting listings read as follows...
+
+[x]. [Device information such as brand, model, generation, and hardware]
+     Price:     <Total price in CAD> (<Total broken down into item and shipping price, both in CAD>)
+     Source:    <What source the listing was found from>
+     Status:    <If the listing is sold or asking>
+     Condition: <The condition based on our internal grading system> (<Condition based on the sources grading system>)
+     Tier:      <The query tier used to extract this listing>
+     Query:     <Query details such as spec and model>
+     Location:  <Location of the listing>
+     URL:       <URL of the listing>
 
 Sanity-check the report
 -----------------------
 
-- Start with Conservative est. when the report is based on active asking listings.
-- Check the supporting listings before trusting the number.
+- Start with Conservative estimate range when the report is based on active asking listings.
+- Check the supporting listings to confirm they are comparable and contain reasonable information.
 - Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
 - Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
 - Confidence flags are about estimate strength, such as too few comparables or a wide price range.
@@ -75,6 +89,6 @@ Notes
 -----
 
 - The setup command creates a local .env file beside pc_pricer.exe.
-- The .env file contains credentials in plaintext. Keep the release folder on trusted pricing computers only.
-- config.yaml controls pricing defaults and can be edited without rebuilding the exe.
+- The .env file contains credentials in plaintext. Keep the release folder in a trusted place.
+- config.yaml controls pricing defaults and can be edited without rebuilding the executable.
 - Current eBay pricing uses active asking listings. When no sold listings are available, the report shows the asking median plus a conservative estimate discounted 0-5%.
