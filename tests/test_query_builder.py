@@ -220,16 +220,16 @@ class QueryBuilderTests(unittest.TestCase):
             "brand": "Samsung",
             "model": "970 EVO Plus",
             "capacity": "1TB",
-            "drive_type": "ssd",
+            "drive_type": "SSD",
             "drive_form_factor": "m.2",
             "interface": "NVMe",
         }
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "Samsung 970 EVO Plus 1TB ssd m.2 NVMe")
-        self.assertEqual(queries[1]["text"], "Samsung 970 EVO Plus 1TB ssd")
-        self.assertEqual(queries[2]["text"], "1TB ssd m.2 NVMe")
+        self.assertEqual(queries[0]["text"], "Samsung 970 EVO Plus 1TB SSD m.2 NVMe")
+        self.assertEqual(queries[1]["text"], "Samsung 970 EVO Plus 1TB SSD")
+        self.assertEqual(queries[2]["text"], "1TB SSD m.2 NVMe")
 
     def test_storage_device_queries_display_msata_alias_cleanly(self):
         specs = {
@@ -237,14 +237,14 @@ class QueryBuilderTests(unittest.TestCase):
             "brand": "Kingston",
             "model": "SSDNow",
             "capacity": "240GB",
-            "drive_type": "ssd",
+            "drive_type": "SSD",
             "drive_form_factor": "msata",
             "interface": "SATA",
         }
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "Kingston SSDNow 240GB ssd mSATA SATA")
+        self.assertEqual(queries[0]["text"], "Kingston SSDNow 240GB SSD mSATA SATA")
 
 
 if __name__ == "__main__":

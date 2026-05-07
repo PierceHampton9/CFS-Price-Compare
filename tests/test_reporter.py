@@ -104,7 +104,7 @@ class ReporterTests(unittest.TestCase):
                     "device_type": "monitor",
                     "brand": "Dell",
                     "model": "U2419H",
-                    "size": "24",
+                    "size": '24"',
                     "resolution": "1080p",
                     "refresh_rate": "60Hz",
                     "input_method": "manual",
@@ -114,7 +114,34 @@ class ReporterTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("Manual monitor:    Dell U2419H 24 1080p 60Hz", report)
+        self.assertIn('Manual monitor:    Dell U2419H 24" 1080p 60Hz', report)
+
+    def test_unknown_device_type_does_not_render_as_computer(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 100,
+                "iqr_low_cad": 90,
+                "iqr_high_cad": 110,
+                "count": 1,
+                "sold_count": 0,
+                "asking_count": 1,
+                "source_counts": {"ebay": 1},
+                "query_tier": 1,
+                "specs": {
+                    "device_type": "scanner",
+                    "brand": "Fujitsu",
+                    "model": "ScanSnap",
+                    "cpu": "not relevant",
+                    "ram_gb": 8,
+                    "input_method": "manual",
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertNotIn("Manual scanner:", report)
+        self.assertNotIn("Fujitsu ScanSnap not relevant 8GB", report)
 
     def test_detected_specs_hide_machine_type_model(self):
         report = format_price_report(

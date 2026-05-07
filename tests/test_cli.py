@@ -486,7 +486,7 @@ sources:
                 self.marketplace = marketplace
 
             def search(self, _query, _max_results):
-                return [_listing("Samsung 970 EVO Plus 1TB NVMe", 70)]
+                return [_listing("Samsung 970 EVO Plus 1.5TB NVMe", 70)]
 
         stdout = io.StringIO()
         argv = [
@@ -498,8 +498,8 @@ sources:
             "Samsung",
             "--model",
             "970 EVO Plus",
-            "--capacity",
-            "1TB",
+            "--storage",
+            "1500",
             "--drive-type",
             "ssd",
             "--drive-form-factor",
@@ -516,9 +516,46 @@ sources:
 
         output = stdout.getvalue()
         self.assertIn('"device_type": "storage"', output)
+        self.assertIn('"capacity": "1.5TB"', output)
+        self.assertIn('"drive_type": "SSD"', output)
         self.assertIn('"drive_form_factor": "m.2"', output)
-        self.assertIn('"interface": "NVME"', output)
-        self.assertIn('"text": "Samsung 970 EVO Plus 1TB ssd m.2 NVME"', output)
+        self.assertIn('"interface": "NVMe"', output)
+        self.assertIn('"text": "Samsung 970 EVO Plus 1.5TB SSD m.2 NVMe"', output)
+
+    def test_price_manual_command_displays_canonical_monitor_specs(self):
+        class FakeEbaySource:
+            def __init__(self, marketplace="EBAY_CA"):
+                self.marketplace = marketplace
+
+            def search(self, _query, _max_results):
+                return [_listing("Dell U2419H monitor", 120)]
+
+        stdout = io.StringIO()
+        argv = [
+            "pc_pricer",
+            "price-manual",
+            "--device-type",
+            "monitor",
+            "--brand",
+            "Dell",
+            "--model",
+            "U2419H",
+            "--size",
+            "24",
+            "--resolution",
+            "1080p",
+            "--refresh-rate",
+            "60",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+            "pc_pricer.cli.EbaySource", FakeEbaySource
+        ):
+            cli.main()
+
+        output = stdout.getvalue()
+        self.assertIn('Manual monitor:    Dell U2419H 24" 1080p 60Hz', output)
+        self.assertIn('T1: Dell U2419H 24" 1080p 60Hz monitor', output)
 
     def test_price_manual_command_requires_form_factor_for_computers(self):
         stderr = io.StringIO()

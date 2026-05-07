@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from typing import Any
 
@@ -394,9 +395,9 @@ def _manual_monitor_specs(args: argparse.Namespace) -> dict[str, Any]:
     specs = _manual_base_specs(args, "monitor")
     specs.update(
         {
-            "size": _clean_text(args.size),
+            "size": _screen_size(args.size),
             "resolution": _clean_text(args.resolution),
-            "refresh_rate": _clean_text(args.refresh_rate),
+            "refresh_rate": _refresh_rate(args.refresh_rate),
         }
     )
     return _without_empty_values(specs)
@@ -418,9 +419,9 @@ def _manual_storage_device_specs(args: argparse.Namespace) -> dict[str, Any]:
     specs.update(
         {
             "capacity": _clean_text(args.capacity) or _capacity_from_gb(args.storage),
-            "drive_type": _clean_lower(args.drive_type),
+            "drive_type": _drive_type(args.drive_type),
             "drive_form_factor": _drive_form_factor(args.drive_form_factor),
-            "interface": _clean_upper(args.interface),
+            "interface": _storage_interface(args.interface),
         }
     )
     return _without_empty_values(specs)
@@ -472,6 +473,10 @@ def _capacity_from_gb(value: Any) -> str | None:
         return None
     if size >= 1024 and size % 1024 == 0:
         return f"{size // 1024}TB"
+    if size >= 1000:
+        divisor = 1000 if size % 1000 == 0 else 1024
+        tb = round(size / divisor, 1)
+        return f"{tb:g}TB"
     return f"{size}GB"
 
 
@@ -480,17 +485,17 @@ def _drive_form_factor(value: Any) -> str | None:
     if not text:
         return None
 
-    normalized = (
-        text.lower()
-        .replace('"', "")
-        .replace("inch", "")
-        .replace("in", "")
-        .replace(" ", "")
-    )
+    normalized = re.sub(r"\s+", "", text.lower()).replace('"', "")
     aliases = {
         "1.8": "1.8",
+        "1.8in": "1.8",
+        "1.8inch": "1.8",
         "2.5": "2.5",
+        "2.5in": "2.5",
+        "2.5inch": "2.5",
         "3.5": "3.5",
+        "3.5in": "3.5",
+        "3.5inch": "3.5",
         "m.2": "m.2",
         "m2": "m.2",
         "msata": "msata",
@@ -498,14 +503,48 @@ def _drive_form_factor(value: Any) -> str | None:
     return aliases.get(normalized, text)
 
 
-def _clean_lower(value: Any) -> str | None:
+def _drive_type(value: Any) -> str | None:
     text = _clean_text(value)
-    return text.lower() if text else None
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered == "ssd":
+        return "SSD"
+    if lowered == "hdd":
+        return "HDD"
+    return text
 
 
-def _clean_upper(value: Any) -> str | None:
+def _storage_interface(value: Any) -> str | None:
     text = _clean_text(value)
-    return text.upper() if text else None
+    if not text:
+        return None
+    normalized = re.sub(r"[\s_-]+", "", text.lower())
+    aliases = {
+        "nvme": "NVMe",
+        "sata": "SATA",
+        "usb": "USB",
+        "sas": "SAS",
+        "pcie": "PCIe",
+        "pciexpress": "PCIe",
+    }
+    return aliases.get(normalized, text)
+
+
+def _screen_size(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    normalized = re.sub(r'\s*(inch|in|")\s*$', "", text, flags=re.IGNORECASE).strip()
+    return f'{normalized}"' if normalized else None
+
+
+def _refresh_rate(value: Any) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    normalized = re.sub(r"\s*hz\s*$", "", text, flags=re.IGNORECASE).strip()
+    return f"{normalized}Hz" if normalized else None
 
 
 def _clean_text(value: Any) -> str | None:

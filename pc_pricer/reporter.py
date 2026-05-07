@@ -115,12 +115,14 @@ def _spec_parts(specs: dict[str, Any]) -> list[Any]:
             specs.get("drive_form_factor"),
             specs.get("interface"),
         ]
-    return [
-        specs.get("brand"),
-        _display_model(specs),
-        specs.get("cpu_short") or specs.get("cpu"),
-        _ram_label(specs.get("ram_gb")),
-    ]
+    if device_type == "computer":
+        return [
+            specs.get("brand"),
+            _display_model(specs),
+            specs.get("cpu_short") or specs.get("cpu"),
+            _ram_label(specs.get("ram_gb")),
+        ]
+    return []
 
 
 def _spec_label(specs: dict[str, Any]) -> str:
