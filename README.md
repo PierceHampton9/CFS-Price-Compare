@@ -2,7 +2,7 @@
 
 Repository/folder name: `CFS-Price-Compare`.
 
-A command-line tool for estimating fair resale prices for donated devices.
+A GUI and command-line tool for estimating fair resale prices for donated devices.
 
 Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, GUI pricing flow wiring, and GUI release packaging.
 
