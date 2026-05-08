@@ -82,8 +82,8 @@ Auto-detection is only for Windows computers. Run this on the computer being ins
 
    .\pc_pricer.exe price-detect --condition good
 
-Reading the report (Line-By-Line) ... CLI only, GUI contains information indicators:
-------------------------------------------------------------------------------------
+Reading the report (Line-By-Line) ... CLI or print-off only, GUI contains information indicators:
+-------------------------------------------------------------------------------------------------
 
 The price estimate reads as follows...
 
