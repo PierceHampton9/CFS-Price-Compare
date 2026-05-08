@@ -3,6 +3,9 @@ CFS Price Compare - Windows Quickstart
 
 This release is meant for Windows pricing computers. You do not need Python, Git, or developer tools on this computer.
 
+Read the following explanation ONLY if you don't already have the eBay API credentials required for this program
+-----------------------------------------------------------------------------------------------------------------
+
 The eBay credentials needed for to run the program can be created by registering an "eBay Developer Program" account. Once your account is activated navigate to the "Application Keys" page and create a "Production" keyset. You can apply to be exempt from marketplace deletion requirements as long as you are using the keyset strictly for this program without further functional modifications. You can do this by choosing the "Not Persisting eBay data setting" in the marketplace deletion exemption form.
 
 First-time setup
