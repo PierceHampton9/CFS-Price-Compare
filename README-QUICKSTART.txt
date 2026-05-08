@@ -8,17 +8,26 @@ Read the following explanation ONLY if you don't already have the eBay API crede
 
 The eBay credentials needed for to run the program can be created by registering an "eBay Developer Program" account. Once your account is activated navigate to the "Application Keys" page and create a "Production" keyset. You can apply to be exempt from marketplace deletion requirements as long as you are using the keyset strictly for this program without further functional modifications. You can do this by choosing the "Not Persisting eBay data setting" in the marketplace deletion exemption form.
 
-First-time setup
-----------------
+First-time setup (if using from github release) SKIP IF USING ON DEVICE WITH THIS PROGRAM PRE-LOADED
+----------------------------------------------------------------------------------------------------
 
 1. Extract the release zip.
 2. Keep the whole extracted folder together. Do not delete the _internal folder.
 3. Open the extracted folder.
 4. Double-click pc_pricer_gui.exe.
-5. Enter the eBay App ID / Client ID and Cert ID / Client Secret when prompted.
-6. Follow the screens to choose device type, enter specs, and review the report.
+5. Choose "Show More" then "Run Anyway"
+6. Enter the eBay App ID / Client ID and Cert ID / Client Secret when prompted.
+7. Follow the screens to choose device type, enter specs, and review the report.
 
 The setup screen creates a local .env file beside pc_pricer_gui.exe. The .env file contains credentials in plaintext, so keep the release folder in a trusted place.
+
+Setup on pre-loaded devices
+---------------------------
+
+1. Double-click pc_pricer_gui.exe.
+2. Choose "Show More" then "Run Anyway"
+3. Enter the eBay App ID / Client ID and Cert ID / Client Secret when prompted.
+4. Follow the screens to choose device type, enter specs, and review the report.
 
 Windows Defender / SmartScreen note:
 Unsigned small-project executables may show a warning the first time they are opened. The practical long-term fix is code signing. Until then, only use release zips downloaded from the project GitHub Releases page.
@@ -89,7 +98,7 @@ The price estimate reads as follows...
 
 Conservative est.: <A range of prices which account for asking prices possibly being inflated compared to sold prices>
 Asking median:     <The value of the median listing price in the extracted listing set>
-Comparable range:  <The range of prices in the exstracted listing set>
+Comparable range:  <The range of prices in the extracted listing set>
 Comparables:       <The number of comparable listings extracted>
 Query tier:        <Rank which represents the specificity of the query used to extract comparable listings with 1 as best, 3 as worst>
 Sources:           <[Source] : [The number of extracted comparable listings from the respective source], ...>
@@ -99,7 +108,7 @@ Manual specs:    <The list of specs given after being stripped of irrelevant cha
 Queries used:
   <[Query tier]: [Query details such as specs and model]
   ...>
-Target condition: <The condition of the device. From best to worst mint (which is essentially new), excellent (like new, probably no visibl damage or hardware decay), good (most used devices, not destroyed but doesn't look or act new), parts (good only for parts or at best very, very short remaining lifespan)>
+Target condition: <The condition of the device. From best to worst mint (which is essentially new), excellent (like new, probably no visible damage or hardware decay), good (most used devices, not destroyed but doesn't look or act new), parts (good only for parts or at best very, very short remaining lifespan)>
 Filtered out:      <[Number of listings filtered out] [(condition mismatch: [X], parts/accessory listing: [Y])]
 Confidence flags: <Indicators which can be used to evaluate the strength of the estimates>
 Pricing limits:   <Indicators which explain what limitations exist when evaluating prices>

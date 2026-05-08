@@ -6,6 +6,10 @@ A command-line tool for estimating fair resale prices for donated devices.
 
 Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, GUI pricing flow wiring, and GUI release packaging.
 
+## Pre-loaded Devices Setup
+
+To use the pre-loaded devices setup, double-click `pc_pricer_gui.exe` and follow the on-screen instructions.
+
 ## Windows Release Setup
 
 For normal use on pricing computers, just download the Windows release zip folder and reference the README-QUICKSTART.txt file within to setup and use the program.
