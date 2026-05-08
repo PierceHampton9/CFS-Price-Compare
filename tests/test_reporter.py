@@ -272,6 +272,28 @@ class ReporterTests(unittest.TestCase):
 
         self.assertIn("Pricing basis:    active asking listings, discounted 10-20%", report)
 
+    def test_formats_unknown_asking_discount_range_without_fake_percent(self):
+        report = format_price_report(
+            {
+                "count": 1,
+                "median_price_cad": 500,
+                "asking_median_price_cad": 500,
+                "conservative_low_cad": 450,
+                "conservative_high_cad": 475,
+                "iqr_low_cad": 500,
+                "iqr_high_cad": 500,
+                "sold_count": 0,
+                "asking_count": 1,
+                "source_counts": {"ebay": 1},
+                "query_tier": 2,
+                "pricing_basis": "asking_adjusted",
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Pricing basis:    active asking listings, discounted unknown range", report)
+
     def test_formats_mixed_and_unknown_pricing_basis(self):
         mixed_report = format_price_report(
             {

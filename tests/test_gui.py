@@ -138,6 +138,52 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
+    def test_report_page_does_not_render_unsafe_listing_links_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.report_result = {
+            "count": 1,
+            "pricing_basis": "asking_adjusted",
+            "conservative_low_cad": 280,
+            "conservative_high_cad": 300,
+            "asking_median_price_cad": 300,
+            "iqr_low_cad": 275,
+            "iqr_high_cad": 325,
+            "query_tier": 2,
+            "source_counts": {"ebay": 1},
+            "confidence_flags": [],
+            "pricing_limitations": [],
+            "listing_warnings": [],
+            "specs": {"device_type": "computer", "brand": "Lenovo"},
+            "raw_listing_count": 1,
+            "deduped_listing_count": 1,
+            "target_condition": "good",
+            "excluded_count": 0,
+            "queries": [],
+            "supporting_listings": [
+                {
+                    "title": "Lenovo ThinkPad",
+                    "item_price_cad": 300,
+                    "shipping_cad": 0,
+                    "total_price_cad": 300,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": False,
+                    "query_tier": 2,
+                    "url": "javascript:alert(1)",
+                }
+            ],
+        }
+
+        window.report_page.refresh()
+        labels = [label.text() for label in window.report_page.findChildren(gui.QLabel)]
+
+        self.assertIn("1. Lenovo ThinkPad", labels)
+        self.assertFalse(any("javascript:" in label for label in labels))
+        self.assertFalse(any("Open in browser" in label for label in labels))
+
+        window.close()
+
     def _qt_app(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         try:

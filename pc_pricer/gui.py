@@ -759,7 +759,7 @@ class ReportPage(Page):
             layout.setSpacing(6)
 
             listing_title = f"{index}. {listing.get('title') or 'Untitled listing'}"
-            url = str(listing.get("url") or "").strip()
+            url = _safe_link_url(listing.get("url"))
             if url:
                 title = QLabel(f'<a href="{html.escape(url, quote=True)}">{html.escape(listing_title)}</a>')
                 title.setOpenExternalLinks(True)
@@ -916,8 +916,15 @@ def _discount_percent_range(result: dict[str, Any]) -> str:
     low = _safe_percent(result.get("asking_only_discount_low"))
     high = _safe_percent(result.get("asking_only_discount_high"))
     if low is None or high is None:
-        return "0-5%"
+        return "Unknown Range"
     return f"{low}-{high}%"
+
+
+def _safe_link_url(value: Any) -> str:
+    url = str(value or "").strip()
+    if url.lower().startswith(("http://", "https://")):
+        return url
+    return ""
 
 
 def _format_source_counts(source_counts: Any) -> str:

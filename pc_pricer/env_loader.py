@@ -15,7 +15,11 @@ def default_env_path() -> Path:
 
 
 def load_env_file(path: str | Path | None = None, override: bool = False) -> None:
-    """Load KEY=VALUE pairs from a local .env file without overriding the shell."""
+    """Load KEY=VALUE pairs from a local .env file.
+
+    By default, existing shell variables win. Pass override=True when the saved
+    .env file should replace values already present in the current process.
+    """
     env_path = Path(path) if path is not None else default_env_path()
     _load_one_env_file(env_path, override=override)
 
