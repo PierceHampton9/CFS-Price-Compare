@@ -184,6 +184,23 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
+    def test_report_page_prints_current_report_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
+        FakeTextDocument.created.clear()
+
+        with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
+            "pc_pricer.gui.QPrintDialog", FakePrintDialog
+        ), patch("pc_pricer.gui.QTextDocument", FakeTextDocument):
+            window.report_page.print_report()
+
+        self.assertIn("CFS Price Report", FakeTextDocument.created[-1].html)
+        self.assertIn("Median price: $300.00 CAD", FakeTextDocument.created[-1].html)
+        self.assertIsInstance(FakeTextDocument.created[-1].printed_to, FakePrinter)
+
+        window.close()
+
     def _qt_app(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         try:
@@ -261,6 +278,37 @@ class FakeDetectionThread:
 
     def deleteLater(self) -> None:
         pass
+
+
+class FakePrinter:
+    pass
+
+
+class FakePrintDialog:
+    def __init__(self, printer, _parent=None) -> None:
+        self.printer = printer
+
+    def exec(self):
+        try:
+            from PySide6.QtWidgets import QDialog
+        except ModuleNotFoundError:
+            return 1
+        return QDialog.Accepted
+
+
+class FakeTextDocument:
+    created = []
+
+    def __init__(self) -> None:
+        self.html = ""
+        self.printed_to = None
+        FakeTextDocument.created.append(self)
+
+    def setHtml(self, html):
+        self.html = html
+
+    def print_(self, printer):
+        self.printed_to = printer
 
 
 if __name__ == "__main__":

@@ -44,10 +44,13 @@ class _MissingSignal:
 
 try:  # pragma: no cover - exercised only when PySide6 is installed.
     from PySide6.QtCore import QThread, Qt, QTimer, Signal  # type: ignore[import-not-found]
+    from PySide6.QtGui import QTextDocument  # type: ignore[import-not-found]
+    from PySide6.QtPrintSupport import QPrintDialog, QPrinter  # type: ignore[import-not-found]
     from PySide6.QtWidgets import (  # type: ignore[import-not-found]
         QApplication,
         QButtonGroup,
         QComboBox,
+        QDialog,
         QFormLayout,
         QFrame,
         QGridLayout,
@@ -67,9 +70,9 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
 except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QApplication = None  # type: ignore[assignment]
     QThread = object  # type: ignore[assignment]
-    QButtonGroup = QComboBox = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
+    QButtonGroup = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
     QGridLayout = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
-    QScrollArea = QStackedWidget = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
+    QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     Qt = type(
         "Qt",
         (),
@@ -518,10 +521,13 @@ class ReportPage(Page):
         back.clicked.connect(self.main_window.show_specs)
         another = QPushButton("Price Another Device")
         another.clicked.connect(self.main_window.reset_for_new_device)
+        print_button = QPushButton("Print")
+        print_button.clicked.connect(self.print_report)
         finish = QPushButton("Finish")
         finish.clicked.connect(self.main_window.close)
         buttons.addWidget(back)
         buttons.addStretch()
+        buttons.addWidget(print_button)
         buttons.addWidget(another)
         buttons.addWidget(finish)
         self.root.addLayout(buttons)
@@ -544,6 +550,22 @@ class ReportPage(Page):
         self._add_filter_section(result)
         self._add_supporting_listings(result.get("supporting_listings") or [])
         self.content_layout.addStretch()
+
+    def print_report(self) -> None:
+        text = self.main_window.state.report_text
+        if self.main_window.state.report_error:
+            text = f"Pricing failed\n\n{self.main_window.state.report_error}"
+        if not text:
+            text = "No report generated."
+
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        document = QTextDocument()
+        document.setHtml(_printable_report_html(text))
+        document.print_(printer)
 
     def _add_price_summary(self, result: dict[str, Any]) -> None:
         count = _safe_int(result.get("count"))
@@ -925,6 +947,38 @@ def _safe_link_url(value: Any) -> str:
     if url.lower().startswith(("http://", "https://")):
         return url
     return ""
+
+
+def _printable_report_html(text: str) -> str:
+    escaped = html.escape(text)
+    return f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{
+      color: #111827;
+      font-family: Arial, sans-serif;
+      font-size: 10pt;
+      line-height: 1.35;
+    }}
+    h1 {{
+      font-size: 18pt;
+      margin: 0 0 12pt;
+    }}
+    pre {{
+      font-family: Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+    }}
+  </style>
+</head>
+<body>
+  <h1>CFS Price Report</h1>
+  <pre>{escaped}</pre>
+</body>
+</html>
+"""
 
 
 def _format_source_counts(source_counts: Any) -> str:
