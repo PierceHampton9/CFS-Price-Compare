@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from pc_pricer.detector import specs_from_raw
+from pc_pricer.detector import collect_windows_specs, specs_from_raw
 
 
 class DetectorTests(unittest.TestCase):
@@ -80,6 +81,26 @@ class DetectorTests(unittest.TestCase):
         self.assertIsNone(specs["search_model"])
         self.assertTrue(specs["model_is_machine_type"])
         self.assertEqual(specs["cpu_short"], "i7-1185G7")
+
+    def test_collect_windows_specs_suppresses_powershell_console_when_available(self):
+        calls = {}
+
+        class Completed:
+            returncode = 0
+            stderr = ""
+            stdout = "{}"
+
+        def fake_run(*args, **kwargs):
+            calls["args"] = args
+            calls["kwargs"] = kwargs
+            return Completed()
+
+        with patch("pc_pricer.detector.platform.system", return_value="Windows"), patch(
+            "pc_pricer.detector.subprocess.CREATE_NO_WINDOW", 134217728, create=True
+        ), patch("pc_pricer.detector.subprocess.run", fake_run):
+            self.assertEqual(collect_windows_specs(), {})
+
+        self.assertEqual(calls["kwargs"]["creationflags"], 134217728)
 
 
 if __name__ == "__main__":

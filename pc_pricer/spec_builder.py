@@ -35,10 +35,14 @@ def gui_values_from_detected_specs(specs: dict[str, Any]) -> dict[str, str]:
     if not isinstance(primary_drive, dict):
         primary_drive = {}
 
+    model = specs.get("search_model")
+    if not model and not specs.get("model_is_machine_type"):
+        model = specs.get("model")
+
     values = {
         "form_factor": specs.get("form_factor"),
         "brand": specs.get("brand"),
-        "model": specs.get("search_model") or specs.get("model"),
+        "model": model,
         "oem_sku": specs.get("oem_sku"),
         "variant": specs.get("variant"),
         "screen_size": specs.get("screen_size"),

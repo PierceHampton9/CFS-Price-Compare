@@ -29,6 +29,7 @@ class GuiImportTests(unittest.TestCase):
 
         self.assertEqual(FakePricingThread.created[-1].device_type, "phone")
         self.assertEqual(FakePricingThread.created[-1].specs, {"brand": "Apple", "model": "iPhone 13"})
+        self.assertEqual(window.state.report_result, {"count": 1})
         self.assertEqual(window.state.report_text, "report text")
         self.assertEqual(window.state.report_error, "")
         self.assertIsNone(window.pricing_thread)
@@ -40,17 +41,101 @@ class GuiImportTests(unittest.TestCase):
         window = gui.MainWindow()
         window.state.device_type = "phone"
         window.state.specs = {"brand": "Apple", "model": "iPhone 13"}
+        window.state.report_result = {"count": 1}
         FakePricingThread.created.clear()
         FakePricingThread.next_error = "credentials failed"
 
         with patch("pc_pricer.gui.PricingThread", FakePricingThread):
             window.price_current_specs()
 
+        self.assertEqual(window.state.report_result, {})
         self.assertEqual(window.state.report_text, "")
         self.assertEqual(window.state.report_error, "credentials failed")
         self.assertIsNone(window.pricing_thread)
 
         FakePricingThread.next_error = None
+        window.close()
+
+    def test_computer_mode_page_runs_auto_detect_thread_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.specs = {"condition": "good"}
+        FakeDetectionThread.created.clear()
+
+        with patch("pc_pricer.gui.DetectionThread", FakeDetectionThread):
+            window.computer_mode_page.start_detection()
+
+        self.assertEqual(FakeDetectionThread.created[-1].parent, window.computer_mode_page)
+        self.assertEqual(window.state.specs["brand"], "Lenovo")
+        self.assertEqual(window.state.specs["model"], "ThinkPad X13")
+        self.assertEqual(window.state.specs["input_method"], "detected")
+        self.assertEqual(window.state.specs["condition"], "good")
+        self.assertIsNone(window.computer_mode_page.detect_thread)
+
+        window.close()
+
+    def test_computer_mode_page_shows_auto_detect_failure_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        FakeDetectionThread.created.clear()
+        FakeDetectionThread.next_error = "auto detect failed"
+
+        with patch("pc_pricer.gui.DetectionThread", FakeDetectionThread):
+            window.computer_mode_page.start_detection()
+
+        self.assertEqual(window.computer_mode_page.error.text(), "auto detect failed")
+        self.assertIsNone(window.computer_mode_page.detect_thread)
+
+        FakeDetectionThread.next_error = None
+        window.close()
+
+    def test_report_page_renders_structured_report_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.report_result = {
+            "count": 1,
+            "pricing_basis": "asking_adjusted",
+            "conservative_low_cad": 280,
+            "conservative_high_cad": 300,
+            "asking_median_price_cad": 300,
+            "iqr_low_cad": 275,
+            "iqr_high_cad": 325,
+            "query_tier": 2,
+            "source_counts": {"ebay": 1},
+            "confidence_flags": [],
+            "pricing_limitations": ["asking_prices_only"],
+            "listing_warnings": [],
+            "specs": {"device_type": "computer", "brand": "Lenovo", "cpu_short": "i5-1135G7"},
+            "raw_listing_count": 1,
+            "deduped_listing_count": 1,
+            "target_condition": "good",
+            "excluded_count": 0,
+            "queries": [{"tier": 2, "text": "Lenovo i5-1135G7 16GB"}],
+            "supporting_listings": [
+                {
+                    "title": "Lenovo ThinkPad",
+                    "item_price_cad": 300,
+                    "shipping_cad": 0,
+                    "total_price_cad": 300,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": False,
+                    "query_tier": 2,
+                    "query_text": "Lenovo i5-1135G7 16GB",
+                    "url": "https://www.ebay.ca/itm/example",
+                }
+            ],
+        }
+
+        window.report_page.refresh()
+        labels = [label.text() for label in window.report_page.findChildren(gui.QLabel)]
+
+        self.assertIn("Conservative Estimate", labels)
+        self.assertIn("$280.00 CAD - $300.00 CAD", labels)
+        self.assertIn("Supporting Listings", labels)
+        self.assertTrue(any("1. Lenovo ThinkPad" in label for label in labels))
+        self.assertTrue(any("Open in browser" in label for label in labels))
+
         window.close()
 
     def _qt_app(self):
@@ -91,11 +176,42 @@ class FakePricingThread:
         if self.next_error:
             self.failed.emit(self.next_error)
         else:
-            self.completed.emit("report text")
+            self.completed.emit({"count": 1}, "report text")
         self.finished.emit()
 
     def isRunning(self) -> bool:
         return False
+
+    def deleteLater(self) -> None:
+        pass
+
+
+class FakeDetectionThread:
+    created = []
+    next_error = None
+
+    def __init__(self, parent=None) -> None:
+        self.parent = parent
+        self.completed = FakeSignal()
+        self.failed = FakeSignal()
+        self.finished = FakeSignal()
+        FakeDetectionThread.created.append(self)
+
+    def start(self) -> None:
+        if self.next_error:
+            self.failed.emit(self.next_error)
+        else:
+            self.completed.emit(
+                {
+                    "brand": "Lenovo",
+                    "search_model": "ThinkPad X13",
+                    "form_factor": "laptop",
+                    "cpu_short": "i5-1135G7",
+                    "ram_gb": 16,
+                    "storage": [{"size_gb": 512, "type": "SSD"}],
+                }
+            )
+        self.finished.emit()
 
     def deleteLater(self) -> None:
         pass

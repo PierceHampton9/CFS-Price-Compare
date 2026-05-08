@@ -42,6 +42,18 @@ class EnvLoaderTests(unittest.TestCase):
         finally:
             env_path.unlink(missing_ok=True)
 
+    def test_can_override_existing_shell_values_for_gui_runs(self):
+        env_path = _test_env_path()
+        try:
+            env_path.write_text("EBAY_CLIENT_ID=file-value", encoding="utf-8")
+
+            with patch.dict(os.environ, {"EBAY_CLIENT_ID": "shell-value"}, clear=True):
+                load_env_file(env_path, override=True)
+
+                self.assertEqual(os.environ["EBAY_CLIENT_ID"], "file-value")
+        finally:
+            env_path.unlink(missing_ok=True)
+
     def test_missing_file_is_ok(self):
         env_path = _test_env_path()
         env_path.unlink(missing_ok=True)
