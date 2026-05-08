@@ -92,6 +92,7 @@ class GuiImportTests(unittest.TestCase):
     def test_report_page_renders_structured_report_when_pyside_is_available(self):
         self._qt_app()
         window = gui.MainWindow()
+        window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
         window.state.report_result = {
             "count": 1,
             "pricing_basis": "asking_adjusted",
@@ -135,12 +136,14 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("Supporting Listings", labels)
         self.assertTrue(any("1. Lenovo ThinkPad" in label for label in labels))
         self.assertTrue(any("Open in browser" in label for label in labels))
+        self.assertTrue(window.report_page.print_button.isEnabled())
 
         window.close()
 
     def test_report_page_does_not_render_unsafe_listing_links_when_pyside_is_available(self):
         self._qt_app()
         window = gui.MainWindow()
+        window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
         window.state.report_result = {
             "count": 1,
             "pricing_basis": "asking_adjusted",
@@ -181,6 +184,20 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("1. Lenovo ThinkPad", labels)
         self.assertFalse(any("javascript:" in label for label in labels))
         self.assertFalse(any("Open in browser" in label for label in labels))
+        self.assertTrue(window.report_page.print_button.isEnabled())
+
+        window.close()
+
+    def test_report_page_disables_print_for_empty_and_error_states_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+
+        window.report_page.refresh()
+        self.assertFalse(window.report_page.print_button.isEnabled())
+
+        window.state.report_error = "credentials failed"
+        window.report_page.refresh()
+        self.assertFalse(window.report_page.print_button.isEnabled())
 
         window.close()
 
@@ -188,7 +205,9 @@ class GuiImportTests(unittest.TestCase):
         self._qt_app()
         window = gui.MainWindow()
         window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
+        window.state.report_result = {"count": 1}
         FakeTextDocument.created.clear()
+        FakePrintDialog.next_result = gui.QDialog.Accepted
 
         with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
             "pc_pricer.gui.QPrintDialog", FakePrintDialog
@@ -199,6 +218,50 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("Median price: $300.00 CAD", FakeTextDocument.created[-1].html)
         self.assertIsInstance(FakeTextDocument.created[-1].printed_to, FakePrinter)
 
+        window.close()
+
+    def test_report_page_does_not_print_without_successful_report_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        FakeTextDocument.created.clear()
+        FakePrintDialog.next_result = gui.QDialog.Accepted
+
+        with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
+            "pc_pricer.gui.QPrintDialog", FakePrintDialog
+        ), patch("pc_pricer.gui.QTextDocument", FakeTextDocument):
+            window.report_page.print_report()
+
+        self.assertEqual(FakeTextDocument.created, [])
+
+        window.state.report_text = "Pricing failed"
+        window.state.report_result = {"count": 0}
+        window.state.report_error = "credentials failed"
+
+        with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
+            "pc_pricer.gui.QPrintDialog", FakePrintDialog
+        ), patch("pc_pricer.gui.QTextDocument", FakeTextDocument):
+            window.report_page.print_report()
+
+        self.assertEqual(FakeTextDocument.created, [])
+
+        window.close()
+
+    def test_report_page_does_not_print_when_dialog_is_rejected_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
+        window.state.report_result = {"count": 1}
+        FakeTextDocument.created.clear()
+        FakePrintDialog.next_result = gui.QDialog.Rejected
+
+        with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
+            "pc_pricer.gui.QPrintDialog", FakePrintDialog
+        ), patch("pc_pricer.gui.QTextDocument", FakeTextDocument):
+            window.report_page.print_report()
+
+        self.assertEqual(FakeTextDocument.created, [])
+
+        FakePrintDialog.next_result = gui.QDialog.Accepted
         window.close()
 
     def _qt_app(self):
@@ -285,15 +348,13 @@ class FakePrinter:
 
 
 class FakePrintDialog:
+    next_result = None
+
     def __init__(self, printer, _parent=None) -> None:
         self.printer = printer
 
     def exec(self):
-        try:
-            from PySide6.QtWidgets import QDialog
-        except ModuleNotFoundError:
-            return 1
-        return QDialog.Accepted
+        return self.next_result
 
 
 class FakeTextDocument:

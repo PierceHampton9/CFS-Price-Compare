@@ -521,19 +521,20 @@ class ReportPage(Page):
         back.clicked.connect(self.main_window.show_specs)
         another = QPushButton("Price Another Device")
         another.clicked.connect(self.main_window.reset_for_new_device)
-        print_button = QPushButton("Print")
-        print_button.clicked.connect(self.print_report)
+        self.print_button = QPushButton("Print")
+        self.print_button.clicked.connect(self.print_report)
         finish = QPushButton("Finish")
         finish.clicked.connect(self.main_window.close)
         buttons.addWidget(back)
         buttons.addStretch()
-        buttons.addWidget(print_button)
+        buttons.addWidget(self.print_button)
         buttons.addWidget(another)
         buttons.addWidget(finish)
         self.root.addLayout(buttons)
 
     def refresh(self) -> None:
         clear_layout(self.content_layout)
+        self.print_button.setEnabled(self._can_print())
         if self.main_window.state.report_error:
             self._add_message("Pricing failed", self.main_window.state.report_error, "errorPanel")
             return
@@ -552,11 +553,8 @@ class ReportPage(Page):
         self.content_layout.addStretch()
 
     def print_report(self) -> None:
-        text = self.main_window.state.report_text
-        if self.main_window.state.report_error:
-            text = f"Pricing failed\n\n{self.main_window.state.report_error}"
-        if not text:
-            text = "No report generated."
+        if not self._can_print():
+            return
 
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
@@ -564,8 +562,15 @@ class ReportPage(Page):
             return
 
         document = QTextDocument()
-        document.setHtml(_printable_report_html(text))
+        document.setHtml(_printable_report_html(self.main_window.state.report_text))
         document.print_(printer)
+
+    def _can_print(self) -> bool:
+        return bool(
+            self.main_window.state.report_text
+            and self.main_window.state.report_result
+            and not self.main_window.state.report_error
+        )
 
     def _add_price_summary(self, result: dict[str, Any]) -> None:
         count = _safe_int(result.get("count"))
@@ -969,6 +974,7 @@ def _printable_report_html(text: str) -> str:
     }}
     pre {{
       font-family: Consolas, "Courier New", monospace;
+      overflow-wrap: anywhere;
       white-space: pre-wrap;
     }}
   </style>
