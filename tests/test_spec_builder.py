@@ -77,6 +77,22 @@ class SpecBuilderTests(unittest.TestCase):
         self.assertEqual(values["ram"], "16")
         self.assertEqual(values["storage"], "512")
 
+    def test_detected_machine_type_model_does_not_become_gui_search_model(self):
+        values = gui_values_from_detected_specs(
+            {
+                "brand": "Lenovo",
+                "model": "20W9S23S00",
+                "search_model": None,
+                "model_is_machine_type": True,
+                "form_factor": "laptop",
+                "cpu_short": "i7-1185G7",
+                "ram_gb": 16,
+            }
+        )
+
+        self.assertNotIn("model", values)
+        self.assertEqual(values["cpu"], "i7-1185G7")
+
 
 if __name__ == "__main__":
     unittest.main()

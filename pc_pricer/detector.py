@@ -64,6 +64,7 @@ def collect_windows_specs() -> dict[str, Any]:
     if platform.system() != "Windows":
         raise RuntimeError("Automatic spec detection currently only supports Windows.")
 
+    creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     completed = subprocess.run(
         [
             "powershell.exe",
@@ -75,6 +76,7 @@ def collect_windows_specs() -> dict[str, Any]:
         ],
         check=False,
         capture_output=True,
+        creationflags=creation_flags,
         text=True,
     )
 

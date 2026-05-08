@@ -181,7 +181,7 @@ class EbaySourceTests(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ResourceWarning)
             with patch("pc_pricer.sources.ebay.request.urlopen", fake_urlopen):
-                with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
+                with self.assertRaisesRegex(RuntimeError, "HTTP 401.*Check the saved eBay"):
                     ebay._http_get_json("https://api.ebay.com/example", {})
 
     def test_url_errors_are_wrapped(self):

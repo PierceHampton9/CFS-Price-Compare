@@ -2,6 +2,7 @@ import unittest
 
 from pc_pricer.gui_forms import (
     fields_for_device,
+    option_label,
     validate_computer_mode,
     validate_device_type,
     validate_specs,
@@ -17,6 +18,21 @@ class GuiFormsTests(unittest.TestCase):
         self.assertIn("model", required)
         self.assertIn("condition", required)
         self.assertIn("storage", required)
+
+    def test_condition_options_are_best_to_worst_with_good_recommended(self):
+        condition = next(field for field in fields_for_device("phone") if field.name == "condition")
+
+        self.assertEqual(condition.options, ("mint", "excellent", "good", "any"))
+        self.assertEqual(condition.default, "good")
+        self.assertEqual(option_label(condition, "good"), "Good (recommended)")
+
+    def test_option_labels_capitalize_user_facing_choices(self):
+        phone = {field.name: field for field in fields_for_device("phone")}
+        storage = {field.name: field for field in fields_for_device("storage")}
+
+        self.assertEqual(option_label(phone["carrier"], "unlocked"), "Unlocked")
+        self.assertEqual(option_label(storage["drive_type"], "ssd"), "SSD")
+        self.assertEqual(option_label(storage["drive_form_factor"], "m.2"), "M.2")
 
     def test_device_type_validation(self):
         self.assertEqual(validate_device_type("phone"), [])

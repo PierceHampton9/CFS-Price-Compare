@@ -221,7 +221,7 @@ def _http_get_json(url: str, headers: dict[str, str]) -> dict[str, Any]:
         with request.urlopen(req, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
     except error.HTTPError as exc:
-        raise RuntimeError(f"eBay request failed with HTTP {exc.code}.") from exc
+        raise RuntimeError(_http_error_message(exc.code)) from exc
     except error.URLError as exc:
         raise RuntimeError(f"eBay request failed: {exc.reason}") from exc
 
@@ -233,7 +233,7 @@ def _http_post_json(url: str, headers: dict[str, str], body: dict[str, str]) -> 
         with request.urlopen(req, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
     except error.HTTPError as exc:
-        raise RuntimeError(f"eBay request failed with HTTP {exc.code}.") from exc
+        raise RuntimeError(_http_error_message(exc.code)) from exc
     except error.URLError as exc:
         raise RuntimeError(f"eBay request failed: {exc.reason}") from exc
 
@@ -250,3 +250,12 @@ def _clean(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _http_error_message(code: int) -> str:
+    if code == 401:
+        return (
+            "eBay request failed with HTTP 401. Check the saved eBay App ID / Client ID "
+            "and Cert ID / Client Secret, then restart the app or save credentials again."
+        )
+    return f"eBay request failed with HTTP {code}."

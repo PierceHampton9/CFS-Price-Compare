@@ -7,7 +7,13 @@ from typing import Any
 
 
 DEVICE_TYPES = ["computer", "phone", "tablet", "monitor", "printer", "storage"]
-CONDITIONS = ["good", "excellent", "mint", "any"]
+CONDITIONS = ["mint", "excellent", "good", "any"]
+CONDITION_LABELS = (
+    ("mint", "Mint"),
+    ("excellent", "Excellent"),
+    ("good", "Good (recommended)"),
+    ("any", "Any"),
+)
 COMPUTER_FORM_FACTORS = ["laptop", "desktop", "all-in-one"]
 COMPUTER_MODES = ["auto", "manual"]
 
@@ -18,13 +24,22 @@ class FieldSpec:
     label: str
     required: bool = False
     options: tuple[str, ...] = ()
+    option_labels: tuple[tuple[str, str], ...] = ()
+    default: str = ""
     placeholder: str = ""
 
 
 COMMON_FIELDS = [
     FieldSpec("brand", "Brand", required=True, placeholder="Apple, Dell, Lenovo, Brother"),
     FieldSpec("model", "Model", required=True, placeholder="iPhone 13, U2419H, ThinkPad T14"),
-    FieldSpec("condition", "Condition", required=True, options=tuple(CONDITIONS)),
+    FieldSpec(
+        "condition",
+        "Condition",
+        required=True,
+        options=tuple(CONDITIONS),
+        option_labels=CONDITION_LABELS,
+        default="good",
+    ),
 ]
 
 
@@ -38,12 +53,12 @@ FIELD_SETS: dict[str, list[FieldSpec]] = {
         FieldSpec("cpu", "CPU", placeholder="i5-1135G7, M1 Pro"),
         FieldSpec("ram", "RAM (GB)", placeholder="16"),
         FieldSpec("storage", "Storage (GB)", placeholder="512"),
-        FieldSpec("storage_type", "Storage type", options=("SSD", "HDD", "NVMe", "eMMC")),
+        FieldSpec("storage_type", "Storage type", options=("SSD", "HDD", "NVMe", "eMMC"), default="SSD"),
         FieldSpec("gpu", "GPU", placeholder="Optional dedicated GPU"),
     ],
     "phone": [
         *COMMON_FIELDS,
-        FieldSpec("variant", "Variant", placeholder="Optional, such as mini, Pro, Pro Max, Plus"),
+        FieldSpec("variant", "Variant", placeholder="Optional, such as Mini, Pro, Pro Max, Plus"),
         FieldSpec("screen_size", "Screen size", placeholder="Optional, such as 6.1"),
         FieldSpec("storage", "Storage (GB)", required=True, placeholder="128"),
         FieldSpec("carrier", "Carrier/unlocked", options=("unlocked", "locked", "unknown")),
@@ -81,6 +96,23 @@ FIELD_SETS: dict[str, list[FieldSpec]] = {
 def fields_for_device(device_type: str) -> list[FieldSpec]:
     """Return GUI field definitions for a device type."""
     return list(FIELD_SETS.get(device_type, []))
+
+
+def option_label(field: FieldSpec, option: str) -> str:
+    labels = dict(field.option_labels)
+    if option in labels:
+        return labels[option]
+    if option.lower() == "all-in-one":
+        return "All-in-One"
+    if option.lower() == "msata":
+        return "mSATA"
+    if option.lower() in {"ssd", "hdd", "sata", "nvme", "usb", "sas"}:
+        return option.upper() if option.lower() != "nvme" else "NVMe"
+    if option.lower() == "emmc":
+        return "eMMC"
+    if option.lower() == "m.2":
+        return "M.2"
+    return option[:1].upper() + option[1:]
 
 
 def validate_device_type(device_type: str | None) -> list[str]:

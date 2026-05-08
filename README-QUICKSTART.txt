@@ -17,6 +17,9 @@ First-time setup
 
 The setup screen creates a local .env file beside pc_pricer_gui.exe. The .env file contains credentials in plaintext, so keep the release folder in a trusted place.
 
+Windows Defender / SmartScreen note:
+Unsigned small-project executables may show a warning the first time they are opened. The practical long-term fix is code signing. Until then, only use release zips downloaded from the project GitHub Releases page.
+
 Optional command-line check
 ---------------------------
 

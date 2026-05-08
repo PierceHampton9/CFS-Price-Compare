@@ -210,7 +210,7 @@ def _discount_percent_range(result: dict[str, Any]) -> str:
     low = _safe_percent(result.get("asking_only_discount_low"))
     high = _safe_percent(result.get("asking_only_discount_high"))
     if low is None or high is None:
-        return "0-5%"
+        return "unknown range"
     return f"{low}-{high}%"
 
 

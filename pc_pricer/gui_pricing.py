@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from pc_pricer.config import load_config
+from pc_pricer.env_loader import load_env_file
 from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
 from pc_pricer.sources.ebay import EbaySource
@@ -18,6 +19,7 @@ def price_gui_values(
     config_path: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Price GUI form values and return both raw result and formatted report."""
+    load_env_file(override=True)
     config = load_config(config_path)
     specs = build_manual_specs(device_type, values)
     result = price_specs(
