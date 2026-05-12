@@ -10,7 +10,12 @@ CONFIG_PATH = Path("tests/cli_test_config.yaml")
 
 
 class CliTests(unittest.TestCase):
+    def setUp(self):
+        self.refurb_patcher = patch("pc_pricer.cli.RefurbIoSource", DisabledRefurbSource)
+        self.refurb_patcher.start()
+
     def tearDown(self):
+        self.refurb_patcher.stop()
         CONFIG_PATH.unlink(missing_ok=True)
 
     def test_setup_command_writes_credentials(self):
@@ -841,6 +846,16 @@ def _listing(title, total_price, is_sold=False, condition_raw="Used"):
         "query_tier": 1,
         "url": "https://www.ebay.ca/itm/example",
     }
+
+
+class DisabledRefurbSource:
+    name = "refurb_io"
+
+    def __init__(self, *args, **kwargs):
+        self.enabled = False
+
+    def search(self, _query, _max_results):
+        return []
 
 
 if __name__ == "__main__":

@@ -158,6 +158,8 @@ def exclusion_reason(
     target_specs: dict[str, Any] | None = None,
 ) -> str | None:
     """Return a short reason if a listing should not be used as a comparable."""
+    if listing.get("available") is False:
+        return "unavailable_listing"
     if _looks_like_parts_listing(listing, device_type=device_type):
         return "parts_or_accessory"
     if _looks_like_variant_mismatch(listing, device_type=device_type, target_specs=target_specs):

@@ -24,6 +24,7 @@ from pc_pricer.reporter import (
     FILTER_LABELS,
     FLAG_LABELS,
     LIMITATION_LABELS,
+    SOURCE_LABELS,
     WARNING_LABELS,
     format_condition,
     format_listing_price,
@@ -490,7 +491,7 @@ class SpecsPage(Page):
 
 class LoadingPage(Page):
     def __init__(self, window: MainWindow) -> None:
-        super().__init__(window, "Searching", "Searching eBay and preparing the price report.")
+        super().__init__(window, "Searching", "Searching configured pricing sources and preparing the price report.")
         self.message = QLabel()
         self.message.setAlignment(Qt.AlignCenter)
         self.root.addStretch()
@@ -548,6 +549,7 @@ class ReportPage(Page):
         self._add_signal_section(result)
         self._add_specs_section(result.get("specs"))
         self._add_search_section(result)
+        self._add_source_diagnostics(result.get("source_diagnostics"))
         self._add_filter_section(result)
         self._add_supporting_listings(result.get("supporting_listings") or [])
         self.content_layout.addStretch()
@@ -589,6 +591,10 @@ class ReportPage(Page):
             estimate = f"{_format_money(result.get('conservative_low_cad'))} - {_format_money(result.get('conservative_high_cad'))}"
             note = f"Asking median: {_format_money(result.get('asking_median_price_cad'))}"
             title = "Conservative Estimate"
+        elif result.get("pricing_basis") == "weighted_sources":
+            estimate = _format_money(result.get("median_price_cad"))
+            note = _format_pricing_basis(result)
+            title = "Weighted Estimate"
         else:
             estimate = _format_money(result.get("median_price_cad"))
             note = _format_pricing_basis(result)
@@ -608,8 +614,8 @@ class ReportPage(Page):
             _metric_card(
                 "Comparable Range",
                 f"{_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}",
-                "Middle range of usable listings",
-                "A rough middle range from the usable comparable listings.",
+                "Source quote range" if result.get("pricing_basis") == "weighted_sources" else "Middle range of usable listings",
+                "For weighted source pricing, this is the low-to-high source quote range. Otherwise it is the middle range from usable listings.",
             ),
             0,
             1,
@@ -627,9 +633,9 @@ class ReportPage(Page):
         grid.addWidget(
             _metric_card(
                 "Sources",
+                _format_source_quotes(result.get("source_quotes")) or _format_source_counts(result.get("source_counts")),
                 _format_source_counts(result.get("source_counts")),
-                "Active eBay asking listings",
-                "Where the usable comparable listings came from.",
+                "Shows source-level quote prices when available, plus the usable listing counts by source.",
             ),
             1,
             1,
@@ -717,6 +723,12 @@ class ReportPage(Page):
         basis = _format_pricing_basis(result)
         if basis:
             rows.append(("Pricing Basis", basis, "Explains what kind of pricing data the estimate is based on."))
+        source_basis = _format_source_basis(result.get("source_basis"))
+        if source_basis:
+            rows.append(("Source Basis", source_basis, "Explains how source-level quotes affected the estimate."))
+        source_quotes = _format_source_quotes(result.get("source_quotes"))
+        if source_quotes:
+            rows.append(("Source Quotes", source_quotes, "Per-source quote medians and weights used by weighted source pricing."))
         if result.get("pricing_basis") != "asking_adjusted" and result.get("sold_count") is not None:
             rows.append(
                 (
@@ -743,6 +755,49 @@ class ReportPage(Page):
                 )
             )
         self._add_key_value_section("Queries Used", query_rows)
+
+    def _add_source_diagnostics(self, diagnostics: Any) -> None:
+        if not isinstance(diagnostics, list) or not diagnostics:
+            return
+
+        self.content_layout.addWidget(_section_title("Source Diagnostics"))
+        for index, diagnostic in enumerate(diagnostics[:6], start=1):
+            if not isinstance(diagnostic, dict):
+                continue
+            source = _format_source_name(diagnostic.get("source"))
+            verified = "Verified" if diagnostic.get("source_match_verified") else "Not Verified"
+            title = diagnostic.get("title") or "Untitled listing"
+            rows = [
+                ("Source", source, "The pricing source that returned this candidate."),
+                ("Candidate", f"{index}. {title}", "Candidate listing returned by a non-eBay pricing source."),
+                ("Match", verified, "Whether deterministic spec matching allowed this listing to affect the weighted estimate."),
+            ]
+            reasons = diagnostic.get("source_match_reasons") or []
+            if reasons:
+                rows.append(("Match Reasons", ", ".join(str(reason) for reason in reasons), "Why the candidate was not considered a verified match."))
+            filter_reason = diagnostic.get("filter_exclusion_reason")
+            if filter_reason:
+                rows.append(("Filter Reason", str(filter_reason), "Why the candidate was excluded from usable comparables."))
+            if diagnostic.get("price_cad") is not None:
+                rows.append(("Price", _format_money(diagnostic.get("price_cad")), "Parsed candidate price."))
+            if diagnostic.get("query_text"):
+                rows.append(("Source Query", str(diagnostic.get("query_text")), "The query actually sent to this source."))
+            if diagnostic.get("generated_query_text"):
+                rows.append(("Generated Query", str(diagnostic.get("generated_query_text")), "The original generic query before source-specific adjustment."))
+            url = _safe_link_url(diagnostic.get("url"))
+            if url:
+                link = QLabel(f'<a href="{html.escape(url, quote=True)}">Open candidate</a>')
+                link.setOpenExternalLinks(True)
+                link.setWordWrap(True)
+                rows.append(("Listing", link, "Opens the candidate listing in your browser."))
+            self._add_key_value_section("", rows)
+
+        if len(diagnostics) > 6:
+            self._add_message(
+                "Source Diagnostics",
+                f"{len(diagnostics) - 6} additional source candidates are available in the JSON report.",
+                "statusPanel",
+            )
 
     def _add_filter_section(self, result: dict[str, Any]) -> None:
         if "excluded_count" not in result and "target_condition" not in result:
@@ -799,25 +854,27 @@ class ReportPage(Page):
             layout.addWidget(title)
 
             layout.addLayout(_detail_row("Price", format_listing_price(listing), "Item price, shipping, and total when shipping is known."))
-            layout.addLayout(_detail_row("Condition", _format_report_condition(listing), "The normalized condition used for matching, with the raw eBay condition in parentheses."))
+            layout.addLayout(_detail_row("Source", _format_source_name(listing.get("source")), "The pricing source that returned this listing."))
+            layout.addLayout(_detail_row("Condition", _format_report_condition(listing), "The normalized condition used for matching, with the raw source condition in parentheses."))
             layout.addLayout(_detail_row("Status", "Sold" if listing.get("is_sold") else "Asking", "Whether this comparable is a sold or active asking listing."))
             layout.addLayout(_detail_row("Tier", _format_query_tier(listing.get("query_tier")), "The search tier that found this listing. Lower is more specific."))
             if listing.get("query_text"):
                 layout.addLayout(_detail_row("Query", str(listing.get("query_text")), "The exact search query that found this listing."))
-            layout.addLayout(_detail_row("Location", _display_value(listing.get("location") or "Unknown", "location"), "Seller location reported by eBay."))
+            layout.addLayout(_detail_row("Location", _display_value(listing.get("location") or "Unknown", "location"), "Location reported by the source."))
 
             if url:
                 link = QLabel(f'<a href="{html.escape(url, quote=True)}">Open in browser</a>')
                 link.setOpenExternalLinks(True)
                 link.setWordWrap(True)
-                layout.addLayout(_detail_row("Listing", link, "Opens the original eBay listing in your browser."))
+                layout.addLayout(_detail_row("Listing", link, "Opens the original source listing in your browser."))
 
             self.content_layout.addWidget(card)
 
     def _add_key_value_section(self, title: str, rows: list[tuple[str, ...]]) -> None:
         if not rows:
             return
-        self.content_layout.addWidget(_section_title(title))
+        if title:
+            self.content_layout.addWidget(_section_title(title))
         panel = QFrame()
         panel.setObjectName("sectionPanel")
         panel.setFrameShape(QFrame.StyledPanel)
@@ -936,7 +993,46 @@ def _format_pricing_basis(result: dict[str, Any]) -> str:
         return "Sold and Asking Listings"
     if basis == "unknown":
         return "Unknown"
+    if basis == "weighted_sources":
+        return "Weighted Source Quote Average"
     return _display_value(basis, "basis") if basis else ""
+
+
+def _format_source_basis(value: Any) -> str:
+    if value == "weighted_source_quotes":
+        return "Weighted Source Quotes"
+    if value == "verified_refurb_io":
+        return "Verified Refurb.io Listings"
+    if value == "ebay_asking_adjusted":
+        return "eBay Filtered Asking Median"
+    if value == "ebay_sold":
+        return "eBay Sold Listings"
+    if value == "ebay_mixed":
+        return "eBay Sold and Asking Listings"
+    if value == "ebay_fallback":
+        return "eBay Fallback"
+    return _display_value(value, "basis") if value else ""
+
+
+def _format_source_quotes(quotes: Any) -> str:
+    if not isinstance(quotes, list) or not quotes:
+        return ""
+    parts = []
+    for quote in quotes:
+        if not isinstance(quote, dict):
+            continue
+        source = _format_source_name(quote.get("source"))
+        price = _format_money(quote.get("price_cad"))
+        weight = quote.get("weight")
+        weight_text = f", weight {weight:g}" if isinstance(weight, (int, float)) else ""
+        verified = " verified" if quote.get("verified") else ""
+        parts.append(f"{source}: {price}{verified}{weight_text}")
+    return "; ".join(parts)
+
+
+def _format_source_name(value: Any) -> str:
+    key = str(value or "unknown").strip().lower()
+    return SOURCE_LABELS.get(key, _display_value(value or "unknown", "source"))
 
 
 def _discount_percent_range(result: dict[str, Any]) -> str:
@@ -1046,12 +1142,14 @@ def _display_value(value: Any, key: str) -> str:
         "phone": "Phone",
         "printer": "Printer",
         "ram": "RAM",
+        "refurb_io": "Refurb.io",
         "sata": "SATA",
         "ssd": "SSD",
         "storage": "Storage",
         "tablet": "Tablet",
         "unknown": "Unknown",
         "usb": "USB",
+        "amazon_renewed": "Amazon Renewed",
     }
     lowered = text.lower()
     if lowered in special:
@@ -1086,6 +1184,8 @@ def _sentence_case(text: str) -> str:
         "only": "Only",
         "or": "or",
         "ram": "RAM",
+        "refurb.io": "Refurb.io",
+        "refurb": "Refurb",
         "sata": "SATA",
         "ssd": "SSD",
         "the": "the",
@@ -1130,7 +1230,7 @@ def _help_text(label: str) -> str:
         "Input": "Whether specs were entered manually or came from auto-detect.",
         "Interface": "Connection standard for storage devices, such as SATA or NVMe.",
         "Listing": "Original listing page.",
-        "Location": "Seller location reported by eBay.",
+        "Location": "Location reported by the source.",
         "Model": "The model name used in search queries.",
         "OEM SKU": "Manufacturer SKU. When available, this is usually the most exact computer search term.",
         "Price": "Item price, shipping, and total when shipping is known.",
@@ -1141,6 +1241,7 @@ def _help_text(label: str) -> str:
         "Resolution": "Monitor resolution used for matching.",
         "Screen Size": "Screen size used to avoid wrong size variants.",
         "Status": "Whether this comparable is a sold or active asking listing.",
+        "Source": "The pricing source that returned the listing or quote.",
         "Storage": "Computer storage size and drive type used for matching.",
         "Target Condition": "Listings outside this condition target are filtered out unless condition is set to Any.",
         "Tier": "The search tier that found the listing. Lower is more specific.",

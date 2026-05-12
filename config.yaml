@@ -18,5 +18,8 @@ sources:
   ebay:
     enabled: true
     marketplace: EBAY_CA
+  refurb_io:
+    enabled: true
+    base_url: https://ca.refurb.io
   canada_computers:
     enabled: false

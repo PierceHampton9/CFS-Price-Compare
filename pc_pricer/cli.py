@@ -24,7 +24,9 @@ from pc_pricer.spec_builder import (
     build_manual_specs,
     manual_device_type,
 )
+from pc_pricer.sources.factory import build_listing_sources
 from pc_pricer.sources.ebay import EbaySource
+from pc_pricer.sources.refurb_io import RefurbIoSource
 
 
 def main() -> None:
@@ -244,7 +246,7 @@ def main() -> None:
         try:
             config = load_config(args.config)
             specs = _manual_specs(args)
-            source = _ebay_source(config, args.marketplace)
+            source = _pricing_sources(config, args.marketplace)
             result = price_specs(
                 specs,
                 source,
@@ -264,7 +266,7 @@ def main() -> None:
         try:
             config = load_config(args.config)
             specs = detect_specs(include_raw=args.raw)
-            source = _ebay_source(config, args.marketplace)
+            source = _pricing_sources(config, args.marketplace)
             result = price_specs(
                 specs,
                 source,
@@ -359,6 +361,14 @@ def _ebay_source(config: dict[str, Any], marketplace_override: str | None = None
     source = EbaySource(marketplace=marketplace)
     source.enabled = enabled
     return source
+
+
+def _pricing_sources(config: dict[str, Any], marketplace_override: str | None = None) -> list[Any]:
+    return build_listing_sources(
+        config,
+        marketplace_override=marketplace_override,
+        source_classes={"ebay": EbaySource, "refurb_io": RefurbIoSource},
+    )
 
 
 def _source_config(config: dict[str, Any], source_name: str) -> dict[str, Any]:
