@@ -36,24 +36,29 @@ def price_specs(
     """Price detected specs using tiered queries from a listing source."""
     queries = build_queries(specs)
     sources = _source_list(source)
-    raw_listings, source_errors = _search_queries(sources, queries, limit_per_query, specs)
+    raw_listings, source_errors, source_statuses = _search_queries(sources, queries, limit_per_query, specs)
     deduped_listings = _dedupe_listings(raw_listings)
     normalized_listings = normalize_listings(deduped_listings)
     normalized_listings = _add_source_match_flags(normalized_listings, specs)
-    source_diagnostics = _source_diagnostics(
-        normalized_listings,
-        specs,
-        target_condition=target_condition,
-    )
     filtered = filter_listings(
         normalized_listings,
         target_condition=target_condition,
         device_type=specs.get("device_type"),
         target_specs=specs,
     )
+    pricing_listings, pricing_excluded_reasons = _pricing_listings(filtered["listings"])
+    if pricing_excluded_reasons:
+        filtered["excluded_count"] += sum(pricing_excluded_reasons.values())
+        filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], pricing_excluded_reasons)
+    source_diagnostics = _source_diagnostics(
+        normalized_listings,
+        specs,
+        target_condition=target_condition,
+        pricing_listings=pricing_listings,
+    )
 
     result = aggregate_listings(
-        filtered["listings"],
+        pricing_listings,
         warn_below_comparables=warn_below_comparables,
         wide_iqr_ratio=wide_iqr_ratio,
         support_limit=support_limit,
@@ -73,11 +78,12 @@ def price_specs(
             "excluded_count": filtered["excluded_count"],
             "excluded_reasons": filtered["excluded_reasons"],
             "source_diagnostics": source_diagnostics,
+            "source_statuses": source_statuses,
         }
     )
     result = _apply_source_quote_basis(
         result,
-        filtered["listings"],
+        pricing_listings,
         warn_below_comparables=warn_below_comparables,
         wide_iqr_ratio=wide_iqr_ratio,
         support_limit=support_limit,
@@ -89,7 +95,7 @@ def price_specs(
         result["confidence_flags"] = _append_flag(result.get("confidence_flags"), "source_unavailable")
     result = add_listing_quality_flags(
         result,
-        filtered["listings"],
+        pricing_listings,
         high_shipping_cad=high_shipping_cad,
         high_shipping_ratio=high_shipping_ratio,
     )
@@ -113,9 +119,22 @@ def _search_queries(
     queries: list[dict[str, Any]],
     limit_per_query: int,
     specs: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[dict[str, Any]]]:
     listings = []
     errors = []
+    statuses = {
+        _source_name(source): {
+            "source": _source_name(source),
+            "enabled": True,
+            "searched": False,
+            "query_count": 0,
+            "queries": [],
+            "raw_listing_count": 0,
+            "error_count": 0,
+            "errors": [],
+        }
+        for source in sources
+    }
     searched = set()
     for query in queries:
         generated_query_text = str(query.get("text") or "").strip()
@@ -131,9 +150,27 @@ def _search_queries(
             if searched_key in searched:
                 continue
             searched.add(searched_key)
+            status = statuses.setdefault(
+                source_name,
+                {
+                    "source": source_name,
+                    "enabled": True,
+                    "searched": False,
+                    "query_count": 0,
+                    "queries": [],
+                    "raw_listing_count": 0,
+                    "error_count": 0,
+                    "errors": [],
+                },
+            )
+            status["searched"] = True
+            status["query_count"] += 1
+            status["queries"].append(query_text)
             try:
                 source_listings = source.search(query_text, limit_per_query)
             except RuntimeError as exc:
+                status["error_count"] += 1
+                status["errors"].append(str(exc))
                 errors.append(
                     {
                         "source": source_name,
@@ -143,6 +180,8 @@ def _search_queries(
                 )
                 continue
 
+            _add_source_runtime_stats(status, getattr(source, "last_search_stats", None))
+            status["raw_listing_count"] += len(source_listings)
             for listing in source_listings:
                 tagged = dict(listing)
                 tagged["query_tier"] = query.get("tier")
@@ -152,7 +191,22 @@ def _search_queries(
                     tagged["generated_query_text"] = generated_query_text
                 listings.append(tagged)
 
-    return listings, errors
+    return listings, errors, list(statuses.values())
+
+
+def _add_source_runtime_stats(status: dict[str, Any], stats: Any) -> None:
+    if not isinstance(stats, dict):
+        return
+    status["candidate_count"] = _safe_int(status.get("candidate_count")) + _safe_int(stats.get("candidate_count"))
+    status["detail_page_count"] = _safe_int(status.get("detail_page_count")) + _safe_int(stats.get("detail_page_count"))
+    status["detail_error_count"] = _safe_int(status.get("detail_error_count")) + _safe_int(stats.get("detail_error_count"))
+    detail_urls = status.setdefault("detail_urls", [])
+    if not isinstance(detail_urls, list):
+        detail_urls = []
+        status["detail_urls"] = detail_urls
+    for url in stats.get("detail_urls") or []:
+        if url and url not in detail_urls:
+            detail_urls.append(url)
 
 
 def _source_name(source: ListingSource) -> str:
@@ -161,12 +215,20 @@ def _source_name(source: ListingSource) -> str:
 
 def _source_query_text(source_name: str, query: dict[str, Any], specs: dict[str, Any]) -> str:
     query_text = str(query.get("text") or "").strip()
-    if source_name != "refurb_io":
+    if source_name not in {"refurb_io", "amazon_renewed"}:
         return query_text
-    if _safe_int(query.get("tier")) == 1 and _clean_text(specs.get("oem_sku")) == query_text:
+    if (
+        source_name == "refurb_io"
+        and _safe_int(query.get("tier")) == 1
+        and _clean_text(specs.get("oem_sku")) == query_text
+    ):
         return query_text
 
     retailer_query = _retailer_query_from_specs(specs)
+    if source_name == "amazon_renewed":
+        if _safe_int(query.get("tier")) == 1 and _clean_text(specs.get("oem_sku")) == query_text:
+            return _amazon_query_text(retailer_query or query_text)
+        return _amazon_query_text(query_text)
     return retailer_query or query_text
 
 
@@ -194,6 +256,15 @@ def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
 def _clean_text(value: Any) -> str | None:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     return text or None
+
+
+def _amazon_query_text(query_text: str) -> str:
+    text = query_text.strip()
+    if not text:
+        return ""
+    if re.search(r"\brenew(ed|al)?\b", text, flags=re.IGNORECASE):
+        return text
+    return f"{text} Renewed"
 
 
 def _dedupe_listings(listings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -239,8 +310,10 @@ def _source_diagnostics(
     listings: list[dict[str, Any]],
     specs: dict[str, Any],
     target_condition: str | None,
+    pricing_listings: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     diagnostics = []
+    pricing_listing_ids = {id(listing) for listing in pricing_listings}
     for listing in listings:
         source = _source_key(listing)
         if source not in {"refurb_io", "amazon_renewed"}:
@@ -267,12 +340,64 @@ def _source_diagnostics(
                 "source_match_verified": listing.get("source_match_verified") is True,
                 "source_match_reasons": list(listing.get("source_match_reasons") or []),
                 "filter_exclusion_reason": filter_reason,
-                "included_in_pricing": filter_reason is None
-                and listing.get("source_match_verified") is True,
+                "included_in_pricing": id(listing) in pricing_listing_ids,
                 "source_specs": listing.get("source_specs") if isinstance(listing.get("source_specs"), dict) else {},
             }
         )
     return diagnostics
+
+
+def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    hard_filtered = []
+    excluded_reasons: dict[str, int] = {}
+    for listing in listings:
+        hard_reason = _source_match_hard_exclusion_reason(listing)
+        if hard_reason:
+            excluded_reasons[hard_reason] = excluded_reasons.get(hard_reason, 0) + 1
+            continue
+        hard_filtered.append(listing)
+
+    verified_or_nonretail = []
+    for listing in hard_filtered:
+        if _source_key(listing) in {"refurb_io", "amazon_renewed"} and listing.get("source_match_verified") is not True:
+            excluded_reasons["unverified_source_listing"] = excluded_reasons.get("unverified_source_listing", 0) + 1
+            continue
+        verified_or_nonretail.append(listing)
+
+    hard_filtered = verified_or_nonretail
+    verified_retail = [listing for listing in hard_filtered if _is_verified_retail_listing(listing)]
+    if not verified_retail:
+        return hard_filtered, excluded_reasons
+
+    unverified_count = len(hard_filtered) - len(verified_retail)
+    if unverified_count:
+        excluded_reasons["unverified_source_listing"] = (
+            excluded_reasons.get("unverified_source_listing", 0) + unverified_count
+        )
+    return verified_retail, excluded_reasons
+
+
+def _source_match_hard_exclusion_reason(listing: dict[str, Any]) -> str | None:
+    source = _source_key(listing)
+    if source not in {"refurb_io", "amazon_renewed"}:
+        return None
+    reasons = set(str(reason) for reason in (listing.get("source_match_reasons") or []))
+    if "ram_mismatch" in reasons:
+        return "ram_mismatch"
+    if "storage_mismatch" in reasons:
+        return "storage_mismatch"
+    return None
+
+
+def _is_verified_retail_listing(listing: dict[str, Any]) -> bool:
+    return _source_key(listing) in {"refurb_io", "amazon_renewed"} and listing.get("source_match_verified") is True
+
+
+def _merge_reason_counts(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
+    merged = dict(left)
+    for reason, count in right.items():
+        merged[reason] = merged.get(reason, 0) + count
+    return merged
 
 
 def _apply_source_quote_basis(
@@ -485,11 +610,8 @@ def _verified_refurb_match(
     if model and not _all_tokens_present(text, str(model)):
         reasons.append("model_mismatch")
 
-    form_factor = specs.get("form_factor")
     device_type = specs.get("device_type")
-    if form_factor and not _form_factor_matches(text, form_factor):
-        reasons.append("form_factor_mismatch")
-    elif device_type and not _device_type_matches(text, device_type):
+    if device_type and not _device_type_matches(text, device_type):
         reasons.append("device_type_mismatch")
 
     ram_gb = _safe_int(specs.get("ram_gb"))
@@ -554,7 +676,19 @@ def _capacity_matches(text: str, capacity_gb: int) -> bool:
 
 
 def _cpu_matches(text: str, cpu_short: str) -> bool:
-    return _normalize_match_text(cpu_short).replace(" ", "") in text.replace(" ", "")
+    wanted = _cpu_match_keys(cpu_short)
+    if not wanted:
+        return True
+    available = text.replace(" ", "")
+    return any(key in available for key in wanted)
+
+
+def _cpu_match_keys(cpu_short: str) -> set[str]:
+    normalized = _normalize_match_text(cpu_short).replace(" ", "")
+    keys = {normalized} if normalized else set()
+    if normalized and normalized[-1:].isalpha() and any(character.isdigit() for character in normalized):
+        keys.add(normalized[:-1])
+    return keys
 
 
 def _target_storage_gb(specs: dict[str, Any]) -> int:

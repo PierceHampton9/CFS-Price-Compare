@@ -8,6 +8,7 @@ from pc_pricer.config import load_config
 from pc_pricer.env_loader import load_env_file
 from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
+from pc_pricer.source_status import merge_config_source_statuses
 from pc_pricer.sources.factory import build_listing_sources
 from pc_pricer.sources.ebay import EbaySource
 from pc_pricer.spec_builder import VALID_CONDITIONS, build_manual_specs
@@ -23,13 +24,16 @@ def price_gui_values(
     load_env_file(override=True)
     config = load_config(config_path)
     specs = build_manual_specs(device_type, values)
+    sources = source or _pricing_sources(config)
     result = price_specs(
         specs,
-        source or _pricing_sources(config),
+        sources,
         limit_per_query=_limit_per_query(config),
         target_condition=_condition(values.get("condition"), config),
         **_pricing_options(config),
     )
+    if source is None:
+        result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
     return result, format_price_report(result)
 
 

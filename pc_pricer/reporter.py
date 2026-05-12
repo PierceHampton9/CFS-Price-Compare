@@ -29,7 +29,10 @@ WARNING_LABELS = {
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
     "parts_or_accessory": "parts/accessory listing",
+    "ram_mismatch": "RAM mismatch",
+    "storage_mismatch": "storage mismatch",
     "unavailable_listing": "unavailable listing",
+    "unverified_source_listing": "unverified source listing",
     "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
 }
@@ -47,6 +50,7 @@ def format_price_report(result: dict[str, Any]) -> str:
         lines.extend(_query_lines(result.get("queries")))
         lines.extend(_search_count_lines(result))
         lines.extend(_filter_lines(result))
+        lines.extend(_source_status_lines(result))
         lines.extend(_source_quote_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
@@ -57,6 +61,7 @@ def format_price_report(result: dict[str, Any]) -> str:
     lines.extend(_price_lines(result))
     lines.extend(_search_count_lines(result))
     lines.extend(_pricing_basis_lines(result))
+    lines.extend(_source_status_lines(result))
     lines.extend(_source_quote_lines(result))
     lines.extend(_source_diagnostic_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
@@ -243,6 +248,43 @@ def _source_quote_lines(result: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _source_status_lines(result: dict[str, Any]) -> list[str]:
+    statuses = result.get("source_statuses") or []
+    if not isinstance(statuses, list) or not statuses:
+        return []
+
+    lines = ["Source status:"]
+    for status in statuses:
+        if not isinstance(status, dict):
+            continue
+        source = format_source_name(status.get("source"))
+        state = _source_status_label(status.get("status"))
+        query_count = _safe_int(status.get("query_count"))
+        listing_count = _safe_int(status.get("raw_listing_count"))
+        message = str(status.get("message") or "").strip()
+        detail_parts = []
+        if query_count:
+            detail_parts.append(f"{query_count} quer{'y' if query_count == 1 else 'ies'}")
+        if status.get("searched"):
+            detail_parts.append(f"{listing_count} raw listing{'s' if listing_count != 1 else ''}")
+        if message:
+            detail_parts.append(message)
+        detail_text = f" ({'; '.join(detail_parts)})" if detail_parts else ""
+        lines.append(f"  {source}: {state}{detail_text}")
+    return lines
+
+
+def _source_status_label(value: Any) -> str:
+    labels = {
+        "disabled": "disabled",
+        "error": "error",
+        "no_results": "no results",
+        "not_searched": "not searched",
+        "returned": "returned listings",
+    }
+    return labels.get(str(value or "").strip().lower(), str(value or "unknown"))
+
+
 def _source_diagnostic_lines(result: dict[str, Any]) -> list[str]:
     diagnostics = result.get("source_diagnostics") or []
     if not diagnostics:
@@ -410,3 +452,10 @@ def _safe_percent(value: Any) -> int | None:
         return round(float(value) * 100)
     except (TypeError, ValueError):
         return None
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0

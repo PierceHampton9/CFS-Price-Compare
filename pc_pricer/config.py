@@ -31,6 +31,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "enabled": True,
             "base_url": "https://ca.refurb.io",
         },
+        "amazon_renewed": {
+            "enabled": False,
+            "base_url": "https://www.amazon.ca",
+            "browser": "chromium",
+            "channel": "msedge",
+            "headless": False,
+            "timeout_ms": 15000,
+            "max_product_pages": 5,
+        },
         "canada_computers": {
             "enabled": False,
         },
@@ -54,6 +63,11 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
     parsed = _parse_simple_yaml(config_path.read_text(encoding="utf-8"))
     return _deep_merge(config, parsed)
+
+
+def save_config(path: str | Path, config: dict[str, Any]) -> None:
+    """Write config using the simple YAML subset this project reads."""
+    Path(path).write_text(_format_simple_yaml(config), encoding="utf-8")
 
 
 def _parse_simple_yaml(text: str) -> dict[str, Any]:
@@ -141,3 +155,32 @@ def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
         else:
             base[key] = value
     return base
+
+
+def _format_simple_yaml(config: dict[str, Any]) -> str:
+    lines = []
+    _append_yaml_lines(lines, config, 0)
+    return "\n".join(lines) + "\n"
+
+
+def _append_yaml_lines(lines: list[str], values: dict[str, Any], indent: int) -> None:
+    prefix = " " * indent
+    for key, value in values.items():
+        if isinstance(value, dict):
+            lines.append(f"{prefix}{key}:")
+            _append_yaml_lines(lines, value, indent + 2)
+        else:
+            lines.append(f"{prefix}{key}: {_format_scalar(value)}")
+
+
+def _format_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)):
+        return str(value)
+    text = str(value)
+    if not text or text.strip() != text or any(char in text for char in [":", "#", "\n"]):
+        return repr(text)
+    return text

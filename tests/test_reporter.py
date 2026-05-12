@@ -347,6 +347,24 @@ class ReporterTests(unittest.TestCase):
                     {"source": "refurb_io", "price_cad": 500, "verified": True, "weight": 2, "listing_count": 1},
                 ],
                 "source_errors": [{"source": "amazon_renewed", "message": "blocked"}],
+                "source_statuses": [
+                    {
+                        "source": "ebay",
+                        "status": "returned",
+                        "searched": True,
+                        "query_count": 1,
+                        "raw_listing_count": 1,
+                        "message": "Returned 1 raw listing(s).",
+                    },
+                    {
+                        "source": "amazon_renewed",
+                        "status": "error",
+                        "searched": True,
+                        "query_count": 1,
+                        "raw_listing_count": 0,
+                        "message": "Playwright browser request failed",
+                    },
+                ],
                 "source_diagnostics": [
                     {
                         "source": "refurb_io",
@@ -369,6 +387,9 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Source basis:     weighted source quotes", report)
         self.assertIn("Source quotes:    eBay: $300.00 CAD, weight 1, 1 listing", report)
         self.assertIn("Refurb.io: $500.00 CAD verified, weight 2, 1 listing", report)
+        self.assertIn("Source status:", report)
+        self.assertIn("Amazon Renewed: error", report)
+        self.assertIn("Playwright browser request failed", report)
         self.assertIn("Source errors:    Amazon Renewed", report)
         self.assertIn("Source diagnostics:", report)
         self.assertIn("Refurb.io: not verified - Lenovo ThinkPad X13 Yoga", report)

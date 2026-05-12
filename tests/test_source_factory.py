@@ -10,9 +10,10 @@ class SourceFactoryTests(unittest.TestCase):
                 "sources": {
                     "ebay": {"enabled": True, "marketplace": "EBAY_US"},
                     "refurb_io": {"enabled": True, "base_url": "https://example.test"},
+                    "amazon_renewed": {"enabled": False},
                 }
             },
-            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource},
+            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource, "amazon_renewed": FakeAmazonSource},
         )
 
         self.assertEqual([source.name for source in sources], ["ebay", "refurb_io"])
@@ -23,11 +24,47 @@ class SourceFactoryTests(unittest.TestCase):
         sources = build_listing_sources(
             {"sources": {"ebay": {"enabled": True, "marketplace": "EBAY_US"}, "refurb_io": {"enabled": False}}},
             marketplace_override="EBAY_CA",
-            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource},
+            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource, "amazon_renewed": FakeAmazonSource},
         )
 
         self.assertEqual(len(sources), 1)
         self.assertEqual(sources[0].marketplace, "EBAY_CA")
+
+    def test_amazon_renewed_is_disabled_by_default(self):
+        sources = build_listing_sources(
+            {"sources": {"ebay": {"enabled": False}, "refurb_io": {"enabled": False}}},
+            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource, "amazon_renewed": FakeAmazonSource},
+        )
+
+        self.assertEqual(sources, [])
+
+    def test_builds_amazon_renewed_when_enabled(self):
+        sources = build_listing_sources(
+            {
+                "sources": {
+                    "ebay": {"enabled": False},
+                    "refurb_io": {"enabled": False},
+                    "amazon_renewed": {
+                        "enabled": True,
+                        "base_url": "https://www.amazon.ca",
+                        "browser": "firefox",
+                        "channel": "msedge",
+                        "headless": False,
+                        "timeout_ms": 9000,
+                        "max_product_pages": 3,
+                    },
+                }
+            },
+            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource, "amazon_renewed": FakeAmazonSource},
+        )
+
+        self.assertEqual([source.name for source in sources], ["amazon_renewed"])
+        self.assertEqual(sources[0].base_url, "https://www.amazon.ca")
+        self.assertEqual(sources[0].browser, "firefox")
+        self.assertEqual(sources[0].channel, "msedge")
+        self.assertIs(sources[0].headless, False)
+        self.assertEqual(sources[0].timeout_ms, 9000)
+        self.assertEqual(sources[0].max_product_pages, 3)
 
 
 class FakeEbaySource:
@@ -42,6 +79,18 @@ class FakeRefurbSource:
 
     def __init__(self, base_url):
         self.base_url = base_url
+
+
+class FakeAmazonSource:
+    name = "amazon_renewed"
+
+    def __init__(self, base_url, browser, channel, headless, timeout_ms, max_product_pages):
+        self.base_url = base_url
+        self.browser = browser
+        self.channel = channel
+        self.headless = headless
+        self.timeout_ms = timeout_ms
+        self.max_product_pages = max_product_pages
 
 
 if __name__ == "__main__":

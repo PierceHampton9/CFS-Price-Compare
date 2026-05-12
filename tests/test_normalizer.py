@@ -35,6 +35,11 @@ class NormalizerTests(unittest.TestCase):
         self.assertEqual(normalize_condition("refurb_io", "A-Grade"), "good")
         self.assertEqual(normalize_condition("refurb_io", "Grade C"), "parts")
 
+    def test_amazon_renewed_condition_mappings(self):
+        self.assertEqual(normalize_condition("amazon_renewed", "Amazon Renewed"), "good")
+        self.assertEqual(normalize_condition("amazon_renewed", "Premium Renewed"), "excellent")
+        self.assertEqual(normalize_condition("amazon_renewed", "Like New"), "excellent")
+
     def test_normalize_listing_returns_copy_with_condition_norm(self):
         listing = {
             "source": "ebay",

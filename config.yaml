@@ -21,5 +21,13 @@ sources:
   refurb_io:
     enabled: true
     base_url: https://ca.refurb.io
+  amazon_renewed:
+    enabled: false
+    base_url: https://www.amazon.ca
+    browser: chromium
+    channel: msedge
+    headless: false
+    timeout_ms: 15000
+    max_product_pages: 5
   canada_computers:
     enabled: false

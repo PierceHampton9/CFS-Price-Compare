@@ -4,7 +4,7 @@ Repository/folder name: `CFS-Price-Compare`.
 
 A GUI and command-line tool for estimating fair resale prices for donated devices.
 
-Current status: Windows computer spec detection, manual device entry, tiered query building, eBay active-listing search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, GUI pricing flow wiring, and GUI release packaging.
+Current status: Windows computer spec detection, manual device entry, tiered query building, multi-source comparable search, listing condition normalization, price aggregation, report formatting, config-driven CLI defaults, GUI pricing flow wiring, and GUI release packaging. eBay and Refurb.io are enabled by default; Amazon Renewed is experimental and disabled by default.
 
 ## Pre-loaded Devices Setup
 
@@ -106,7 +106,31 @@ Search, pricing, and eBay credential-check commands read defaults from `config.y
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
 ```
 
-Reports show the estimate, comparable range, sold/asking breakdown, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. Current eBay pricing uses active asking listings; when no sold listings are available, the report shows the asking median plus a conservative estimate discounted 0-5%.
+Reports show the estimate, comparable range, source quote basis, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. eBay pricing uses active asking listings; when no verified retailer source is available, the report shows the eBay asking median plus a conservative estimate discounted 0-5%. Verified Refurb.io and Amazon Renewed matches are folded into a weighted source quote estimate.
+
+## Optional Amazon Renewed Source
+
+Amazon Renewed uses Playwright browser automation and is disabled by default. To test it locally:
+
+```powershell
+python -m pip install -e ".[amazon]"
+python -m playwright install chromium
+```
+
+Then enable it in `config.yaml`:
+
+```yaml
+sources:
+  amazon_renewed:
+    enabled: true
+    base_url: https://www.amazon.ca
+    browser: chromium
+    headless: true
+    timeout_ms: 15000
+    max_product_pages: 5
+```
+
+If Playwright is not installed or Amazon is disabled, the normal eBay and Refurb.io flow still works.
 
 ## eBay Smoke Test
 

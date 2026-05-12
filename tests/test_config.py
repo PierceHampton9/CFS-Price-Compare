@@ -19,6 +19,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["default_limit"], 10)
         self.assertEqual(config["sources"]["ebay"]["marketplace"], "EBAY_CA")
         self.assertIs(config["sources"]["refurb_io"]["enabled"], True)
+        self.assertIs(config["sources"]["amazon_renewed"]["enabled"], False)
+        self.assertEqual(config["sources"]["amazon_renewed"]["browser"], "chromium")
+        self.assertEqual(config["sources"]["amazon_renewed"]["channel"], "msedge")
+        self.assertIs(config["sources"]["amazon_renewed"]["headless"], False)
 
     def test_loads_simple_values_and_nested_source_config(self):
         CONFIG_PATH.write_text(
@@ -41,6 +45,7 @@ sources:
         self.assertEqual(config["wide_iqr_ratio"], 0.5)
         self.assertIs(config["sources"]["ebay"]["enabled"], False)
         self.assertEqual(config["sources"]["ebay"]["marketplace"], "EBAY_US")
+        self.assertIs(config["sources"]["amazon_renewed"]["enabled"], False)
         self.assertEqual(config["support_limit"], 5)
 
     def test_rejects_unsupported_indentation(self):
@@ -48,6 +53,29 @@ sources:
 
         with self.assertRaises(RuntimeError):
             load_config(CONFIG_PATH)
+
+    def test_save_config_writes_loadable_simple_yaml(self):
+        from pc_pricer.config import save_config
+
+        save_config(
+            CONFIG_PATH,
+            {
+                "default_condition": "good",
+                "sources": {
+                    "amazon_renewed": {
+                        "enabled": True,
+                        "channel": "msedge",
+                        "headless": False,
+                    }
+                },
+            },
+        )
+
+        config = load_config(CONFIG_PATH)
+
+        self.assertIs(config["sources"]["amazon_renewed"]["enabled"], True)
+        self.assertEqual(config["sources"]["amazon_renewed"]["channel"], "msedge")
+        self.assertIs(config["sources"]["amazon_renewed"]["headless"], False)
 
     def test_default_config_path_uses_working_directory_for_source_runs(self):
         with patch("pc_pricer.config.sys.frozen", False, create=True):

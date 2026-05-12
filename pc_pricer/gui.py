@@ -20,6 +20,7 @@ from pc_pricer.gui_forms import (
     validate_specs,
 )
 from pc_pricer.gui_pricing import price_gui_values
+from pc_pricer.gui_source_settings import load_source_settings, save_source_settings
 from pc_pricer.reporter import (
     FILTER_LABELS,
     FLAG_LABELS,
@@ -53,6 +54,7 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
     from PySide6.QtWidgets import (  # type: ignore[import-not-found]
         QApplication,
         QButtonGroup,
+        QCheckBox,
         QComboBox,
         QDialog,
         QFormLayout,
@@ -74,7 +76,7 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
 except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QApplication = None  # type: ignore[assignment]
     QThread = object  # type: ignore[assignment]
-    QButtonGroup = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
+    QButtonGroup = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
     QGridLayout = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
     QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     Qt = type(
@@ -103,6 +105,7 @@ class GuiState:
         self.report_result: dict[str, Any] = {}
         self.report_text: str = ""
         self.report_error: str = ""
+        self.source_settings: dict[str, bool] = load_source_settings()
 
 
 class StableComboBox(QComboBox):  # type: ignore[misc]
@@ -436,11 +439,13 @@ class SpecsPage(Page):
         self.form_container = QWidget()
         self.form = QFormLayout(self.form_container)
         self.inputs: dict[str, QWidget] = {}
+        self.source_checks: dict[str, QCheckBox] = {}
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(self.form_container)
         self.root.addWidget(scroll, 1)
+        self.root.addWidget(self._source_panel())
         self.error = QLabel()
         self.error.setObjectName("errorText")
         self.error.setWordWrap(True)
@@ -457,6 +462,10 @@ class SpecsPage(Page):
             self.inputs[field.name] = widget
             suffix = " *" if field.required else ""
             self.form.addRow(f"{field.label}{suffix}", widget)
+
+        self.main_window.state.source_settings = load_source_settings()
+        for source, checkbox in self.source_checks.items():
+            checkbox.setChecked(self.main_window.state.source_settings.get(source, source != "amazon_renewed"))
 
         if device_type == "computer" and self.main_window.state.computer_mode == "auto":
             self.error.setText("Auto-detected specs are editable before pricing.")
@@ -475,6 +484,10 @@ class SpecsPage(Page):
         if errors:
             self.error.setText(" ".join(errors))
             return
+        source_errors = self._store_source_settings()
+        if source_errors:
+            self.error.setText(" ".join(source_errors))
+            return
         self.main_window.show_loading()
 
     def _store_values(self) -> None:
@@ -490,6 +503,41 @@ class SpecsPage(Page):
         ):
             values["input_method"] = "detected"
         self.main_window.state.specs = values
+
+    def _source_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("sectionPanel")
+        panel.setFrameShape(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
+        layout.setSpacing(6)
+        title = _selectable_label("Pricing Sources")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+
+        labels = {
+            "ebay": "eBay",
+            "refurb_io": "Refurb.io",
+            "amazon_renewed": "Amazon Renewed (experimental)",
+        }
+        for source, label in labels.items():
+            checkbox = QCheckBox(label)
+            self.source_checks[source] = checkbox
+            layout.addWidget(checkbox)
+
+        note = _selectable_label(
+            "Amazon Renewed uses browser automation through Microsoft Edge and may open a browser window while pricing."
+        )
+        note.setObjectName("statusText")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        return panel
+
+    def _store_source_settings(self) -> list[str]:
+        settings = {source: checkbox.isChecked() for source, checkbox in self.source_checks.items()}
+        if not any(settings.values()):
+            return ["Enable at least one pricing source."]
+        self.main_window.state.source_settings = save_source_settings(settings)
+        return []
 
 
 class LoadingPage(Page):
@@ -552,6 +600,7 @@ class ReportPage(Page):
         self._add_signal_section(result)
         self._add_specs_section(result.get("specs"))
         self._add_search_section(result)
+        self._add_source_statuses(result.get("source_statuses"))
         self._add_source_diagnostics(result.get("source_diagnostics"))
         self._add_filter_section(result)
         self._add_supporting_listings(result.get("supporting_listings") or [])
@@ -758,6 +807,25 @@ class ReportPage(Page):
                 )
             )
         self._add_key_value_section("Queries Used", query_rows)
+
+    def _add_source_statuses(self, statuses: Any) -> None:
+        if not isinstance(statuses, list) or not statuses:
+            return
+
+        rows = []
+        for status in statuses:
+            if not isinstance(status, dict):
+                continue
+            source = _format_source_name(status.get("source"))
+            state = _format_source_status(status)
+            rows.append(
+                (
+                    source,
+                    state,
+                    "Shows whether this source was disabled, searched successfully, returned no candidates, or failed.",
+                )
+            )
+        self._add_key_value_section("Source Status", rows)
 
     def _add_source_diagnostics(self, diagnostics: Any) -> None:
         if not isinstance(diagnostics, list) or not diagnostics:
@@ -1023,6 +1091,28 @@ def _format_source_quotes(quotes: Any) -> str:
 
 def _format_source_name(value: Any) -> str:
     return _source_name_label(value)
+
+
+def _format_source_status(status: dict[str, Any]) -> str:
+    labels = {
+        "disabled": "Disabled",
+        "error": "Error",
+        "no_results": "No Results",
+        "not_searched": "Not Searched",
+        "returned": "Returned Listings",
+    }
+    state = labels.get(str(status.get("status") or "").strip().lower(), "Unknown")
+    details = []
+    query_count = _safe_int(status.get("query_count"))
+    listing_count = _safe_int(status.get("raw_listing_count"))
+    if query_count:
+        details.append(f"{query_count} Quer{'y' if query_count == 1 else 'ies'}")
+    if status.get("searched"):
+        details.append(f"{listing_count} Raw Listing{'s' if listing_count != 1 else ''}")
+    message = str(status.get("message") or "").strip()
+    if message:
+        details.append(message)
+    return f"{state} ({'; '.join(details)})" if details else state
 
 
 def _discount_percent_range(result: dict[str, Any]) -> str:
