@@ -28,11 +28,12 @@ WARNING_LABELS = {
 
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
+    "displaced_by_retailer": "displaced by verified retailer listing",
     "parts_or_accessory": "parts/accessory listing",
     "ram_mismatch": "RAM mismatch",
     "storage_mismatch": "storage mismatch",
     "unavailable_listing": "unavailable listing",
-    "unverified_source_listing": "unverified source listing",
+    "unverified_retailer_listing": "unverified retailer listing",
     "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
 }

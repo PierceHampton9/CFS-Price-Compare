@@ -178,7 +178,7 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["source_basis"], "weighted_source_quotes")
         self.assertEqual(result["pricing_basis"], "weighted_sources")
         self.assertEqual(result["source_counts"], {"refurb_io": 1})
-        self.assertEqual(result["excluded_reasons"], {"unverified_source_listing": 1})
+        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
         self.assertNotIn("source_disagreement", result["confidence_flags"])
         self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["refurb_io"])
         self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2])
@@ -287,7 +287,7 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["iqr_high_cad"], 600.00)
         self.assertEqual(result["source_basis"], "weighted_source_quotes")
         self.assertEqual(result["source_counts"], {"amazon_renewed": 1})
-        self.assertEqual(result["excluded_reasons"], {"unverified_source_listing": 1})
+        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
         self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["amazon_renewed"])
         self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2])
         self.assertEqual(result["supporting_listings"][0]["source"], "amazon_renewed")
@@ -327,7 +327,7 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["refurb_io", "amazon_renewed"])
         self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2, 2])
         self.assertEqual(result["source_counts"], {"refurb_io": 1, "amazon_renewed": 1})
-        self.assertEqual(result["excluded_reasons"], {"unverified_source_listing": 1})
+        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
 
     def test_laptop_cpu_suffix_omission_is_not_a_cpu_mismatch(self):
         refurb = FakeSource(

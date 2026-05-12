@@ -77,6 +77,26 @@ sources:
         self.assertEqual(config["sources"]["amazon_renewed"]["channel"], "msedge")
         self.assertIs(config["sources"]["amazon_renewed"]["headless"], False)
 
+    def test_save_config_round_trips_urls_with_colons(self):
+        from pc_pricer.config import save_config
+
+        save_config(
+            CONFIG_PATH,
+            {
+                "sources": {
+                    "refurb_io": {"base_url": "https://ca.refurb.io"},
+                    "amazon_renewed": {"base_url": "https://www.amazon.ca"},
+                },
+            },
+        )
+
+        text = CONFIG_PATH.read_text(encoding="utf-8")
+        config = load_config(CONFIG_PATH)
+
+        self.assertIn("base_url: 'https://www.amazon.ca'", text)
+        self.assertEqual(config["sources"]["refurb_io"]["base_url"], "https://ca.refurb.io")
+        self.assertEqual(config["sources"]["amazon_renewed"]["base_url"], "https://www.amazon.ca")
+
     def test_default_config_path_uses_working_directory_for_source_runs(self):
         with patch("pc_pricer.config.sys.frozen", False, create=True):
             self.assertEqual(default_config_path(), Path.cwd() / "config.yaml")

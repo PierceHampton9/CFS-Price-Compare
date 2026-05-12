@@ -114,6 +114,7 @@ def _supporting_listings(
 def _public_listing(listing: dict[str, Any]) -> dict[str, Any]:
     copy = dict(listing)
     copy.pop("_price", None)
+    copy.pop("_included_in_pricing", None)
     return copy
 
 

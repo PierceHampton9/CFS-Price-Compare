@@ -50,11 +50,11 @@ def price_specs(
     if pricing_excluded_reasons:
         filtered["excluded_count"] += sum(pricing_excluded_reasons.values())
         filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], pricing_excluded_reasons)
+    _mark_included_in_pricing(normalized_listings, pricing_listings)
     source_diagnostics = _source_diagnostics(
         normalized_listings,
         specs,
         target_condition=target_condition,
-        pricing_listings=pricing_listings,
     )
 
     result = aggregate_listings(
@@ -310,10 +310,8 @@ def _source_diagnostics(
     listings: list[dict[str, Any]],
     specs: dict[str, Any],
     target_condition: str | None,
-    pricing_listings: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     diagnostics = []
-    pricing_listing_ids = {id(listing) for listing in pricing_listings}
     for listing in listings:
         source = _source_key(listing)
         if source not in {"refurb_io", "amazon_renewed"}:
@@ -340,7 +338,7 @@ def _source_diagnostics(
                 "source_match_verified": listing.get("source_match_verified") is True,
                 "source_match_reasons": list(listing.get("source_match_reasons") or []),
                 "filter_exclusion_reason": filter_reason,
-                "included_in_pricing": id(listing) in pricing_listing_ids,
+                "included_in_pricing": listing.get("_included_in_pricing") is True,
                 "source_specs": listing.get("source_specs") if isinstance(listing.get("source_specs"), dict) else {},
             }
         )
@@ -360,7 +358,7 @@ def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, An
     verified_or_nonretail = []
     for listing in hard_filtered:
         if _source_key(listing) in {"refurb_io", "amazon_renewed"} and listing.get("source_match_verified") is not True:
-            excluded_reasons["unverified_source_listing"] = excluded_reasons.get("unverified_source_listing", 0) + 1
+            excluded_reasons["unverified_retailer_listing"] = excluded_reasons.get("unverified_retailer_listing", 0) + 1
             continue
         verified_or_nonretail.append(listing)
 
@@ -371,10 +369,23 @@ def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, An
 
     unverified_count = len(hard_filtered) - len(verified_retail)
     if unverified_count:
-        excluded_reasons["unverified_source_listing"] = (
-            excluded_reasons.get("unverified_source_listing", 0) + unverified_count
-        )
+        excluded_reasons["displaced_by_retailer"] = excluded_reasons.get("displaced_by_retailer", 0) + unverified_count
     return verified_retail, excluded_reasons
+
+
+def _mark_included_in_pricing(all_listings: list[dict[str, Any]], pricing_listings: list[dict[str, Any]]) -> None:
+    included_keys = {_listing_identity(listing) for listing in pricing_listings}
+    included_keys.discard("")
+    for listing in all_listings:
+        listing["_included_in_pricing"] = _listing_identity(listing) in included_keys
+
+
+def _listing_identity(listing: dict[str, Any]) -> str:
+    keys = _listing_keys(listing)
+    if not keys:
+        return ""
+    key_type, key_value = keys[0]
+    return f"{key_type}:{key_value}"
 
 
 def _source_match_hard_exclusion_reason(listing: dict[str, Any]) -> str | None:
