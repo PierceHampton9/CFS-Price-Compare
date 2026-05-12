@@ -17,9 +17,22 @@ EBAY_CONDITION_MAP = {
     "for parts or not working": "parts",
 }
 
+REFURB_IO_CONDITION_MAP = {
+    "grade a": "good",
+    "a-grade": "good",
+    "grade b": "good",
+    "b-grade": "good",
+    "refurbished": "good",
+    "good": "good",
+    "excellent": "excellent",
+    "grade c": "parts",
+    "c-grade": "parts",
+}
+
 
 CONDITION_MAPS = {
     "ebay": EBAY_CONDITION_MAP,
+    "refurb_io": REFURB_IO_CONDITION_MAP,
 }
 
 

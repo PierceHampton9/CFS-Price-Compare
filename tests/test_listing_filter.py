@@ -70,6 +70,12 @@ class ListingFilterTests(unittest.TestCase):
 
         self.assertEqual(exclusion_reason(listing, target_condition="good"), "parts_or_accessory")
 
+    def test_excludes_unavailable_listings_before_other_checks(self):
+        listing = _listing("ThinkPad X13 Yoga", "good")
+        listing["available"] = False
+
+        self.assertEqual(exclusion_reason(listing, target_condition="good"), "unavailable_listing")
+
     def test_unknown_condition_has_separate_reason(self):
         listing = _listing("ThinkPad X13 Yoga", None)
 

@@ -25,7 +25,7 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Comparable range:  $300.00 CAD - $360.00 CAD", report)
         self.assertIn("Comparables:       7", report)
         self.assertIn("Sold / asking:     4 sold, 3 asking", report)
-        self.assertIn("Sources:           ebay: 5, retailer: 2", report)
+        self.assertIn("Sources:           eBay: 5, retailer: 2", report)
         self.assertIn("Confidence flags: none", report)
 
     def test_formats_filter_summary_when_present(self):
@@ -328,6 +328,52 @@ class ReporterTests(unittest.TestCase):
 
         self.assertIn("Pricing basis:    sold and asking listings", mixed_report)
         self.assertIn("Pricing basis:    unknown", unknown_report)
+
+    def test_formats_source_quotes_and_source_errors(self):
+        report = format_price_report(
+            {
+                "count": 1,
+                "median_price_cad": 433.33,
+                "iqr_low_cad": 300,
+                "iqr_high_cad": 500,
+                "sold_count": 0,
+                "asking_count": 1,
+                "source_counts": {"ebay": 1, "refurb_io": 1},
+                "query_tier": 1,
+                "pricing_basis": "weighted_sources",
+                "source_basis": "weighted_source_quotes",
+                "source_quotes": [
+                    {"source": "ebay", "price_cad": 300, "verified": False, "weight": 1, "listing_count": 1},
+                    {"source": "refurb_io", "price_cad": 500, "verified": True, "weight": 2, "listing_count": 1},
+                ],
+                "source_errors": [{"source": "amazon_renewed", "message": "blocked"}],
+                "source_diagnostics": [
+                    {
+                        "source": "refurb_io",
+                        "title": "Lenovo ThinkPad X13 Yoga",
+                        "source_match_verified": False,
+                        "source_match_reasons": ["storage_mismatch"],
+                        "filter_exclusion_reason": None,
+                        "generated_query_text": "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB",
+                    }
+                ],
+                "confidence_flags": ["source_disagreement", "source_unavailable"],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Median price:      $433.33 CAD", report)
+        self.assertIn("Source quote range:  $300.00 CAD - $500.00 CAD", report)
+        self.assertIn("Sources:           eBay: 1, Refurb.io: 1", report)
+        self.assertIn("Pricing basis:    weighted source quote average", report)
+        self.assertIn("Source basis:     weighted source quotes", report)
+        self.assertIn("Source quotes:    eBay: $300.00 CAD, weight 1, 1 listing", report)
+        self.assertIn("Refurb.io: $500.00 CAD verified, weight 2, 1 listing", report)
+        self.assertIn("Source errors:    Amazon Renewed", report)
+        self.assertIn("Source diagnostics:", report)
+        self.assertIn("Refurb.io: not verified - Lenovo ThinkPad X13 Yoga", report)
+        self.assertIn("match: storage_mismatch", report)
+        self.assertIn("Source disagreement", report)
 
     def test_formats_no_comparables(self):
         report = format_price_report(

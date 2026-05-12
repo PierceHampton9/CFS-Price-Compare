@@ -103,6 +103,7 @@ def _supporting_listings(
     sorted_listings = sorted(
         listings,
         key=lambda listing: (
+            _supporting_source_rank(listing),
             _supporting_tier_rank(listing.get("query_tier")),
             abs((listing["_price"] or 0) - median),
         ),
@@ -134,6 +135,15 @@ def _query_tier(listings: list[dict[str, Any]]) -> int | None:
 def _supporting_tier_rank(value: Any) -> int:
     tier = _safe_int(value)
     return tier if tier > 0 else 999
+
+
+def _supporting_source_rank(listing: dict[str, Any]) -> int:
+    if listing.get("source_match_verified") is True and _source(listing) in {
+        "refurb_io",
+        "amazon_renewed",
+    }:
+        return 0
+    return 1
 
 
 def _safe_float(value: Any) -> float | None:

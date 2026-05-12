@@ -18,6 +18,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["default_condition"], "good")
         self.assertEqual(config["default_limit"], 10)
         self.assertEqual(config["sources"]["ebay"]["marketplace"], "EBAY_CA")
+        self.assertIs(config["sources"]["refurb_io"]["enabled"], True)
 
     def test_loads_simple_values_and_nested_source_config(self):
         CONFIG_PATH.write_text(

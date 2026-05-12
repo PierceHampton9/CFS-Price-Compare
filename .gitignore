@@ -8,6 +8,7 @@ env/
 pc_pricer.log
 .env
 PLAN.md
+SOURCES_PLAN.md
 
 dist/
 build/

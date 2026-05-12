@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from pc_pricer.source_labels import format_source_basis, format_source_name
+
 
 FLAG_LABELS = {
     "no_comparables": "No usable comparable listings",
     "low_comparable_count": "Low comparable count",
     "no_queries": "No usable search queries",
+    "source_disagreement": "Source disagreement",
+    "source_unavailable": "Source unavailable",
     "wide_price_range": "Wide price range",
 }
 
@@ -25,6 +29,7 @@ WARNING_LABELS = {
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
     "parts_or_accessory": "parts/accessory listing",
+    "unavailable_listing": "unavailable listing",
     "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
 }
@@ -42,6 +47,7 @@ def format_price_report(result: dict[str, Any]) -> str:
         lines.extend(_query_lines(result.get("queries")))
         lines.extend(_search_count_lines(result))
         lines.extend(_filter_lines(result))
+        lines.extend(_source_quote_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
         lines.extend(_limitation_lines(result))
@@ -51,6 +57,8 @@ def format_price_report(result: dict[str, Any]) -> str:
     lines.extend(_price_lines(result))
     lines.extend(_search_count_lines(result))
     lines.extend(_pricing_basis_lines(result))
+    lines.extend(_source_quote_lines(result))
+    lines.extend(_source_diagnostic_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
     lines.extend(_query_lines(result.get("queries")))
     lines.extend(_filter_lines(result))
@@ -71,7 +79,8 @@ def _price_lines(result: dict[str, Any]) -> list[str]:
     else:
         lines.append(f"Median price:      {_format_money(result.get('median_price_cad'))}")
 
-    lines.append(f"Comparable range:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}")
+    range_label = "Source quote range" if result.get("pricing_basis") == "weighted_sources" else "Comparable range"
+    lines.append(f"{range_label}:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}")
     lines.append(f"Comparables:       {result.get('count')}")
     lines.append(f"Query tier:        {_format_query_tier(result.get('query_tier'))}")
     if result.get("pricing_basis") != "asking_adjusted":
@@ -187,10 +196,14 @@ def _search_count_lines(result: dict[str, Any]) -> list[str]:
 
 def _pricing_basis_lines(result: dict[str, Any]) -> list[str]:
     basis = result.get("pricing_basis")
-    if not basis:
-        return []
+    source_basis = result.get("source_basis")
+    lines = []
 
-    return [f"Pricing basis:    {_format_pricing_basis(result)}"]
+    if basis:
+        lines.append(f"Pricing basis:    {_format_pricing_basis(result)}")
+    if source_basis:
+        lines.append(f"Source basis:     {format_source_basis(source_basis)}")
+    return lines
 
 
 def _format_pricing_basis(result: dict[str, Any]) -> str:
@@ -203,7 +216,59 @@ def _format_pricing_basis(result: dict[str, Any]) -> str:
         return "sold and asking listings"
     if value == "unknown":
         return "unknown"
+    if value == "weighted_sources":
+        return "weighted source quote average"
     return str(value)
+
+
+def _source_quote_lines(result: dict[str, Any]) -> list[str]:
+    quotes = result.get("source_quotes") or []
+    errors = result.get("source_errors") or []
+    lines = []
+    if quotes:
+        parts = []
+        for quote in quotes:
+            source = format_source_name(quote.get("source"))
+            price = _format_money(quote.get("price_cad"))
+            weight = quote.get("weight")
+            marker = " verified" if quote.get("verified") else ""
+            weight_text = f", weight {weight:g}" if isinstance(weight, (int, float)) else ""
+            listing_count = quote.get("listing_count")
+            count_text = f", {listing_count} listing{'s' if listing_count != 1 else ''}" if listing_count else ""
+            parts.append(f"{source}: {price}{marker}{weight_text}{count_text}")
+        lines.append(f"Source quotes:    {', '.join(parts)}")
+    if errors:
+        sources = sorted({format_source_name(error.get("source")) for error in errors if isinstance(error, dict)})
+        lines.append(f"Source errors:    {', '.join(sources)}")
+    return lines
+
+
+def _source_diagnostic_lines(result: dict[str, Any]) -> list[str]:
+    diagnostics = result.get("source_diagnostics") or []
+    if not diagnostics:
+        return []
+
+    lines = ["Source diagnostics:"]
+    for diagnostic in diagnostics[:5]:
+        if not isinstance(diagnostic, dict):
+            continue
+        source = format_source_name(diagnostic.get("source"))
+        title = diagnostic.get("title") or "Untitled listing"
+        status = "verified" if diagnostic.get("source_match_verified") else "not verified"
+        reasons = diagnostic.get("source_match_reasons") or []
+        filter_reason = diagnostic.get("filter_exclusion_reason")
+        details = []
+        if reasons:
+            details.append(f"match: {', '.join(str(reason) for reason in reasons)}")
+        if filter_reason:
+            details.append(f"filter: {filter_reason}")
+        if diagnostic.get("generated_query_text"):
+            details.append(f"generated query: {diagnostic.get('generated_query_text')}")
+        detail_text = f" ({'; '.join(details)})" if details else ""
+        lines.append(f"  {source}: {status} - {title}{detail_text}")
+    if len(diagnostics) > 5:
+        lines.append(f"  ... {len(diagnostics) - 5} more source diagnostics omitted")
+    return lines
 
 
 def _discount_percent_range(result: dict[str, Any]) -> str:
@@ -278,7 +343,7 @@ def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
     for index, listing in enumerate(listings, start=1):
         lines.append(f"{index}. {listing.get('title') or 'Untitled listing'}")
         lines.append(f"   Price:     {format_listing_price(listing)}")
-        lines.append(f"   Source:    {listing.get('source') or 'unknown'}")
+        lines.append(f"   Source:    {format_source_name(listing.get('source'))}")
         lines.append(f"   Status:    {_format_listing_status(listing)}")
         lines.append(f"   Condition: {format_condition(listing)}")
         lines.append(f"   Tier:      {_format_query_tier(listing.get('query_tier'))}")
@@ -317,7 +382,7 @@ def _format_source_counts(source_counts: Any) -> str:
     if not isinstance(source_counts, dict) or not source_counts:
         return "none"
 
-    parts = [f"{source}: {count}" for source, count in sorted(source_counts.items())]
+    parts = [f"{format_source_name(source)}: {count}" for source, count in sorted(source_counts.items())]
     return ", ".join(parts)
 
 

@@ -152,15 +152,159 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 400)
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
+    def test_verified_refurb_io_quote_gets_heavier_weight_than_ebay(self):
+        ebay = FakeSource(
+            {
+                "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+        refurb = FakeSource(
+            {
+                "20XW004AUS": [_refurb_listing("Lenovo ThinkPad X13 Yoga Laptop i5-1135G7 16GB 256GB", 500)],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(_laptop_specs(), [ebay, refurb], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 433.33)
+        self.assertEqual(result["iqr_low_cad"], 300.00)
+        self.assertEqual(result["iqr_high_cad"], 500.00)
+        self.assertEqual(result["source_basis"], "weighted_source_quotes")
+        self.assertEqual(result["pricing_basis"], "weighted_sources")
+        self.assertEqual(result["source_counts"], {"ebay": 1, "refurb_io": 1})
+        self.assertIn("source_disagreement", result["confidence_flags"])
+        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["ebay", "refurb_io"])
+        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [1, 2])
+        self.assertEqual(result["supporting_listings"][0]["source"], "refurb_io")
+        self.assertEqual(result["source_diagnostics"][0]["source"], "refurb_io")
+        self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
+        self.assertIs(result["source_diagnostics"][0]["included_in_pricing"], True)
+
+    def test_weak_refurb_io_match_falls_back_to_ebay(self):
+        ebay = FakeSource(
+            {
+                "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+        refurb = FakeSource(
+            {
+                "20XW004AUS": [_refurb_listing("Dell Latitude Laptop i5-1135G7 16GB 256GB", 500, model="Latitude")],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(_laptop_specs(), [ebay, refurb], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 300.00)
+        self.assertEqual(result["source_basis"], "ebay_asking_adjusted")
+        self.assertEqual(result["source_counts"], {"ebay": 1})
+        self.assertEqual(result["source_diagnostics"][0]["source_match_reasons"], ["model_mismatch"])
+        self.assertIs(result["source_diagnostics"][0]["included_in_pricing"], False)
+
+    def test_refurb_io_uses_broader_retailer_query_when_model_is_known(self):
+        refurb = FakeSource(
+            {
+                "20XW004AUS": [],
+                "Lenovo ThinkPad X13 Yoga": [
+                    _refurb_listing("Lenovo ThinkPad X13 Yoga Laptop i5-1135G7 16GB 256GB", 525)
+                ],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(_laptop_specs(), [refurb], limit_per_query=5)
+
+        self.assertEqual(refurb.calls, [("20XW004AUS", 5), ("Lenovo ThinkPad X13 Yoga", 5)])
+        self.assertEqual(result["median_price_cad"], 525.00)
+        self.assertEqual(result["source_diagnostics"][0]["query_text"], "Lenovo ThinkPad X13 Yoga")
+        self.assertEqual(
+            result["source_diagnostics"][0]["generated_query_text"],
+            "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB",
+        )
+
+    def test_refurb_io_only_verified_result_works(self):
+        refurb = FakeSource(
+            {
+                "20XW004AUS": [_refurb_listing("Lenovo ThinkPad X13 Yoga Laptop i5-1135G7 16GB 256GB", 525)],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(_laptop_specs(), [refurb], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 525.00)
+        self.assertEqual(result["source_basis"], "weighted_source_quotes")
+        self.assertEqual(result["pricing_basis"], "weighted_sources")
+        self.assertEqual(result["source_counts"], {"refurb_io": 1})
+
+    def test_source_failure_is_reported_without_crashing(self):
+        ebay = FakeSource(
+            {
+                "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+        failing = FailingSource("refurb_io")
+
+        result = price_specs(_laptop_specs(), [ebay, failing], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 300.00)
+        self.assertIn("source_unavailable", result["confidence_flags"])
+        self.assertEqual(result["source_errors"][0]["source"], "refurb_io")
+
+    def test_ebay_only_behavior_remains_asking_adjusted(self):
+        source = FakeSource(
+            {
+                "20XW004AUS": [
+                    _listing("Listing 1", 500, "https://www.ebay.ca/itm/1"),
+                    _listing("Listing 2", 520, "https://www.ebay.ca/itm/2"),
+                ],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+
+        result = price_specs(_laptop_specs(), [source], limit_per_query=5, warn_below_comparables=2)
+
+        self.assertEqual(result["median_price_cad"], 510.00)
+        self.assertEqual(result["pricing_basis"], "asking_adjusted")
+        self.assertEqual(result["conservative_low_cad"], 484.5)
+        self.assertEqual(result["conservative_high_cad"], 510.0)
+
 
 class FakeSource:
-    def __init__(self, results):
+    def __init__(self, results, name="ebay"):
         self.results = results
         self.calls = []
+        self.name = name
 
     def search(self, query, max_results):
         self.calls.append((query, max_results))
         return self.results.get(query, [])
+
+
+class FailingSource:
+    def __init__(self, name):
+        self.name = name
+
+    def search(self, _query, _max_results):
+        raise RuntimeError("source unavailable")
 
 
 def _laptop_specs():
@@ -202,6 +346,29 @@ def _listing(title, price, url, condition_raw="Used", item_id=None):
         "is_sold": False,
         "query_tier": None,
         "url": url,
+    }
+
+
+def _refurb_listing(title, price, model="ThinkPad X13 Yoga Gen 2"):
+    return {
+        "source": "refurb_io",
+        "title": title,
+        "item_price_cad": price,
+        "shipping_cad": 0,
+        "total_price_cad": price,
+        "shipping_is_estimated": False,
+        "condition_raw": "Grade A",
+        "condition_norm": None,
+        "is_sold": False,
+        "available": True,
+        "url": "https://ca.refurb.io/products/example",
+        "source_specs": {
+            "brand": "Lenovo",
+            "model": model,
+            "ram_gb": 16,
+            "storage_gb": 256,
+            "cpu_short": "i5-1135G7",
+        },
     }
 
 

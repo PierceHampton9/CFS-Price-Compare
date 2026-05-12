@@ -30,6 +30,11 @@ class NormalizerTests(unittest.TestCase):
     def test_unknown_source_returns_none(self):
         self.assertIsNone(normalize_condition("unknown", "Used"))
 
+    def test_refurb_io_condition_mappings(self):
+        self.assertEqual(normalize_condition("refurb_io", "Grade A"), "good")
+        self.assertEqual(normalize_condition("refurb_io", "A-Grade"), "good")
+        self.assertEqual(normalize_condition("refurb_io", "Grade C"), "parts")
+
     def test_normalize_listing_returns_copy_with_condition_norm(self):
         listing = {
             "source": "ebay",

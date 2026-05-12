@@ -103,6 +103,17 @@ class GuiImportTests(unittest.TestCase):
             "iqr_high_cad": 325,
             "query_tier": 2,
             "source_counts": {"ebay": 1},
+            "source_diagnostics": [
+                {
+                    "source": "refurb_io",
+                    "title": "Lenovo ThinkPad Refurb",
+                    "source_match_verified": False,
+                    "source_match_reasons": ["storage_mismatch"],
+                    "filter_exclusion_reason": None,
+                    "query_text": "Lenovo ThinkPad",
+                    "price_cad": 350,
+                }
+            ],
             "confidence_flags": [],
             "pricing_limitations": ["asking_prices_only"],
             "listing_warnings": [],
@@ -134,6 +145,9 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("Conservative Estimate", labels)
         self.assertIn("$280.00 CAD - $300.00 CAD", labels)
         self.assertIn("Supporting Listings", labels)
+        self.assertIn("Source Diagnostics", labels)
+        self.assertIn("Not Verified", labels)
+        self.assertTrue(any("Lenovo ThinkPad Refurb" in label for label in labels))
         self.assertTrue(any("1. Lenovo ThinkPad" in label for label in labels))
         self.assertTrue(any("Open in browser" in label for label in labels))
         self.assertTrue(window.report_page.print_button.isEnabled())

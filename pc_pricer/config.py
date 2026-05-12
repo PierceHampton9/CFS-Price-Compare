@@ -27,6 +27,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "enabled": True,
             "marketplace": "EBAY_CA",
         },
+        "refurb_io": {
+            "enabled": True,
+            "base_url": "https://ca.refurb.io",
+        },
         "canada_computers": {
             "enabled": False,
         },
