@@ -129,7 +129,7 @@ The supporting listings read as follows...
 Sanity-check the report
 -----------------------
 
-- Start with Conservative estimate range when the report is based on active asking listings.
+- Start with the conservative estimate range when the report is based only on active asking listings.
 - Check the supporting listings to confirm they are comparable and contain reasonable information.
 - Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
 - Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
@@ -144,4 +144,6 @@ Notes
 - The setup command creates a local .env file beside pc_pricer.exe.
 - The .env file contains credentials in plaintext. Keep the release folder in a trusted place.
 - config.yaml controls pricing defaults and can be edited without rebuilding the executable.
-- Current eBay pricing uses active asking listings. When no sold listings are available, the report shows the asking median plus a conservative estimate discounted 0-5%.
+- eBay and Refurb.io are enabled by default. Amazon Renewed is experimental and disabled by default in config.yaml.
+- eBay pricing uses active asking listings. When no verified retailer source is available, the report shows the eBay asking median plus a conservative estimate discounted 0-5%.
+- Verified Refurb.io and Amazon Renewed matches are folded into a weighted source quote estimate.

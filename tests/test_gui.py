@@ -103,6 +103,16 @@ class GuiImportTests(unittest.TestCase):
             "iqr_high_cad": 325,
             "query_tier": 2,
             "source_counts": {"ebay": 1},
+            "source_statuses": [
+                {
+                    "source": "amazon_renewed",
+                    "status": "error",
+                    "searched": True,
+                    "query_count": 1,
+                    "raw_listing_count": 0,
+                    "message": "Playwright browser request failed",
+                }
+            ],
             "source_diagnostics": [
                 {
                     "source": "refurb_io",
@@ -145,12 +155,38 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("Conservative Estimate", labels)
         self.assertIn("$280.00 CAD - $300.00 CAD", labels)
         self.assertIn("Supporting Listings", labels)
+        self.assertIn("Source Status", labels)
+        self.assertIn("Amazon Renewed", labels)
+        self.assertTrue(any("Playwright browser request failed" in label for label in labels))
         self.assertIn("Source Diagnostics", labels)
         self.assertIn("Not Verified", labels)
         self.assertTrue(any("Lenovo ThinkPad Refurb" in label for label in labels))
         self.assertTrue(any("1. Lenovo ThinkPad" in label for label in labels))
         self.assertTrue(any("Open in browser" in label for label in labels))
         self.assertTrue(window.report_page.print_button.isEnabled())
+
+        window.close()
+
+    def test_specs_page_renders_pricing_source_toggles_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.device_type = "computer"
+        window.state.computer_mode = "manual"
+        window.state.specs = {
+            "form_factor": "laptop",
+            "brand": "Lenovo",
+            "model": "ThinkPad X13",
+            "condition": "good",
+        }
+
+        window.specs_page.refresh()
+        labels = [label.text() for label in window.specs_page.findChildren(gui.QLabel)]
+        checkboxes = [checkbox.text() for checkbox in window.specs_page.findChildren(gui.QCheckBox)]
+
+        self.assertIn("Pricing Sources", labels)
+        self.assertIn("eBay", checkboxes)
+        self.assertIn("Refurb.io", checkboxes)
+        self.assertIn("Amazon Renewed (experimental)", checkboxes)
 
         window.close()
 

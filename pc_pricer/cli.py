@@ -17,6 +17,7 @@ from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
+from pc_pricer.source_status import merge_config_source_statuses
 from pc_pricer.setup_credentials import run_setup
 from pc_pricer.spec_builder import (
     VALID_CONDITIONS,
@@ -63,7 +64,7 @@ def main() -> None:
 
     price_query_parser = subparsers.add_parser(
         "price-query",
-        help="Search active eBay listings and print a draft price report.",
+        help="Search configured pricing sources and print a draft price report.",
     )
     price_query_parser.add_argument("query", nargs="+", help="Search terms to price.")
     price_query_parser.add_argument("--limit", type=int, default=None, help="Maximum listings to fetch.")
@@ -85,7 +86,7 @@ def main() -> None:
 
     price_manual_parser = subparsers.add_parser(
         "price-manual",
-        help="Enter specs manually, search tiered eBay queries, and print a draft price report.",
+        help="Enter specs manually, search configured pricing sources, and print a draft price report.",
     )
     price_manual_parser.add_argument(
         "--device-type",
@@ -140,7 +141,7 @@ def main() -> None:
 
     price_detect_parser = subparsers.add_parser(
         "price-detect",
-        help="Detect this Windows PC, search tiered eBay queries, and print a draft price report.",
+        help="Detect this Windows PC, search configured pricing sources, and print a draft price report.",
     )
     price_detect_parser.add_argument(
         "--limit-per-query",
@@ -253,6 +254,7 @@ def main() -> None:
                 target_condition=_condition(args.condition, config),
                 **_pricing_options(config),
             )
+            result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
@@ -273,6 +275,7 @@ def main() -> None:
                 target_condition=_condition(args.condition, config),
                 **_pricing_options(config),
             )
+            result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc

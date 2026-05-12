@@ -29,8 +29,19 @@ REFURB_IO_CONDITION_MAP = {
     "c-grade": "parts",
 }
 
+AMAZON_RENEWED_CONDITION_MAP = {
+    "renewed": "good",
+    "amazon renewed": "good",
+    "excellent condition": "excellent",
+    "good condition": "good",
+    "acceptable condition": "good",
+    "premium renewed": "excellent",
+    "like new": "excellent",
+}
+
 
 CONDITION_MAPS = {
+    "amazon_renewed": AMAZON_RENEWED_CONDITION_MAP,
     "ebay": EBAY_CONDITION_MAP,
     "refurb_io": REFURB_IO_CONDITION_MAP,
 }

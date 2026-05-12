@@ -1,9 +1,15 @@
 import unittest
+from pathlib import Path
 
 from pc_pricer.gui_pricing import price_gui_values
 
+CONFIG_PATH = Path("tests/gui_pricing_config.yaml")
+
 
 class GuiPricingTests(unittest.TestCase):
+    def tearDown(self):
+        CONFIG_PATH.unlink(missing_ok=True)
+
     def test_prices_gui_values_through_pipeline(self):
         source = FakeSource(
             {
@@ -45,6 +51,36 @@ class GuiPricingTests(unittest.TestCase):
             )
 
         self.assertIn("Invalid condition 'broken'", str(exc.exception))
+
+    def test_gui_pricing_reports_disabled_amazon_status(self):
+        CONFIG_PATH.write_text(
+            """
+sources:
+  ebay:
+    enabled: false
+  refurb_io:
+    enabled: false
+  amazon_renewed:
+    enabled: false
+""".strip(),
+            encoding="utf-8",
+        )
+
+        result, report = price_gui_values(
+            "phone",
+            {
+                "brand": "Apple",
+                "model": "iPhone 13",
+                "storage": "128",
+                "carrier": "unlocked",
+                "condition": "good",
+            },
+            config_path=str(CONFIG_PATH),
+        )
+
+        amazon_status = next(status for status in result["source_statuses"] if status["source"] == "amazon_renewed")
+        self.assertEqual(amazon_status["status"], "disabled")
+        self.assertIn("Amazon Renewed: disabled", report)
 
 
 class FakeSource:
