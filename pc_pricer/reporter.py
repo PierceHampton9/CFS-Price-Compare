@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pc_pricer.source_labels import format_source_basis, format_source_name
+
 
 FLAG_LABELS = {
     "no_comparables": "No usable comparable listings",
@@ -30,12 +32,6 @@ FILTER_LABELS = {
     "unavailable_listing": "unavailable listing",
     "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
-}
-
-SOURCE_LABELS = {
-    "amazon_renewed": "Amazon Renewed",
-    "ebay": "eBay",
-    "refurb_io": "Refurb.io",
 }
 
 
@@ -206,7 +202,7 @@ def _pricing_basis_lines(result: dict[str, Any]) -> list[str]:
     if basis:
         lines.append(f"Pricing basis:    {_format_pricing_basis(result)}")
     if source_basis:
-        lines.append(f"Source basis:     {_format_source_basis(source_basis)}")
+        lines.append(f"Source basis:     {format_source_basis(source_basis)}")
     return lines
 
 
@@ -225,22 +221,6 @@ def _format_pricing_basis(result: dict[str, Any]) -> str:
     return str(value)
 
 
-def _format_source_basis(value: Any) -> str:
-    if value == "verified_refurb_io":
-        return "verified Refurb.io listings"
-    if value == "weighted_source_quotes":
-        return "weighted source quotes"
-    if value == "ebay_asking_adjusted":
-        return "eBay filtered asking median"
-    if value == "ebay_sold":
-        return "eBay sold listings"
-    if value == "ebay_mixed":
-        return "eBay sold and asking listings"
-    if value == "ebay_fallback":
-        return "eBay fallback"
-    return str(value)
-
-
 def _source_quote_lines(result: dict[str, Any]) -> list[str]:
     quotes = result.get("source_quotes") or []
     errors = result.get("source_errors") or []
@@ -248,7 +228,7 @@ def _source_quote_lines(result: dict[str, Any]) -> list[str]:
     if quotes:
         parts = []
         for quote in quotes:
-            source = _format_source_name(quote.get("source"))
+            source = format_source_name(quote.get("source"))
             price = _format_money(quote.get("price_cad"))
             weight = quote.get("weight")
             marker = " verified" if quote.get("verified") else ""
@@ -258,7 +238,7 @@ def _source_quote_lines(result: dict[str, Any]) -> list[str]:
             parts.append(f"{source}: {price}{marker}{weight_text}{count_text}")
         lines.append(f"Source quotes:    {', '.join(parts)}")
     if errors:
-        sources = sorted({_format_source_name(error.get("source")) for error in errors if isinstance(error, dict)})
+        sources = sorted({format_source_name(error.get("source")) for error in errors if isinstance(error, dict)})
         lines.append(f"Source errors:    {', '.join(sources)}")
     return lines
 
@@ -272,7 +252,7 @@ def _source_diagnostic_lines(result: dict[str, Any]) -> list[str]:
     for diagnostic in diagnostics[:5]:
         if not isinstance(diagnostic, dict):
             continue
-        source = _format_source_name(diagnostic.get("source"))
+        source = format_source_name(diagnostic.get("source"))
         title = diagnostic.get("title") or "Untitled listing"
         status = "verified" if diagnostic.get("source_match_verified") else "not verified"
         reasons = diagnostic.get("source_match_reasons") or []
@@ -363,7 +343,7 @@ def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
     for index, listing in enumerate(listings, start=1):
         lines.append(f"{index}. {listing.get('title') or 'Untitled listing'}")
         lines.append(f"   Price:     {format_listing_price(listing)}")
-        lines.append(f"   Source:    {_format_source_name(listing.get('source'))}")
+        lines.append(f"   Source:    {format_source_name(listing.get('source'))}")
         lines.append(f"   Status:    {_format_listing_status(listing)}")
         lines.append(f"   Condition: {format_condition(listing)}")
         lines.append(f"   Tier:      {_format_query_tier(listing.get('query_tier'))}")
@@ -402,13 +382,8 @@ def _format_source_counts(source_counts: Any) -> str:
     if not isinstance(source_counts, dict) or not source_counts:
         return "none"
 
-    parts = [f"{_format_source_name(source)}: {count}" for source, count in sorted(source_counts.items())]
+    parts = [f"{format_source_name(source)}: {count}" for source, count in sorted(source_counts.items())]
     return ", ".join(parts)
-
-
-def _format_source_name(value: Any) -> str:
-    key = str(value or "unknown").strip().lower()
-    return SOURCE_LABELS.get(key, str(value or "unknown"))
 
 
 def _format_query_tier(query_tier: Any) -> str:

@@ -94,6 +94,82 @@ class RefurbIoSourceTests(unittest.TestCase):
         self.assertEqual(listings[0]["total_price_cad"], 499.00)
         self.assertEqual(listings[0]["availability"], "in_stock")
 
+    def test_rejects_product_urls_outside_configured_host(self):
+        source = RefurbIoSource(
+            base_url="https://ca.refurb.io",
+            json_get=lambda _url, _headers: _search_payload(
+                [
+                    "file:///etc/passwd",
+                    "https://evil.example/products/bad",
+                    "/products/lenovo-thinkpad-x13",
+                ]
+            ),
+            http_get=lambda url, _headers: _product_html(
+                title=f"Fetched {url}",
+                price="499.00",
+            ),
+        )
+
+        listings = source.search("ThinkPad X13", 5)
+
+        self.assertEqual(len(listings), 1)
+        self.assertEqual(listings[0]["url"], "https://ca.refurb.io/products/lenovo-thinkpad-x13")
+
+    def test_skips_one_failed_product_fetch_and_keeps_later_candidates(self):
+        urls = [
+            "https://ca.refurb.io/products/dead",
+            "https://ca.refurb.io/products/good",
+        ]
+
+        def http_get(url, _headers):
+            if url.endswith("/dead"):
+                raise RuntimeError("dead product page")
+            return _product_html(
+                title="Lenovo ThinkPad X13 Yoga Laptop i5-1145G7 16GB 256GB",
+                price="499.00",
+            )
+
+        source = RefurbIoSource(json_get=lambda _url, _headers: _search_payload(urls), http_get=http_get)
+
+        listings = source.search("ThinkPad X13", 5)
+
+        self.assertEqual(len(listings), 1)
+        self.assertEqual(listings[0]["url"], "https://ca.refurb.io/products/good")
+
+    def test_user_agent_uses_package_version(self):
+        seen_headers = []
+
+        def http_get(_url, headers):
+            seen_headers.append(headers)
+            return _product_html(
+                title="Lenovo ThinkPad X13 Yoga Laptop i5-1145G7 16GB 256GB",
+                price="499.00",
+            )
+
+        source = RefurbIoSource(
+            json_get=lambda _url, _headers: _search_payload(["https://ca.refurb.io/products/good"]),
+            http_get=http_get,
+        )
+
+        source.search("ThinkPad X13", 1)
+
+        self.assertEqual(seen_headers[0]["User-Agent"], "CFS-Price-Compare/0.4.0")
+
+    def test_parses_newer_cpu_short_names(self):
+        apple = parse_product_html(
+            _product_html(title="Apple MacBook Air Laptop M2 8GB 256GB", price="699.00", processor="M2")
+        )
+        ultra = parse_product_html(
+            _product_html(
+                title="Lenovo ThinkPad Laptop Core Ultra 7 155U 16GB 512GB",
+                price="899.00",
+                processor="Core Ultra 7 155U",
+            )
+        )
+
+        self.assertEqual(apple.specs["cpu_short"], "M2")
+        self.assertEqual(ultra.specs["cpu_short"], "Core Ultra 7 155U")
+
 
 def _product_html(
     title,
@@ -102,6 +178,7 @@ def _product_html(
     condition="Grade A",
     stock_text="29 in stock, ready to be shipped",
     extra_prices="",
+    processor="Core i5-1145G7",
 ):
     price_json = f'"price": "{price}",' if price is not None else ""
     return f"""
@@ -133,7 +210,7 @@ def _product_html(
       <tr><th>Model</th><td>ThinkPad X13 Yoga Gen 2</td></tr>
       <tr><th>Memory</th><td>16GB</td></tr>
       <tr><th>Storage</th><td>256GB SSD</td></tr>
-      <tr><th>Processor</th><td>Core i5-1145G7</td></tr>
+      <tr><th>Processor</th><td>{processor}</td></tr>
       <tr><th>Condition</th><td>{condition}</td></tr>
     </table>
   </body>

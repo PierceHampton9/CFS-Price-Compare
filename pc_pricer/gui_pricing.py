@@ -10,7 +10,6 @@ from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
 from pc_pricer.sources.factory import build_listing_sources
 from pc_pricer.sources.ebay import EbaySource
-from pc_pricer.sources.refurb_io import RefurbIoSource
 from pc_pricer.spec_builder import VALID_CONDITIONS, build_manual_specs
 
 
@@ -44,10 +43,7 @@ def _ebay_source(config: dict[str, Any]) -> EbaySource:
 
 
 def _pricing_sources(config: dict[str, Any]) -> list[Any]:
-    return build_listing_sources(
-        config,
-        source_classes={"ebay": EbaySource, "refurb_io": RefurbIoSource},
-    )
+    return build_listing_sources(config)
 
 
 def _source_config(config: dict[str, Any], source_name: str) -> dict[str, Any]:

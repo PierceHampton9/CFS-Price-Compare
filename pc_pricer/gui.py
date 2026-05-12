@@ -24,10 +24,13 @@ from pc_pricer.reporter import (
     FILTER_LABELS,
     FLAG_LABELS,
     LIMITATION_LABELS,
-    SOURCE_LABELS,
     WARNING_LABELS,
     format_condition,
     format_listing_price,
+)
+from pc_pricer.source_labels import (
+    format_source_basis as _source_basis_label,
+    format_source_name as _source_name_label,
 )
 from pc_pricer.setup_credentials import write_credentials_env
 from pc_pricer.spec_builder import gui_values_from_detected_specs
@@ -999,19 +1002,7 @@ def _format_pricing_basis(result: dict[str, Any]) -> str:
 
 
 def _format_source_basis(value: Any) -> str:
-    if value == "weighted_source_quotes":
-        return "Weighted Source Quotes"
-    if value == "verified_refurb_io":
-        return "Verified Refurb.io Listings"
-    if value == "ebay_asking_adjusted":
-        return "eBay Filtered Asking Median"
-    if value == "ebay_sold":
-        return "eBay Sold Listings"
-    if value == "ebay_mixed":
-        return "eBay Sold and Asking Listings"
-    if value == "ebay_fallback":
-        return "eBay Fallback"
-    return _display_value(value, "basis") if value else ""
+    return _sentence_case(_source_basis_label(value)) if value else ""
 
 
 def _format_source_quotes(quotes: Any) -> str:
@@ -1031,8 +1022,7 @@ def _format_source_quotes(quotes: Any) -> str:
 
 
 def _format_source_name(value: Any) -> str:
-    key = str(value or "unknown").strip().lower()
-    return SOURCE_LABELS.get(key, _display_value(value or "unknown", "source"))
+    return _source_name_label(value)
 
 
 def _discount_percent_range(result: dict[str, Any]) -> str:

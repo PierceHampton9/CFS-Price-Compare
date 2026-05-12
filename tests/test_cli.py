@@ -11,10 +11,13 @@ CONFIG_PATH = Path("tests/cli_test_config.yaml")
 
 class CliTests(unittest.TestCase):
     def setUp(self):
-        self.refurb_patcher = patch("pc_pricer.cli.RefurbIoSource", DisabledRefurbSource)
+        self.refurb_patcher = patch("pc_pricer.sources.factory.RefurbIoSource", DisabledRefurbSource)
+        self.ebay_factory_patcher = patch("pc_pricer.sources.factory.EbaySource", DelegatingEbaySource)
         self.refurb_patcher.start()
+        self.ebay_factory_patcher.start()
 
     def tearDown(self):
+        self.ebay_factory_patcher.stop()
         self.refurb_patcher.stop()
         CONFIG_PATH.unlink(missing_ok=True)
 
@@ -856,6 +859,11 @@ class DisabledRefurbSource:
 
     def search(self, _query, _max_results):
         return []
+
+
+class DelegatingEbaySource:
+    def __new__(cls, *args, **kwargs):
+        return cli.EbaySource(*args, **kwargs)
 
 
 if __name__ == "__main__":

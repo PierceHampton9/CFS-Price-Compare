@@ -9,6 +9,8 @@ import re
 from typing import Any, Callable
 from urllib import error, parse, request
 
+from pc_pricer import __version__
+
 
 DEFAULT_BASE_URL = "https://ca.refurb.io"
 SEARCH_PATH = "/search/suggest.json"
@@ -41,6 +43,7 @@ class RefurbIoSource:
     ) -> None:
         self.enabled = enabled
         self.base_url = base_url.rstrip("/")
+        self._base_host = _validated_base_host(self.base_url)
         self._http_get = http_get or _http_get_text
         self._json_get = json_get or _http_get_json
 
@@ -52,7 +55,10 @@ class RefurbIoSource:
         urls = self._search_product_urls(query, max_results)
         listings = []
         for url in urls[:max_results]:
-            html = self._http_get(url, _headers())
+            try:
+                html = self._http_get(url, _headers())
+            except RuntimeError:
+                continue
             product = parse_product_html(html)
             listing = _listing_from_product(product, url)
             if listing:
@@ -77,7 +83,9 @@ class RefurbIoSource:
             product_url = product.get("url")
             if not product_url:
                 continue
-            urls.append(_absolute_url(str(product_url), self.base_url))
+            absolute_url = _absolute_url(str(product_url), self.base_url, self._base_host)
+            if absolute_url:
+                urls.append(absolute_url)
         return _dedupe_urls(urls)
 
 
@@ -386,14 +394,36 @@ def _storage_gb(value: Any) -> int | None:
 
 def _cpu_short(value: Any) -> str | None:
     text = str(value or "")
-    match = re.search(r"\b(?:i[3579]|m[3579]|ryzen\s*\d)\s*[- ]?\w{3,8}\b", text, flags=re.IGNORECASE)
-    if match:
-        return re.sub(r"\s+", " ", match.group(0)).strip()
+    patterns = [
+        r"\bcore\s+ultra\s+\d\s+\d{3}[a-z]?\b",
+        r"\bi[3579]\s*[- ]?\d{3,5}[a-z0-9]{0,4}\b",
+        r"\bm[1234](?:\s+(?:pro|max|ultra))?\b",
+        r"\bryzen\s*\d\s*[- ]?\d{3,5}[a-z0-9]{0,4}\b",
+        r"\bxeon\s+\w[-\w]*\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return re.sub(r"\s+", " ", match.group(0)).strip()
     return None
 
 
 def _brand_from_title(title: str) -> str | None:
-    for brand in ["Lenovo", "Dell", "HP", "Apple", "Acer", "Asus", "Samsung", "Microsoft"]:
+    for brand in [
+        "Lenovo",
+        "Dell",
+        "HP",
+        "Apple",
+        "Acer",
+        "Asus",
+        "Samsung",
+        "Microsoft",
+        "Toshiba",
+        "MSI",
+        "LG",
+        "Razer",
+        "Google",
+    ]:
         if re.search(rf"\b{re.escape(brand)}\b", title, flags=re.IGNORECASE):
             return brand
     return None
@@ -407,10 +437,21 @@ def _availability_label(available: bool | None) -> str:
     return "unknown"
 
 
-def _absolute_url(url: str, base_url: str) -> str:
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return f"{base_url}/{url.lstrip('/')}"
+def _absolute_url(url: str, base_url: str, base_host: str) -> str | None:
+    absolute = parse.urljoin(f"{base_url}/", url)
+    parsed = parse.urlparse(absolute)
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    if parsed.hostname != base_host:
+        return None
+    return absolute
+
+
+def _validated_base_host(base_url: str) -> str:
+    parsed = parse.urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Refurb.io base_url must be an HTTP(S) URL with a host.")
+    return parsed.hostname
 
 
 def _dedupe_urls(urls: list[str]) -> list[str]:
@@ -428,7 +469,7 @@ def _dedupe_urls(urls: list[str]) -> list[str]:
 def _headers() -> dict[str, str]:
     return {
         "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
-        "User-Agent": "CFS-Price-Compare/0.3",
+        "User-Agent": f"CFS-Price-Compare/{__version__}",
     }
 
 

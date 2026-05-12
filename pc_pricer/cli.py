@@ -26,7 +26,6 @@ from pc_pricer.spec_builder import (
 )
 from pc_pricer.sources.factory import build_listing_sources
 from pc_pricer.sources.ebay import EbaySource
-from pc_pricer.sources.refurb_io import RefurbIoSource
 
 
 def main() -> None:
@@ -367,7 +366,6 @@ def _pricing_sources(config: dict[str, Any], marketplace_override: str | None = 
     return build_listing_sources(
         config,
         marketplace_override=marketplace_override,
-        source_classes={"ebay": EbaySource, "refurb_io": RefurbIoSource},
     )
 
 
