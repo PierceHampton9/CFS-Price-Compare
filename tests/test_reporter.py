@@ -1,10 +1,14 @@
 import unittest
 
 from pc_pricer.aggregator import aggregate_listings
-from pc_pricer.reporter import format_price_report
+from pc_pricer.reporter import format_location, format_price_report
 
 
 class ReporterTests(unittest.TestCase):
+    def test_formats_canadian_country_code_locations(self):
+        self.assertEqual(format_location("Calgary, AB, CA"), "Calgary, AB, Canada")
+        self.assertEqual(format_location("Canada"), "Canada")
+
     def test_formats_price_summary(self):
         report = format_price_report(
             {
@@ -24,7 +28,7 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Median price:      $325.00 CAD", report)
         self.assertIn("Comparable range:  $300.00 CAD - $360.00 CAD", report)
         self.assertIn("Comparables:       7", report)
-        self.assertIn("Sold / asking:     4 sold, 3 asking", report)
+        self.assertNotIn("Sold / asking:", report)
         self.assertIn("Sources:           eBay: 5, retailer: 2", report)
         self.assertIn("Confidence flags: none", report)
 
@@ -197,6 +201,31 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Detected specs:    LENOVO i7-1185G7 16GB", report)
         self.assertNotIn("20W9S23S00", report)
 
+    def test_formats_cpu_short_without_capitalizing_intel_i(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 300,
+                "iqr_low_cad": 280,
+                "iqr_high_cad": 320,
+                "count": 2,
+                "sold_count": 0,
+                "asking_count": 2,
+                "source_counts": {"ebay": 2},
+                "query_tier": 3,
+                "specs": {
+                    "brand": "Lenovo",
+                    "model": "ThinkPad",
+                    "cpu_short": "I5-1135G7",
+                    "ram_gb": 16,
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Detected specs:    Lenovo ThinkPad i5-1135G7 16GB", report)
+        self.assertNotIn("I5-1135G7", report)
+
     def test_formats_confidence_flags(self):
         report = format_price_report(
             {
@@ -240,10 +269,10 @@ class ReporterTests(unittest.TestCase):
         )
 
         self.assertIn("Conservative est.: $450.00 CAD - $475.00 CAD", report)
-        self.assertIn("Asking median:     $500.00 CAD", report)
-        self.assertIn("Pricing basis:    active asking listings, discounted 5-10%", report)
+        self.assertIn("eBay median:       $500.00 CAD", report)
+        self.assertIn("Pricing basis:    eBay active listings, discounted 5-10%", report)
         self.assertIn("Confidence flags: Low comparable count", report)
-        self.assertIn("Pricing limits:   Asking prices only", report)
+        self.assertIn("Pricing limits:   eBay active listing estimate", report)
         self.assertIn("Listing warnings: Unknown shipping", report)
         self.assertIn("Non-Canadian location", report)
         self.assertNotIn("Sold / asking:", report)
@@ -270,7 +299,7 @@ class ReporterTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("Pricing basis:    active asking listings, discounted 10-20%", report)
+        self.assertIn("Pricing basis:    eBay active listings, discounted 10-20%", report)
 
     def test_formats_unknown_asking_discount_range_without_fake_percent(self):
         report = format_price_report(
@@ -292,7 +321,7 @@ class ReporterTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("Pricing basis:    active asking listings, discounted unknown range", report)
+        self.assertIn("Pricing basis:    eBay active listings, discounted unknown range", report)
 
     def test_formats_mixed_and_unknown_pricing_basis(self):
         mixed_report = format_price_report(
@@ -326,7 +355,7 @@ class ReporterTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("Pricing basis:    sold and asking listings", mixed_report)
+        self.assertIn("Pricing basis:    comparable listings", mixed_report)
         self.assertIn("Pricing basis:    unknown", unknown_report)
 
     def test_formats_source_quotes_and_source_errors(self):
@@ -396,6 +425,31 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("match: storage_mismatch", report)
         self.assertIn("Source disagreement", report)
 
+    def test_standard_report_hides_advanced_source_details(self):
+        result = {
+            "count": 1,
+            "median_price_cad": 300,
+            "iqr_low_cad": 280,
+            "iqr_high_cad": 320,
+            "source_counts": {"ebay": 1},
+            "query_tier": 2,
+            "pricing_basis": "weighted_sources",
+            "source_quotes": [{"source": "ebay", "price_cad": 300, "weight": 1}],
+            "source_statuses": [{"source": "ebay", "status": "returned"}],
+            "source_diagnostics": [{"source": "refurb_io", "title": "candidate"}],
+            "queries": [{"tier": 2, "text": "Lenovo"}],
+            "confidence_flags": [],
+            "supporting_listings": [],
+        }
+
+        report = format_price_report(result, advanced=False)
+
+        self.assertIn("Sources:           eBay: 1", report)
+        self.assertNotIn("Source quotes:", report)
+        self.assertNotIn("Source status:", report)
+        self.assertNotIn("Source diagnostics:", report)
+        self.assertNotIn("Queries used:", report)
+
     def test_formats_no_comparables(self):
         report = format_price_report(
             {
@@ -441,7 +495,7 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Supporting listings", report)
         self.assertIn("1. Lenovo ThinkPad X13 Yoga", report)
         self.assertIn("$325.00 CAD total ($300.00 CAD item + $25.00 CAD shipping)", report)
-        self.assertIn("Status:    asking", report)
+        self.assertNotIn("Status:", report)
         self.assertIn("Condition: good (Used)", report)
         self.assertIn("Tier:      2", report)
 
@@ -508,7 +562,7 @@ class ReporterTests(unittest.TestCase):
         report = format_price_report(aggregation)
 
         self.assertIn("Median price:      $250.00 CAD", report)
-        self.assertIn("Sold / asking:     1 sold, 1 asking", report)
+        self.assertNotIn("Sold / asking:", report)
         self.assertIn("Supporting listings", report)
         self.assertIn("Condition: good (Used)", report)
 

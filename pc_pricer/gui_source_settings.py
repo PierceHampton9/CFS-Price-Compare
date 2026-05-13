@@ -42,7 +42,7 @@ def save_source_settings(settings: dict[str, bool], path: str | Path | None = No
         amazon_config.setdefault("base_url", "https://www.amazon.ca")
         amazon_config.setdefault("browser", "chromium")
         amazon_config.setdefault("channel", "msedge")
-        amazon_config.setdefault("headless", False)
+        amazon_config.setdefault("headless", True)
         amazon_config.setdefault("timeout_ms", 15000)
         amazon_config.setdefault("max_product_pages", 5)
 

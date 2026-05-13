@@ -9,6 +9,10 @@ class GuiImportTests(unittest.TestCase):
     def test_gui_entry_point_imports_without_pyside_installed(self):
         self.assertTrue(callable(gui.main))
 
+    def test_display_value_formats_cpu_names(self):
+        self.assertEqual(gui._display_value("I5-1135G7", "cpu_short"), "i5-1135G7")
+        self.assertEqual(gui._display_value("ryzen 5 5600u", "cpu"), "Ryzen 5 5600u")
+
     def test_main_window_constructs_when_pyside_is_available(self):
         app = self._qt_app()
         window = gui.MainWindow()
@@ -155,12 +159,98 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("Conservative Estimate", labels)
         self.assertIn("$280.00 CAD - $300.00 CAD", labels)
         self.assertIn("Supporting Listings", labels)
+        self.assertNotIn("Source Status", labels)
+
+        window.close()
+
+    def test_report_page_renders_advanced_report_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
+        window.state.report_mode = "advanced"
+        window.state.report_result = {
+            "count": 1,
+            "pricing_basis": "asking_adjusted",
+            "conservative_low_cad": 280,
+            "conservative_high_cad": 300,
+            "asking_median_price_cad": 300,
+            "iqr_low_cad": 275,
+            "iqr_high_cad": 325,
+            "query_tier": 2,
+            "source_counts": {"ebay": 1},
+            "source_statuses": [
+                {
+                    "source": "amazon_renewed",
+                    "status": "error",
+                    "searched": True,
+                    "query_count": 1,
+                    "raw_listing_count": 0,
+                    "message": "Playwright browser request failed",
+                }
+            ],
+            "source_diagnostics": [
+                {
+                    "source": "refurb_io",
+                    "title": "Lenovo ThinkPad Refurb",
+                    "source_match_verified": False,
+                    "source_match_reasons": ["storage_mismatch"],
+                    "filter_exclusion_reason": None,
+                    "query_text": "Lenovo ThinkPad",
+                    "price_cad": 350,
+                }
+            ],
+            "confidence_flags": [],
+            "pricing_limitations": ["asking_prices_only"],
+            "listing_warnings": [],
+            "specs": {"device_type": "computer", "brand": "Lenovo", "cpu_short": "i5-1135G7"},
+            "raw_listing_count": 1,
+            "deduped_listing_count": 1,
+            "target_condition": "good",
+            "excluded_count": 0,
+            "queries": [{"tier": 2, "text": "Lenovo i5-1135G7 16GB"}],
+            "supporting_listings": [
+                {
+                    "source": "ebay",
+                    "title": "Lenovo ThinkPad",
+                    "item_price_cad": 300,
+                    "shipping_cad": 0,
+                    "total_price_cad": 300,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": False,
+                    "query_tier": 2,
+                    "query_text": "Lenovo i5-1135G7 16GB",
+                    "url": "https://www.ebay.ca/itm/example",
+                }
+            ],
+            "all_comparable_listings": [
+                {
+                    "comparable_id": "url:https://www.ebay.ca/itm/example",
+                    "source": "ebay",
+                    "title": "Lenovo ThinkPad",
+                    "item_price_cad": 300,
+                    "shipping_cad": 0,
+                    "total_price_cad": 300,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "is_sold": False,
+                    "query_tier": 2,
+                    "query_text": "Lenovo i5-1135G7 16GB",
+                    "url": "https://www.ebay.ca/itm/example",
+                }
+            ],
+        }
+
+        window.report_page.refresh()
+        labels = [label.text() for label in window.report_page.findChildren(gui.QLabel)]
+
         self.assertIn("Source Status", labels)
         self.assertIn("Amazon Renewed", labels)
         self.assertTrue(any("Playwright browser request failed" in label for label in labels))
         self.assertIn("Source Diagnostics", labels)
         self.assertIn("Not Verified", labels)
         self.assertTrue(any("Lenovo ThinkPad Refurb" in label for label in labels))
+        self.assertIn("Comparable Review", labels)
         self.assertTrue(any("1. Lenovo ThinkPad" in label for label in labels))
         self.assertTrue(any("Open in browser" in label for label in labels))
         self.assertTrue(window.report_page.print_button.isEnabled())
@@ -187,6 +277,74 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("eBay", checkboxes)
         self.assertIn("Refurb.io", checkboxes)
         self.assertIn("Amazon Renewed (experimental)", checkboxes)
+
+        window.close()
+
+    def test_report_page_reevaluates_after_comparable_toggle_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        base_result = {
+            "count": 2,
+            "median_price_cad": 400,
+            "iqr_low_cad": 350,
+            "iqr_high_cad": 450,
+            "source_counts": {"ebay": 2},
+            "query_tier": 1,
+            "confidence_flags": [],
+            "target_condition": "good",
+            "excluded_count": 0,
+            "excluded_reasons": {},
+            "pricing_basis": "asking_adjusted",
+            "asking_median_price_cad": 400,
+            "conservative_low_cad": 380,
+            "conservative_high_cad": 400,
+            "asking_only_discount_low": 0,
+            "asking_only_discount_high": 0.05,
+            "reprice_options": {
+                "warn_below_comparables": 1,
+                "wide_iqr_ratio": 0.4,
+                "support_limit": 5,
+                "high_shipping_cad": 75,
+                "high_shipping_ratio": 0.25,
+                "asking_discount_low": 0,
+                "asking_discount_high": 0.05,
+            },
+            "all_comparable_listings": [
+                {
+                    "comparable_id": "url:https://www.ebay.ca/itm/1",
+                    "source": "ebay",
+                    "title": "Listing 1",
+                    "item_price_cad": 300,
+                    "shipping_cad": 0,
+                    "total_price_cad": 300,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "url": "https://www.ebay.ca/itm/1",
+                },
+                {
+                    "comparable_id": "url:https://www.ebay.ca/itm/2",
+                    "source": "ebay",
+                    "title": "Listing 2",
+                    "item_price_cad": 500,
+                    "shipping_cad": 0,
+                    "total_price_cad": 500,
+                    "condition_raw": "Used",
+                    "condition_norm": "good",
+                    "url": "https://www.ebay.ca/itm/2",
+                },
+            ],
+            "supporting_listings": [],
+        }
+        window.state.base_report_result = base_result
+        window.state.report_result = base_result
+        window.state.report_mode = "advanced"
+        window.state.pending_excluded_comparable_ids = {"url:https://www.ebay.ca/itm/2"}
+
+        window.report_page._reevaluate_report()
+
+        self.assertEqual(window.state.report_result["count"], 1)
+        self.assertEqual(window.state.report_result["median_price_cad"], 300)
+        self.assertEqual(window.state.report_result["excluded_reasons"]["user_removed_comparable"], 1)
 
         window.close()
 
@@ -255,7 +413,7 @@ class GuiImportTests(unittest.TestCase):
         self._qt_app()
         window = gui.MainWindow()
         window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
-        window.state.report_result = {"count": 1}
+        window.state.report_result = {"count": 1, "median_price_cad": 300, "source_counts": {"ebay": 1}}
         FakeTextDocument.created.clear()
         FakePrintDialog.next_result = gui.QDialog.Accepted
 
@@ -265,7 +423,7 @@ class GuiImportTests(unittest.TestCase):
             window.report_page.print_report()
 
         self.assertIn("CFS Price Report", FakeTextDocument.created[-1].html)
-        self.assertIn("Median price: $300.00 CAD", FakeTextDocument.created[-1].html)
+        self.assertIn("Median price:      $300.00 CAD", FakeTextDocument.created[-1].html)
         self.assertIsInstance(FakeTextDocument.created[-1].printed_to, FakePrinter)
 
         window.close()

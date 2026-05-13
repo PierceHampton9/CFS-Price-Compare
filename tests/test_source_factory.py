@@ -66,6 +66,21 @@ class SourceFactoryTests(unittest.TestCase):
         self.assertEqual(sources[0].timeout_ms, 9000)
         self.assertEqual(sources[0].max_product_pages, 3)
 
+    def test_amazon_renewed_defaults_to_headless_when_enabled(self):
+        sources = build_listing_sources(
+            {
+                "sources": {
+                    "ebay": {"enabled": False},
+                    "refurb_io": {"enabled": False},
+                    "amazon_renewed": {"enabled": True},
+                }
+            },
+            source_classes={"ebay": FakeEbaySource, "refurb_io": FakeRefurbSource, "amazon_renewed": FakeAmazonSource},
+        )
+
+        self.assertEqual([source.name for source in sources], ["amazon_renewed"])
+        self.assertIs(sources[0].headless, True)
+
 
 class FakeEbaySource:
     name = "ebay"

@@ -106,7 +106,9 @@ Search, pricing, and eBay credential-check commands read defaults from `config.y
 pc_pricer price-query "ThinkPad X13 Yoga i5-1135G7 16GB" --config config.yaml --condition good --limit 10
 ```
 
-Reports show the estimate, comparable range, source quote basis, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. eBay pricing uses active asking listings; when no verified retailer source is available, the report shows the eBay asking median plus a conservative estimate discounted 0-5%. Verified Refurb.io and Amazon Renewed matches are folded into a weighted source quote estimate.
+Reports show the estimate, comparable range, source quote basis, source counts, generated queries, filter counts, confidence flags, pricing limitations, listing warnings, and up to 5 supporting listings. eBay pricing uses active listings; when no verified retailer source is available, the report shows the eBay median plus a conservative estimate discounted 0-5%. Verified Refurb.io and Amazon Renewed matches are folded into a weighted source quote estimate without applying the eBay-only discount to retailer prices.
+
+The GUI defaults to a Standard report view. Advanced view shows search/source diagnostics and all comparable listings; users can exclude bad comparables and reevaluate the estimate from the already fetched listings without running another online search.
 
 ## Optional Amazon Renewed Source
 
@@ -204,7 +206,7 @@ For the first live pass, check:
 - whether titles, prices, shipping, condition, URLs, and locations appear
 - whether missing shipping is shown as unknown shipping, not as a total
 - whether high/unknown shipping and non-Canadian locations appear under listing warnings
-- whether asking-only reports show both the asking median and conservative estimate
+- whether eBay-only reports show both the eBay median and conservative estimate
 - whether the query returns obviously wrong models or parts-only listings
 - whether the supporting listings look relevant enough for human review
 

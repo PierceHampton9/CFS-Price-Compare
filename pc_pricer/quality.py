@@ -16,7 +16,7 @@ def add_listing_quality_flags(
     limitations = list(updated.get("pricing_limitations") or [])
     warnings = list(updated.get("listing_warnings") or [])
 
-    if updated.get("asking_count", 0) > 0 and updated.get("sold_count", 0) == 0:
+    if updated.get("pricing_basis") == "asking_adjusted":
         _append_flag(limitations, "asking_prices_only")
 
     if any(_has_unknown_shipping(listing) for listing in listings):

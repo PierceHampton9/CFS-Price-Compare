@@ -9,8 +9,9 @@ def apply_pricing_basis(
     result: dict[str, Any],
     asking_discount_low: float = 0.00,
     asking_discount_high: float = 0.05,
+    discount_eligible: bool = True,
 ) -> dict[str, Any]:
-    """Return a copy of an aggregate result with asking-only adjustment fields."""
+    """Return a copy of an aggregate result with active-listing adjustment fields."""
     updated = dict(result)
     sold_count = _safe_int(updated.get("sold_count"))
     asking_count = _safe_int(updated.get("asking_count"))
@@ -20,13 +21,16 @@ def apply_pricing_basis(
 
     if sold_count == 0 and asking_count > 0:
         median = _safe_float(updated.get("median_price_cad"))
-        updated["pricing_basis"] = "asking_adjusted"
-        updated["asking_median_price_cad"] = updated.get("median_price_cad")
-        updated["asking_only_discount_low"] = asking_discount_low
-        updated["asking_only_discount_high"] = asking_discount_high
-        if median is not None:
-            updated["conservative_low_cad"] = round(median * (1 - asking_discount_high), 2)
-            updated["conservative_high_cad"] = round(median * (1 - asking_discount_low), 2)
+        if discount_eligible:
+            updated["pricing_basis"] = "asking_adjusted"
+            updated["asking_median_price_cad"] = updated.get("median_price_cad")
+            updated["asking_only_discount_low"] = asking_discount_low
+            updated["asking_only_discount_high"] = asking_discount_high
+            if median is not None:
+                updated["conservative_low_cad"] = round(median * (1 - asking_discount_high), 2)
+                updated["conservative_high_cad"] = round(median * (1 - asking_discount_low), 2)
+        else:
+            updated["pricing_basis"] = "active"
         return updated
 
     if sold_count > 0 and asking_count > 0:

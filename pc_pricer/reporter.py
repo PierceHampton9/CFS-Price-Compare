@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pc_pricer.source_labels import format_source_basis, format_source_name
@@ -17,7 +18,7 @@ FLAG_LABELS = {
 }
 
 LIMITATION_LABELS = {
-    "asking_prices_only": "Asking prices only; conservative estimate is discounted from active listings",
+    "asking_prices_only": "eBay active listing estimate; conservative range discounts the eBay median",
 }
 
 WARNING_LABELS = {
@@ -33,13 +34,18 @@ FILTER_LABELS = {
     "ram_mismatch": "RAM mismatch",
     "storage_mismatch": "storage mismatch",
     "unavailable_listing": "unavailable listing",
+    "user_removed_comparable": "manually removed comparable",
     "unverified_retailer_listing": "unverified retailer listing",
     "variant_mismatch": "variant/screen-size mismatch",
     "unknown_condition": "unknown condition",
 }
 
 
-def format_price_report(result: dict[str, Any]) -> str:
+def format_price_report(
+    result: dict[str, Any],
+    advanced: bool = True,
+    include_all_comparables: bool = False,
+) -> str:
     """Format an aggregation result for human review."""
     lines = [
         "Price estimate",
@@ -48,11 +54,13 @@ def format_price_report(result: dict[str, Any]) -> str:
 
     if not result.get("count"):
         lines.extend(_spec_lines(result.get("specs")))
-        lines.extend(_query_lines(result.get("queries")))
-        lines.extend(_search_count_lines(result))
+        if advanced:
+            lines.extend(_query_lines(result.get("queries")))
+            lines.extend(_search_count_lines(result))
         lines.extend(_filter_lines(result))
-        lines.extend(_source_status_lines(result))
-        lines.extend(_source_quote_lines(result))
+        if advanced:
+            lines.extend(_source_status_lines(result))
+            lines.extend(_source_quote_lines(result))
         lines.append("No usable comparable listings found.")
         lines.extend(_confidence_lines(result))
         lines.extend(_limitation_lines(result))
@@ -60,18 +68,20 @@ def format_price_report(result: dict[str, Any]) -> str:
         return "\n".join(lines)
 
     lines.extend(_price_lines(result))
-    lines.extend(_search_count_lines(result))
-    lines.extend(_pricing_basis_lines(result))
-    lines.extend(_source_status_lines(result))
-    lines.extend(_source_quote_lines(result))
-    lines.extend(_source_diagnostic_lines(result))
+    if advanced:
+        lines.extend(_search_count_lines(result))
+        lines.extend(_pricing_basis_lines(result))
+        lines.extend(_source_status_lines(result))
+        lines.extend(_source_quote_lines(result))
+        lines.extend(_source_diagnostic_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
-    lines.extend(_query_lines(result.get("queries")))
+    if advanced:
+        lines.extend(_query_lines(result.get("queries")))
     lines.extend(_filter_lines(result))
     lines.extend(_confidence_lines(result))
     lines.extend(_limitation_lines(result))
     lines.extend(_warning_lines(result))
-    lines.extend(_supporting_listing_lines(result.get("supporting_listings") or []))
+    lines.extend(_supporting_listing_lines(_report_listings(result, include_all_comparables)))
     return "\n".join(lines)
 
 
@@ -81,7 +91,7 @@ def _price_lines(result: dict[str, Any]) -> list[str]:
         lines.append(
             f"Conservative est.: {_format_money(result.get('conservative_low_cad'))} - {_format_money(result.get('conservative_high_cad'))}"
         )
-        lines.append(f"Asking median:     {_format_money(result.get('asking_median_price_cad'))}")
+        lines.append(f"eBay median:       {_format_money(result.get('asking_median_price_cad'))}")
     else:
         lines.append(f"Median price:      {_format_money(result.get('median_price_cad'))}")
 
@@ -89,8 +99,6 @@ def _price_lines(result: dict[str, Any]) -> list[str]:
     lines.append(f"{range_label}:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}")
     lines.append(f"Comparables:       {result.get('count')}")
     lines.append(f"Query tier:        {_format_query_tier(result.get('query_tier'))}")
-    if result.get("pricing_basis") != "asking_adjusted":
-        lines.append(f"Sold / asking:     {result.get('sold_count', 0)} sold, {result.get('asking_count', 0)} asking")
     lines.append(f"Sources:           {_format_source_counts(result.get('source_counts'))}")
     return lines
 
@@ -151,7 +159,7 @@ def _spec_parts(specs: dict[str, Any]) -> list[Any]:
             _display_model(specs),
             specs.get("variant"),
             specs.get("screen_size"),
-            specs.get("cpu_short") or specs.get("cpu"),
+            _cpu_label(specs.get("cpu_short") or specs.get("cpu")),
             _ram_label(specs.get("ram_gb")),
         ]
     return []
@@ -215,11 +223,13 @@ def _pricing_basis_lines(result: dict[str, Any]) -> list[str]:
 def _format_pricing_basis(result: dict[str, Any]) -> str:
     value = result.get("pricing_basis")
     if value == "sold":
-        return "sold listings"
+        return "comparable listings"
     if value == "asking_adjusted":
-        return f"active asking listings, discounted {_discount_percent_range(result)}"
+        return f"eBay active listings, discounted {_discount_percent_range(result)}"
+    if value == "active":
+        return "active listings"
     if value == "mixed":
-        return "sold and asking listings"
+        return "comparable listings"
     if value == "unknown":
         return "unknown"
     if value == "weighted_sources":
@@ -387,14 +397,25 @@ def _supporting_listing_lines(listings: list[dict[str, Any]]) -> list[str]:
         lines.append(f"{index}. {listing.get('title') or 'Untitled listing'}")
         lines.append(f"   Price:     {format_listing_price(listing)}")
         lines.append(f"   Source:    {format_source_name(listing.get('source'))}")
-        lines.append(f"   Status:    {_format_listing_status(listing)}")
         lines.append(f"   Condition: {format_condition(listing)}")
         lines.append(f"   Tier:      {_format_query_tier(listing.get('query_tier'))}")
         if listing.get("query_text"):
             lines.append(f"   Query:     {listing.get('query_text')}")
-        lines.append(f"   Location:  {listing.get('location') or 'Unknown'}")
+        lines.append(f"   Location:  {format_location(listing.get('location'))}")
         lines.append(f"   URL:       {listing.get('url') or 'Unknown'}")
     return lines
+
+
+def _report_listings(result: dict[str, Any], include_all_comparables: bool) -> list[dict[str, Any]]:
+    if include_all_comparables and isinstance(result.get("all_comparable_listings"), list):
+        listings = result.get("all_comparable_listings") or []
+    else:
+        listings = result.get("supporting_listings") or []
+    return [
+        listing
+        for listing in listings
+        if isinstance(listing, dict) and listing.get("excluded_by_user") is not True
+    ]
 
 
 def format_listing_price(listing: dict[str, Any]) -> str:
@@ -409,16 +430,22 @@ def format_listing_price(listing: dict[str, Any]) -> str:
     return f"{total} total ({item_price} item + {shipping} shipping)"
 
 
-def _format_listing_status(listing: dict[str, Any]) -> str:
-    return "sold" if listing.get("is_sold") is True else "asking"
-
-
 def format_condition(listing: dict[str, Any]) -> str:
     raw = listing.get("condition_raw") or "Unknown"
     normalized = listing.get("condition_norm")
     if not normalized:
         return raw
     return f"{normalized} ({raw})"
+
+
+def format_location(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "Unknown"
+    parts = [part.strip() for part in text.split(",")]
+    if parts and parts[-1].upper() == "CA":
+        parts[-1] = "Canada"
+    return ", ".join(part for part in parts if part)
 
 
 def _format_source_counts(source_counts: Any) -> str:
@@ -439,6 +466,15 @@ def _ram_label(ram_gb: Any) -> str | None:
     if not ram_gb:
         return None
     return f"{ram_gb}GB"
+
+
+def _cpu_label(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = re.sub(r"\bI([3579])(?=(?:[-\s]?\d|\b))", r"i\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRyzen\b", "Ryzen", text, flags=re.IGNORECASE)
+    return text
 
 
 def _format_money(value: Any) -> str:

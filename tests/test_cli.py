@@ -76,6 +76,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Lenovo ThinkPad X13 Yoga", output)
         self.assertIn("$325.00 CAD total", output)
         self.assertIn("Condition: good (Used)", output)
+        self.assertIn("Location:  Calgary, AB, Canada", output)
         self.assertIn("https://www.ebay.ca/itm/example", output)
 
     def test_ebay_search_command_does_not_call_unknown_shipping_total(self):
@@ -201,7 +202,7 @@ class CliTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("Price estimate", output)
         self.assertIn("Median price:      $250.00 CAD", output)
-        self.assertIn("Sold / asking:     1 sold, 1 asking", output)
+        self.assertNotIn("Sold / asking:", output)
         self.assertIn("Supporting listings", output)
         self.assertIn("Queries used:", output)
         self.assertIn("  ThinkPad X13", output)
@@ -248,7 +249,7 @@ sources:
         self.assertEqual(instances[0].max_results, 2)
         output = stdout.getvalue()
         self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
-        self.assertIn("Asking median:     $500.00 CAD", output)
+        self.assertIn("eBay median:       $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
 
@@ -331,7 +332,7 @@ sources:
 
         output = stdout.getvalue()
         self.assertIn("Conservative est.: $160.00 CAD - $180.00 CAD", output)
-        self.assertIn("Pricing basis:    active asking listings, discounted 10-20%", output)
+        self.assertIn("Pricing basis:    eBay active listings, discounted 10-20%", output)
 
     def test_price_query_command_filters_condition_and_parts_by_default(self):
         class FakeEbaySource:
@@ -409,7 +410,7 @@ sources:
 
         output = stdout.getvalue()
         self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
-        self.assertIn("Asking median:     $500.00 CAD", output)
+        self.assertIn("eBay median:       $500.00 CAD", output)
         self.assertIn("Target condition:  any", output)
         self.assertIn("Filtered out:      0", output)
 
@@ -471,8 +472,8 @@ sources:
         self.assertIn("Queries used:", output)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", output)
         self.assertIn("Conservative est.: $285.00 CAD - $300.00 CAD", output)
-        self.assertIn("Asking median:     $300.00 CAD", output)
-        self.assertIn("Asking prices only", output)
+        self.assertIn("eBay median:       $300.00 CAD", output)
+        self.assertIn("eBay active listing estimate", output)
 
     def test_price_manual_command_prices_phone_specs(self):
         class FakeEbaySource:

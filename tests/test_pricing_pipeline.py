@@ -1,6 +1,6 @@
 import unittest
 
-from pc_pricer.pricing_pipeline import price_specs
+from pc_pricer.pricing_pipeline import price_specs, reprice_existing_result
 
 
 class PricingPipelineTests(unittest.TestCase):
@@ -152,7 +152,7 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 400)
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
-    def test_verified_refurb_io_quote_excludes_ebay_from_pricing(self):
+    def test_verified_refurb_io_quote_weights_with_ebay_pricing(self):
         ebay = FakeSource(
             {
                 "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
@@ -172,16 +172,16 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(_laptop_specs(), [ebay, refurb], limit_per_query=5)
 
-        self.assertEqual(result["median_price_cad"], 500.00)
-        self.assertEqual(result["iqr_low_cad"], 500.00)
+        self.assertEqual(result["median_price_cad"], 430.83)
+        self.assertEqual(result["iqr_low_cad"], 292.50)
         self.assertEqual(result["iqr_high_cad"], 500.00)
         self.assertEqual(result["source_basis"], "weighted_source_quotes")
         self.assertEqual(result["pricing_basis"], "weighted_sources")
-        self.assertEqual(result["source_counts"], {"refurb_io": 1})
-        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
-        self.assertNotIn("source_disagreement", result["confidence_flags"])
-        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["refurb_io"])
-        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2])
+        self.assertEqual(result["source_counts"], {"ebay": 1, "refurb_io": 1})
+        self.assertEqual(result["excluded_reasons"], {})
+        self.assertIn("source_disagreement", result["confidence_flags"])
+        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["ebay", "refurb_io"])
+        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [1, 2])
         self.assertEqual(result["supporting_listings"][0]["source"], "refurb_io")
         self.assertEqual(result["source_diagnostics"][0]["source"], "refurb_io")
         self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
@@ -251,7 +251,7 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["pricing_basis"], "weighted_sources")
         self.assertEqual(result["source_counts"], {"refurb_io": 1})
 
-    def test_verified_amazon_renewed_quote_excludes_ebay_from_pricing(self):
+    def test_verified_amazon_renewed_quote_weights_with_ebay_pricing(self):
         ebay = FakeSource(
             {
                 "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
@@ -282,19 +282,19 @@ class PricingPipelineTests(unittest.TestCase):
         amazon_status = next(status for status in result["source_statuses"] if status["source"] == "amazon_renewed")
         self.assertEqual(amazon_status["query_count"], 2)
         self.assertEqual(amazon_status["raw_listing_count"], 1)
-        self.assertEqual(result["median_price_cad"], 600.00)
-        self.assertEqual(result["iqr_low_cad"], 600.00)
+        self.assertEqual(result["median_price_cad"], 497.50)
+        self.assertEqual(result["iqr_low_cad"], 292.50)
         self.assertEqual(result["iqr_high_cad"], 600.00)
         self.assertEqual(result["source_basis"], "weighted_source_quotes")
-        self.assertEqual(result["source_counts"], {"amazon_renewed": 1})
-        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
-        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["amazon_renewed"])
-        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2])
+        self.assertEqual(result["source_counts"], {"ebay": 1, "amazon_renewed": 1})
+        self.assertEqual(result["excluded_reasons"], {})
+        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["ebay", "amazon_renewed"])
+        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [1, 2])
         self.assertEqual(result["supporting_listings"][0]["source"], "amazon_renewed")
         self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
         self.assertIs(result["source_diagnostics"][0]["included_in_pricing"], True)
 
-    def test_amazon_and_refurb_quotes_exclude_ebay_when_verified(self):
+    def test_amazon_and_refurb_quotes_weight_with_ebay_when_verified(self):
         ebay = FakeSource(
             {
                 "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
@@ -323,11 +323,11 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(_laptop_specs(), [ebay, refurb, amazon], limit_per_query=5)
 
-        self.assertEqual(result["median_price_cad"], 600.00)
-        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["refurb_io", "amazon_renewed"])
-        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [2, 2])
-        self.assertEqual(result["source_counts"], {"refurb_io": 1, "amazon_renewed": 1})
-        self.assertEqual(result["excluded_reasons"], {"displaced_by_retailer": 1})
+        self.assertEqual(result["median_price_cad"], 538.50)
+        self.assertEqual([quote["source"] for quote in result["source_quotes"]], ["ebay", "refurb_io", "amazon_renewed"])
+        self.assertEqual([quote["weight"] for quote in result["source_quotes"]], [1, 2, 2])
+        self.assertEqual(result["source_counts"], {"ebay": 1, "refurb_io": 1, "amazon_renewed": 1})
+        self.assertEqual(result["excluded_reasons"], {})
 
     def test_laptop_cpu_suffix_omission_is_not_a_cpu_mismatch(self):
         refurb = FakeSource(
@@ -472,6 +472,28 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["pricing_basis"], "asking_adjusted")
         self.assertEqual(result["conservative_low_cad"], 484.5)
         self.assertEqual(result["conservative_high_cad"], 510.0)
+
+    def test_reprices_existing_result_after_user_removes_comparable(self):
+        source = FakeSource(
+            {
+                "20XW004AUS": [
+                    _listing("Listing 1", 300, "https://www.ebay.ca/itm/1"),
+                    _listing("Listing 2", 500, "https://www.ebay.ca/itm/2"),
+                ],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+        result = price_specs(_laptop_specs(), [source], limit_per_query=5, warn_below_comparables=2)
+        removed_id = result["all_comparable_listings"][1]["comparable_id"]
+
+        repriced = reprice_existing_result(result, {removed_id})
+
+        self.assertEqual(repriced["count"], 1)
+        self.assertEqual(repriced["median_price_cad"], 300.00)
+        self.assertEqual(repriced["excluded_reasons"]["user_removed_comparable"], 1)
+        self.assertIs(repriced["all_comparable_listings"][1]["excluded_by_user"], True)
 
 
 class FakeSource:

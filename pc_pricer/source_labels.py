@@ -12,10 +12,11 @@ SOURCE_LABELS = {
 }
 
 SOURCE_BASIS_LABELS = {
-    "ebay_asking_adjusted": "eBay filtered asking median",
+    "ebay_active": "eBay active listing median",
+    "ebay_asking_adjusted": "eBay active listing conservative estimate",
     "ebay_fallback": "eBay fallback",
-    "ebay_mixed": "eBay sold and asking listings",
-    "ebay_sold": "eBay sold listings",
+    "ebay_mixed": "eBay comparable listings",
+    "ebay_sold": "eBay comparable listings",
     "verified_refurb_io": "verified Refurb.io listings",
     "weighted_source_quotes": "weighted source quotes",
 }

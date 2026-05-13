@@ -34,6 +34,20 @@ class PriceAdjustmentTests(unittest.TestCase):
         self.assertEqual(result["pricing_basis"], "sold")
         self.assertNotIn("conservative_low_cad", result)
 
+    def test_can_leave_active_results_without_conservative_discount(self):
+        result = apply_pricing_basis(
+            {
+                "count": 2,
+                "median_price_cad": 500,
+                "sold_count": 0,
+                "asking_count": 2,
+            },
+            discount_eligible=False,
+        )
+
+        self.assertEqual(result["pricing_basis"], "active")
+        self.assertNotIn("conservative_low_cad", result)
+
     def test_leaves_empty_results_without_basis(self):
         result = apply_pricing_basis({"count": 0, "sold_count": 0, "asking_count": 0})
 
