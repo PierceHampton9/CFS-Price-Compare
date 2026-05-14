@@ -18,6 +18,8 @@ class AggregatorTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 250.00)
         self.assertEqual(result["iqr_low_cad"], 175.00)
         self.assertEqual(result["iqr_high_cad"], 325.00)
+        self.assertEqual(result["price_low_cad"], 100.00)
+        self.assertEqual(result["price_high_cad"], 400.00)
         self.assertEqual(result["count"], 4)
         self.assertEqual(result["sold_count"], 2)
         self.assertEqual(result["asking_count"], 2)

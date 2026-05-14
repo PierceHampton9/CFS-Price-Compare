@@ -573,6 +573,8 @@ def _apply_source_quote_basis(
         updated["median_price_cad"] = _round_money(weighted_price)
         updated["iqr_low_cad"] = _round_money(min(quote_prices))
         updated["iqr_high_cad"] = _round_money(max(quote_prices))
+        updated["price_low_cad"] = _round_money(min(quote_prices))
+        updated["price_high_cad"] = _round_money(max(quote_prices))
         updated["pricing_basis"] = "weighted_sources"
         updated["source_basis"] = "weighted_source_quotes"
         updated.pop("asking_median_price_cad", None)
@@ -592,6 +594,8 @@ def _result_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "median_price_cad",
         "iqr_low_cad",
         "iqr_high_cad",
+        "price_low_cad",
+        "price_high_cad",
         "count",
         "sold_count",
         "asking_count",

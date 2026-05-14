@@ -95,7 +95,7 @@ def _price_lines(result: dict[str, Any]) -> list[str]:
         lines.append(f"Median price:      {_format_money(result.get('median_price_cad'))}")
 
     range_label = "Source quote range" if result.get("pricing_basis") == "weighted_sources" else "Comparable range"
-    lines.append(f"{range_label}:  {_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}")
+    lines.append(f"{range_label}:  {_format_money(_range_low(result))} - {_format_money(_range_high(result))}")
     lines.append(f"Comparables:       {result.get('count')}")
     lines.append(f"Query tier:        {_format_query_tier(result.get('query_tier'))}")
     lines.append(f"Sources:           {_format_source_counts(result.get('source_counts'))}")
@@ -459,6 +459,14 @@ def _format_query_tier(query_tier: Any) -> str:
     if query_tier is None:
         return "unknown"
     return str(query_tier)
+
+
+def _range_low(result: dict[str, Any]) -> Any:
+    return result.get("price_low_cad", result.get("iqr_low_cad"))
+
+
+def _range_high(result: dict[str, Any]) -> Any:
+    return result.get("price_high_cad", result.get("iqr_high_cad"))
 
 
 def _ram_label(ram_gb: Any) -> str | None:
