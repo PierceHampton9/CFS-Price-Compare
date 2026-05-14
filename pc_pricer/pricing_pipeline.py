@@ -483,8 +483,8 @@ def _manual_reprice_metadata(
     metadata["all_comparable_listings"] = all_comparables
     metadata["excluded_comparable_ids"] = sorted(excluded_ids)
     removed_count = sum(1 for listing in all_comparables if listing.get("excluded_by_user") is True)
-    base_excluded_count = _safe_int(result.get("base_excluded_count", result.get("excluded_count")))
-    base_excluded_reasons = result.get("base_excluded_reasons", result.get("excluded_reasons"))
+    base_excluded_count = _safe_int(metadata.get("base_excluded_count", metadata.get("excluded_count")))
+    base_excluded_reasons = metadata.get("base_excluded_reasons", metadata.get("excluded_reasons"))
     metadata["base_excluded_count"] = base_excluded_count
     metadata["base_excluded_reasons"] = dict(base_excluded_reasons) if isinstance(base_excluded_reasons, dict) else {}
     metadata["excluded_count"] = base_excluded_count + removed_count
@@ -582,7 +582,7 @@ def _apply_source_quote_basis(
         updated.pop("conservative_high_cad", None)
 
     ebay_quote = next((quote for quote in source_quotes if quote.get("source") == "ebay"), None)
-    if ebay_quote and _source_prices_disagree(ebay_quote.get("price_cad"), updated["median_price_cad"]):
+    if ebay_quote and _source_prices_disagree(ebay_quote.get("price_cad"), updated.get("median_price_cad")):
         updated["confidence_flags"] = _append_flag(updated.get("confidence_flags"), "source_disagreement")
     return updated
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from copy import deepcopy
 import html
 import os
-import re
 import sys
 from typing import Any
 
@@ -34,6 +33,7 @@ from pc_pricer.reporter import (
     format_price_report,
 )
 from pc_pricer.source_labels import (
+    format_cpu_value as _format_cpu_value,
     format_source_basis as _source_basis_label,
     format_source_name as _source_name_label,
 )
@@ -1376,13 +1376,6 @@ def _display_value(value: Any, key: str) -> str:
     if lowered in special:
         return special[lowered]
     return _sentence_case(text)
-
-
-def _format_cpu_value(text: str) -> str:
-    formatted = _sentence_case(text)
-    formatted = re.sub(r"\bI([3579])(?=(?:[-\s]?\d|\b))", r"i\1", formatted, flags=re.IGNORECASE)
-    formatted = re.sub(r"\bRyzen\b", "Ryzen", formatted, flags=re.IGNORECASE)
-    return formatted
 
 
 def _format_report_condition(listing: dict[str, Any]) -> str:

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from pc_pricer.source_labels import format_source_basis, format_source_name
+from pc_pricer.source_labels import format_cpu_value, format_source_basis, format_source_name
 
 
 FLAG_LABELS = {
@@ -469,12 +468,7 @@ def _ram_label(ram_gb: Any) -> str | None:
 
 
 def _cpu_label(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    text = re.sub(r"\bI([3579])(?=(?:[-\s]?\d|\b))", r"i\1", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bRyzen\b", "Ryzen", text, flags=re.IGNORECASE)
-    return text
+    return format_cpu_value(value) or None
 
 
 def _format_money(value: Any) -> str:

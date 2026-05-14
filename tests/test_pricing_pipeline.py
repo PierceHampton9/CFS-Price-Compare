@@ -495,6 +495,46 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(repriced["excluded_reasons"]["user_removed_comparable"], 1)
         self.assertIs(repriced["all_comparable_listings"][1]["excluded_by_user"], True)
 
+    def test_reprice_preserves_metadata_when_verified_retailer_is_removed(self):
+        ebay = FakeSource(
+            {
+                "20XW004AUS": [_listing("eBay ThinkPad X13 Yoga", 300, "https://www.ebay.ca/itm/1")],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+        refurb = FakeSource(
+            {
+                "20XW004AUS": [_refurb_listing("Lenovo ThinkPad X13 Yoga Laptop i5-1135G7 16GB 256GB", 500)],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="refurb_io",
+        )
+        result = price_specs(_laptop_specs(), [ebay, refurb], limit_per_query=5)
+        removed_id = next(
+            listing["comparable_id"]
+            for listing in result["all_comparable_listings"]
+            if listing["source"] == "refurb_io"
+        )
+
+        repriced = reprice_existing_result(result, {removed_id})
+
+        self.assertEqual(repriced["median_price_cad"], 300.00)
+        self.assertEqual(repriced["source_basis"], "ebay_asking_adjusted")
+        self.assertEqual(repriced["source_counts"], {"ebay": 1})
+        self.assertEqual(repriced["excluded_reasons"]["user_removed_comparable"], 1)
+        self.assertEqual(len(repriced["all_comparable_listings"]), 2)
+        self.assertTrue(
+            next(
+                listing
+                for listing in repriced["all_comparable_listings"]
+                if listing["source"] == "refurb_io"
+            )["excluded_by_user"]
+        )
+        self.assertEqual(repriced["source_diagnostics"][0]["source"], "refurb_io")
+
 
 class FakeSource:
     def __init__(self, results, name="ebay"):
