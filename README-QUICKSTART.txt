@@ -94,10 +94,16 @@ Auto-detection is only for Windows computers. Run this on the computer being ins
 Reading the report (Line-By-Line) ... CLI or print-off only, GUI contains information indicators:
 -------------------------------------------------------------------------------------------------
 
+The GUI opens reports in Standard mode by default. Standard mode shows the estimate, signals, specs,
+filtering, and the most relevant supporting listings. Advanced mode adds search details, source status,
+source diagnostics, and all fetched comparable listings. In Advanced mode, uncheck bad comparables and
+click Reevaluate Report to recalculate without searching online again. Printing uses the mode currently
+selected in the GUI.
+
 The price estimate reads as follows...
 
-Conservative est.: <A range of prices which account for asking prices possibly being inflated compared to sold prices>
-Asking median:     <The value of the median listing price in the extracted listing set>
+Conservative est.: <A range of prices which discounts the eBay active-listing median>
+eBay median:       <The median eBay listing price before the conservative discount>
 Comparable range:  <The range of prices in the extracted listing set>
 Comparables:       <The number of comparable listings extracted>
 Query tier:        <Rank which represents the specificity of the query used to extract comparable listings with 1 as best, 3 as worst>
@@ -119,7 +125,6 @@ The supporting listings read as follows...
 [x]. [Device information such as brand, model, generation, and hardware]
      Price:     <Total price in CAD> (<Total broken down into item and shipping price, both in CAD>)
      Source:    <What source the listing was found from>
-     Status:    <If the listing is sold or asking>
      Condition: <The condition based on our internal grading system> (<Condition based on the sources grading system>)
      Tier:      <The query tier used to extract this listing>
      Query:     <Query details such as spec and model>
@@ -129,12 +134,12 @@ The supporting listings read as follows...
 Sanity-check the report
 -----------------------
 
-- Start with the conservative estimate range when the report is based only on active asking listings.
+- Start with the conservative estimate range when the report is based only on eBay active listings.
 - Check the supporting listings to confirm they are comparable and contain reasonable information.
 - Titles should match the same computer class, generation, CPU range, RAM, storage, and form factor.
 - Ignore the estimate or rerun with better specs if the supporting listings are mostly parts, accessories, wrong models, or wrong form factors.
 - Confidence flags are about estimate strength, such as too few comparables or a wide price range.
-- Pricing limitations explain what the data can and cannot prove, such as asking-only pricing.
+- Pricing limitations explain what the data can and cannot prove, such as eBay-only active listing pricing.
 - Listing warnings point out listing-level concerns, such as unknown shipping, high shipping, or non-Canadian locations.
 - When shipping or location warnings dominate the supporting listings, use the lower end of the conservative estimate or review more listings manually.
 
@@ -145,5 +150,5 @@ Notes
 - The .env file contains credentials in plaintext. Keep the release folder in a trusted place.
 - config.yaml controls pricing defaults and can be edited without rebuilding the executable.
 - eBay and Refurb.io are enabled by default. Amazon Renewed is experimental and disabled by default in config.yaml.
-- eBay pricing uses active asking listings. When no verified retailer source is available, the report shows the eBay asking median plus a conservative estimate discounted 0-5%.
+- eBay pricing uses active listings. When no verified retailer source is available, the report shows the eBay median plus a conservative estimate discounted 0-5%.
 - Verified Refurb.io and Amazon Renewed matches are folded into a weighted source quote estimate.

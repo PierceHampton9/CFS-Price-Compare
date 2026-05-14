@@ -39,7 +39,7 @@ class GuiSourceSettingsTests(unittest.TestCase):
         self.assertIn("amazon_renewed:", text)
         self.assertIn("enabled: true", text)
         self.assertIn("channel: msedge", text)
-        self.assertIn("headless: false", text)
+        self.assertIn("headless: true", text)
 
         self.assertEqual(load_source_settings(CONFIG_PATH)["amazon_renewed"], True)
 

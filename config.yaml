@@ -26,7 +26,7 @@ sources:
     base_url: https://www.amazon.ca
     browser: chromium
     channel: msedge
-    headless: false
+    headless: true
     timeout_ms: 15000
     max_product_pages: 5
   canada_computers:

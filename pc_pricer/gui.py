@@ -21,6 +21,7 @@ from pc_pricer.gui_forms import (
 )
 from pc_pricer.gui_pricing import price_gui_values
 from pc_pricer.gui_source_settings import load_source_settings, save_source_settings
+from pc_pricer.pricing_pipeline import reprice_existing_result
 from pc_pricer.reporter import (
     FILTER_LABELS,
     FLAG_LABELS,
@@ -28,8 +29,11 @@ from pc_pricer.reporter import (
     WARNING_LABELS,
     format_condition,
     format_listing_price,
+    format_location,
+    format_price_report,
 )
 from pc_pricer.source_labels import (
+    format_cpu_value as _format_cpu_value,
     format_source_basis as _source_basis_label,
     format_source_name as _source_name_label,
 )
@@ -103,8 +107,12 @@ class GuiState:
         self.computer_mode: str | None = None
         self.specs: dict[str, Any] = {}
         self.report_result: dict[str, Any] = {}
+        self.base_report_result: dict[str, Any] = {}
         self.report_text: str = ""
         self.report_error: str = ""
+        self.report_mode: str = "standard"
+        self.pending_excluded_comparable_ids: set[str] = set()
+        self.applied_excluded_comparable_ids: set[str] = set()
         self.source_settings: dict[str, bool] = load_source_settings()
 
 
@@ -222,9 +230,13 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.pricing_thread.start()
 
     def pricing_succeeded(self, result: dict[str, Any], report: str) -> None:
+        self.state.base_report_result = result
         self.state.report_result = result
         self.state.report_text = report
         self.state.report_error = ""
+        self.state.report_mode = "standard"
+        self.state.pending_excluded_comparable_ids = set()
+        self.state.applied_excluded_comparable_ids = set()
         self.show_report()
 
     def pricing_failed(self, message: str) -> None:
@@ -525,7 +537,7 @@ class SpecsPage(Page):
             layout.addWidget(checkbox)
 
         note = _selectable_label(
-            "Amazon Renewed uses browser automation through Microsoft Edge and may open a browser window while pricing."
+            "Amazon Renewed uses browser automation through Microsoft Edge in the background when enabled."
         )
         note.setObjectName("statusText")
         note.setWordWrap(True)
@@ -567,6 +579,21 @@ class ReportPage(Page):
         self.content_layout = QVBoxLayout(self.content)
         self.content_layout.setSpacing(14)
         self.scroll.setWidget(self.content)
+        mode_row = QHBoxLayout()
+        self.mode_group = QButtonGroup(self)
+        self.standard_radio = QRadioButton("Standard")
+        self.standard_radio.setProperty("report_mode", "standard")
+        self.advanced_radio = QRadioButton("Advanced")
+        self.advanced_radio.setProperty("report_mode", "advanced")
+        self.mode_group.addButton(self.standard_radio)
+        self.mode_group.addButton(self.advanced_radio)
+        self.standard_radio.setChecked(True)
+        self.standard_radio.toggled.connect(self._mode_changed)
+        self.advanced_radio.toggled.connect(self._mode_changed)
+        mode_row.addWidget(self.standard_radio)
+        mode_row.addWidget(self.advanced_radio)
+        mode_row.addStretch()
+        self.root.addLayout(mode_row)
         self.root.addWidget(self.scroll, 1)
         buttons = QHBoxLayout()
         back = QPushButton("Back to Specs")
@@ -587,6 +614,7 @@ class ReportPage(Page):
     def refresh(self) -> None:
         clear_layout(self.content_layout)
         self.print_button.setEnabled(self._can_print())
+        self._sync_mode_controls()
         if self.main_window.state.report_error:
             self._add_message("Pricing failed", self.main_window.state.report_error, "errorPanel")
             return
@@ -596,15 +624,43 @@ class ReportPage(Page):
             self._add_message("No report generated", self.main_window.state.report_text or "Try pricing the device again.", "statusPanel")
             return
 
-        self._add_price_summary(result)
+        advanced = self.main_window.state.report_mode == "advanced"
+        self._add_price_summary(result, advanced=advanced)
         self._add_signal_section(result)
         self._add_specs_section(result.get("specs"))
-        self._add_search_section(result)
-        self._add_source_statuses(result.get("source_statuses"))
-        self._add_source_diagnostics(result.get("source_diagnostics"))
+        if advanced:
+            self._add_search_section(result)
+            self._add_source_statuses(result.get("source_statuses"))
+            self._add_source_diagnostics(result.get("source_diagnostics"))
         self._add_filter_section(result)
-        self._add_supporting_listings(result.get("supporting_listings") or [])
+        if advanced:
+            self._add_advanced_comparable_controls(result)
+            self._add_supporting_listings(
+                result.get("all_comparable_listings") or result.get("supporting_listings") or [],
+                interactive=True,
+            )
+        else:
+            self._add_supporting_listings(result.get("supporting_listings") or [])
         self.content_layout.addStretch()
+
+    def _mode_changed(self, *_args: Any) -> None:
+        checked = self.mode_group.checkedButton()
+        if checked is None:
+            return
+        mode = str(checked.property("report_mode") or "standard")
+        if self.main_window.state.report_mode == mode:
+            return
+        self.main_window.state.report_mode = mode
+        self.refresh()
+
+    def _sync_mode_controls(self) -> None:
+        mode = self.main_window.state.report_mode
+        self.standard_radio.blockSignals(True)
+        self.advanced_radio.blockSignals(True)
+        self.standard_radio.setChecked(mode != "advanced")
+        self.advanced_radio.setChecked(mode == "advanced")
+        self.standard_radio.blockSignals(False)
+        self.advanced_radio.blockSignals(False)
 
     def print_report(self) -> None:
         if not self._can_print():
@@ -616,17 +672,25 @@ class ReportPage(Page):
             return
 
         document = QTextDocument()
-        document.setHtml(_printable_report_html(self.main_window.state.report_text))
+        document.setHtml(_printable_report_html(self._printable_report_text()))
         document.print_(printer)
 
     def _can_print(self) -> bool:
         return bool(
-            self.main_window.state.report_text
-            and self.main_window.state.report_result
+            self.main_window.state.report_result
             and not self.main_window.state.report_error
         )
 
-    def _add_price_summary(self, result: dict[str, Any]) -> None:
+    def _printable_report_text(self) -> str:
+        result = self.main_window.state.report_result
+        advanced = self.main_window.state.report_mode == "advanced"
+        return format_price_report(
+            result,
+            advanced=advanced,
+            include_all_comparables=advanced,
+        )
+
+    def _add_price_summary(self, result: dict[str, Any], advanced: bool) -> None:
         count = _safe_int(result.get("count"))
         if count <= 0:
             self._add_message(
@@ -641,7 +705,7 @@ class ReportPage(Page):
 
         if result.get("pricing_basis") == "asking_adjusted":
             estimate = f"{_format_money(result.get('conservative_low_cad'))} - {_format_money(result.get('conservative_high_cad'))}"
-            note = f"Asking median: {_format_money(result.get('asking_median_price_cad'))}"
+            note = f"eBay median: {_format_money(result.get('asking_median_price_cad'))}"
             title = "Conservative Estimate"
         elif result.get("pricing_basis") == "weighted_sources":
             estimate = _format_money(result.get("median_price_cad"))
@@ -685,7 +749,9 @@ class ReportPage(Page):
         grid.addWidget(
             _metric_card(
                 "Sources",
-                _format_source_quotes(result.get("source_quotes")) or _format_source_counts(result.get("source_counts")),
+                (_format_source_quotes(result.get("source_quotes")) or _format_source_counts(result.get("source_counts")))
+                if advanced
+                else _format_source_counts(result.get("source_counts")),
                 _format_source_counts(result.get("source_counts")),
                 "Shows source-level quote prices when available, plus the usable listing counts by source.",
             ),
@@ -711,7 +777,7 @@ class ReportPage(Page):
             (
                 "Pricing Limitations",
                 ", ".join(limitations) if limitations else "None Triggered",
-                "Limits caused by the available pricing data, such as active asking listings only.",
+                "Limits caused by the available pricing data, such as eBay-only active listing estimates.",
             )
         )
         rows.append(
@@ -781,14 +847,6 @@ class ReportPage(Page):
         source_quotes = _format_source_quotes(result.get("source_quotes"))
         if source_quotes:
             rows.append(("Source Quotes", source_quotes, "Per-source quote medians and weights used by weighted source pricing."))
-        if result.get("pricing_basis") != "asking_adjusted" and result.get("sold_count") is not None:
-            rows.append(
-                (
-                    "Sold / Asking",
-                    f"{result.get('sold_count', 0)} Sold, {result.get('asking_count', 0)} Asking",
-                    "How many sold and active asking listings were used.",
-                )
-            )
         self._add_key_value_section("Search Summary", rows)
 
         queries = result.get("queries")
@@ -894,7 +952,54 @@ class ReportPage(Page):
             rows.append(("Filtered Out", "0", "Listings removed before pricing because they were not useful comparables."))
         self._add_key_value_section("Filtering", rows)
 
-    def _add_supporting_listings(self, listings: list[dict[str, Any]]) -> None:
+    def _add_advanced_comparable_controls(self, result: dict[str, Any]) -> None:
+        comparables = result.get("all_comparable_listings") or result.get("supporting_listings") or []
+        if not comparables:
+            return
+        removed_count = len(self.main_window.state.pending_excluded_comparable_ids)
+        applied_count = len(self.main_window.state.applied_excluded_comparable_ids)
+        rows = [
+            (
+                "Manual Review",
+                f"{removed_count} marked for removal, {applied_count} currently excluded",
+                "Toggle comparable listings below, then reevaluate using the already fetched results.",
+            )
+        ]
+        self._add_key_value_section("Comparable Review", rows)
+        row = QHBoxLayout()
+        reevaluate = QPushButton("Reevaluate Report")
+        reevaluate.clicked.connect(self._reevaluate_report)
+        reset = QPushButton("Use All Comparables")
+        reset.clicked.connect(self._use_all_comparables)
+        row.addStretch()
+        row.addWidget(reset)
+        row.addWidget(reevaluate)
+        self.content_layout.addLayout(row)
+
+    def _reevaluate_report(self, *_args: Any) -> None:
+        base_result = self.main_window.state.base_report_result or self.main_window.state.report_result
+        excluded_ids = set(self.main_window.state.pending_excluded_comparable_ids)
+        self.main_window.state.report_result = reprice_existing_result(base_result, excluded_ids)
+        self.main_window.state.applied_excluded_comparable_ids = excluded_ids
+        self.main_window.state.report_text = self._printable_report_text()
+        self.refresh()
+
+    def _use_all_comparables(self, *_args: Any) -> None:
+        self.main_window.state.pending_excluded_comparable_ids = set()
+        self._reevaluate_report()
+
+    def _set_comparable_pending(self, comparable_id: str, included: bool) -> None:
+        if not comparable_id:
+            return
+        pending = set(self.main_window.state.pending_excluded_comparable_ids)
+        if included:
+            pending.discard(comparable_id)
+        else:
+            pending.add(comparable_id)
+        self.main_window.state.pending_excluded_comparable_ids = pending
+        self.refresh()
+
+    def _add_supporting_listings(self, listings: list[dict[str, Any]], interactive: bool = False) -> None:
         if not listings:
             self._add_message(
                 "Supporting listings",
@@ -903,13 +1008,30 @@ class ReportPage(Page):
             )
             return
 
-        self.content_layout.addWidget(_section_title("Supporting Listings"))
+        self.content_layout.addWidget(_section_title("Comparable Listings" if interactive else "Supporting Listings"))
         for index, listing in enumerate(listings, start=1):
+            comparable_id = _comparable_id(listing)
+            pending_removed = comparable_id in self.main_window.state.pending_excluded_comparable_ids
+            applied_removed = comparable_id in self.main_window.state.applied_excluded_comparable_ids or listing.get("excluded_by_user") is True
             card = QFrame()
-            card.setObjectName("listingCard")
+            card.setObjectName("listingCardRemoved" if pending_removed else "listingCard")
             card.setFrameShape(QFrame.StyledPanel)
             layout = QVBoxLayout(card)
             layout.setSpacing(6)
+
+            if interactive:
+                toggle = QCheckBox("Use in report")
+                toggle.setChecked(not pending_removed)
+                toggle.setToolTip("Unchecked listings are excluded after you reevaluate the report.")
+                toggle.toggled.connect(
+                    lambda checked, listing_id=comparable_id: self._set_comparable_pending(listing_id, checked)
+                )
+                layout.addWidget(toggle)
+                if pending_removed:
+                    status = "Excluded from current report" if applied_removed else "Marked for removal"
+                    label = _selectable_label(status)
+                    label.setObjectName("statusText")
+                    layout.addWidget(label)
 
             listing_title = f"{index}. {listing.get('title') or 'Untitled listing'}"
             url = _safe_link_url(listing.get("url"))
@@ -927,11 +1049,10 @@ class ReportPage(Page):
             layout.addLayout(_detail_row("Price", format_listing_price(listing), "Item price, shipping, and total when shipping is known."))
             layout.addLayout(_detail_row("Source", _format_source_name(listing.get("source")), "The pricing source that returned this listing."))
             layout.addLayout(_detail_row("Condition", _format_report_condition(listing), "The normalized condition used for matching, with the raw source condition in parentheses."))
-            layout.addLayout(_detail_row("Status", "Sold" if listing.get("is_sold") else "Asking", "Whether this comparable is a sold or active asking listing."))
             layout.addLayout(_detail_row("Tier", _format_query_tier(listing.get("query_tier")), "The search tier that found this listing. Lower is more specific."))
             if listing.get("query_text"):
                 layout.addLayout(_detail_row("Query", str(listing.get("query_text")), "The exact search query that found this listing."))
-            layout.addLayout(_detail_row("Location", _display_value(listing.get("location") or "Unknown", "location"), "Location reported by the source."))
+            layout.addLayout(_detail_row("Location", format_location(listing.get("location")), "Location reported by the source."))
 
             if url:
                 link = QLabel(f'<a href="{html.escape(url, quote=True)}">Open in browser</a>')
@@ -1057,11 +1178,13 @@ def _labels(values: Any, mapping: dict[str, str]) -> list[str]:
 def _format_pricing_basis(result: dict[str, Any]) -> str:
     basis = result.get("pricing_basis")
     if basis == "sold":
-        return "Sold Listings"
+        return "Comparable Listings"
     if basis == "asking_adjusted":
-        return f"Active Asking Listings, Discounted {_discount_percent_range(result)}"
+        return f"eBay Active Listings, Discounted {_discount_percent_range(result)}"
+    if basis == "active":
+        return "Active Listings"
     if basis == "mixed":
-        return "Sold and Asking Listings"
+        return "Comparable Listings"
     if basis == "unknown":
         return "Unknown"
     if basis == "weighted_sources":
@@ -1128,6 +1251,22 @@ def _safe_link_url(value: Any) -> str:
     if url.lower().startswith(("http://", "https://")):
         return url
     return ""
+
+
+def _comparable_id(listing: dict[str, Any]) -> str:
+    value = str(listing.get("comparable_id") or "").strip()
+    if value:
+        return value
+    source = str(listing.get("source") or "unknown").strip().lower()
+    item_id = str(listing.get("item_id") or "").strip().lower()
+    if item_id:
+        return f"source_item:{source}|{item_id}"
+    url = str(listing.get("url") or "").strip().lower()
+    if url:
+        return f"url:{url}"
+    title = str(listing.get("title") or "").strip().lower()
+    price = str(listing.get("total_price_cad") or "").strip()
+    return f"title_price:{title}|{price}"
 
 
 def _printable_report_html(text: str) -> str:
@@ -1198,6 +1337,8 @@ def _display_value(value: Any, key: str) -> str:
     text = str(value).strip()
     if not text:
         return ""
+    if key in {"cpu", "cpu_short"}:
+        return _format_cpu_value(text)
 
     special = {
         "aio": "All-In-One",
@@ -1320,7 +1461,6 @@ def _help_text(label: str) -> str:
         "Refresh Rate": "Monitor refresh rate used for matching.",
         "Resolution": "Monitor resolution used for matching.",
         "Screen Size": "Screen size used to avoid wrong size variants.",
-        "Status": "Whether this comparable is a sold or active asking listing.",
         "Source": "The pricing source that returned the listing or quote.",
         "Storage": "Computer storage size and drive type used for matching.",
         "Target Condition": "Listings outside this condition target are filtered out unless condition is set to Any.",
@@ -1467,7 +1607,7 @@ QLineEdit, QComboBox {
 QPushButton {
     padding: 7px 14px;
 }
-#sectionPanel, #metricCard, #listingCard, #statusPanel, #warningPanel, #errorPanel {
+#sectionPanel, #metricCard, #listingCard, #listingCardRemoved, #statusPanel, #warningPanel, #errorPanel {
     border: 1px solid #d1d5db;
     border-radius: 6px;
     background: #ffffff;
@@ -1479,6 +1619,11 @@ QPushButton {
 #errorPanel {
     border-color: #dc2626;
     background: #fef2f2;
+}
+#listingCardRemoved {
+    border-color: #9ca3af;
+    background: #f3f4f6;
+    color: #6b7280;
 }
 #sectionTitle {
     font-size: 13pt;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -12,10 +13,11 @@ SOURCE_LABELS = {
 }
 
 SOURCE_BASIS_LABELS = {
-    "ebay_asking_adjusted": "eBay filtered asking median",
+    "ebay_active": "eBay active listing median",
+    "ebay_asking_adjusted": "eBay active listing conservative estimate",
     "ebay_fallback": "eBay fallback",
-    "ebay_mixed": "eBay sold and asking listings",
-    "ebay_sold": "eBay sold listings",
+    "ebay_mixed": "eBay comparable listings",
+    "ebay_sold": "eBay comparable listings",
     "verified_refurb_io": "verified Refurb.io listings",
     "weighted_source_quotes": "weighted source quotes",
 }
@@ -33,3 +35,15 @@ def format_source_basis(value: Any) -> str:
         return ""
     key = str(value).strip()
     return SOURCE_BASIS_LABELS.get(key, key)
+
+
+def format_cpu_value(value: Any) -> str:
+    """Return a CPU value with conventional product-name casing."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\bI([3579])(?=(?:[-\s]?\d|\b))", r"i\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRyzen\b", "Ryzen", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bIntel\b", "Intel", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bCore\b", "Core", text, flags=re.IGNORECASE)
+    return text

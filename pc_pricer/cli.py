@@ -16,7 +16,7 @@ from pc_pricer.normalizer import normalize_listings
 from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.pricing_pipeline import price_specs
 from pc_pricer.quality import add_listing_quality_flags
-from pc_pricer.reporter import format_condition, format_listing_price, format_price_report
+from pc_pricer.reporter import format_condition, format_listing_price, format_location, format_price_report
 from pc_pricer.source_status import merge_config_source_statuses
 from pc_pricer.setup_credentials import run_setup
 from pc_pricer.spec_builder import (
@@ -321,7 +321,7 @@ def print_ebay_listings(query: str, listings: list[dict]) -> None:
         print(f"{index}. {listing.get('title') or 'Untitled listing'}")
         print(f"   Price:     {format_listing_price(listing)}")
         print(f"   Condition: {format_condition(listing)}")
-        print(f"   Location:  {listing.get('location') or 'Unknown'}")
+        print(f"   Location:  {format_location(listing.get('location'))}")
         print(f"   URL:       {listing.get('url') or 'Unknown'}")
 
 

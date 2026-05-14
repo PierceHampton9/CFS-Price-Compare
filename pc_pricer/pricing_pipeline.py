@@ -67,6 +67,7 @@ def price_specs(
         result,
         asking_discount_low=asking_discount_low,
         asking_discount_high=asking_discount_high,
+        discount_eligible=_is_ebay_only(pricing_listings),
     )
     result.update(
         {
@@ -79,6 +80,18 @@ def price_specs(
             "excluded_reasons": filtered["excluded_reasons"],
             "source_diagnostics": source_diagnostics,
             "source_statuses": source_statuses,
+            "all_comparable_listings": _public_comparable_listings(pricing_listings),
+            "base_excluded_count": filtered["excluded_count"],
+            "base_excluded_reasons": filtered["excluded_reasons"],
+            "reprice_options": _reprice_options(
+                warn_below_comparables=warn_below_comparables,
+                wide_iqr_ratio=wide_iqr_ratio,
+                support_limit=support_limit,
+                high_shipping_cad=high_shipping_cad,
+                high_shipping_ratio=high_shipping_ratio,
+                asking_discount_low=asking_discount_low,
+                asking_discount_high=asking_discount_high,
+            ),
         }
     )
     result = _apply_source_quote_basis(
@@ -104,6 +117,55 @@ def price_specs(
         result["confidence_flags"] = _append_flag(result.get("confidence_flags"), "no_queries")
 
     return result
+
+
+def reprice_existing_result(
+    result: dict[str, Any],
+    excluded_comparable_ids: set[str] | list[str] | tuple[str, ...],
+) -> dict[str, Any]:
+    """Recalculate a result from already fetched comparable listings."""
+    excluded_ids = {str(value) for value in excluded_comparable_ids if value}
+    all_listings = _result_comparable_listings(result)
+    pricing_listings = [
+        dict(listing)
+        for listing in all_listings
+        if _comparable_id(listing) not in excluded_ids
+    ]
+    options = _result_reprice_options(result)
+
+    updated = aggregate_listings(
+        pricing_listings,
+        warn_below_comparables=options["warn_below_comparables"],
+        wide_iqr_ratio=options["wide_iqr_ratio"],
+        support_limit=options["support_limit"],
+    )
+    updated = apply_pricing_basis(
+        updated,
+        asking_discount_low=options["asking_discount_low"],
+        asking_discount_high=options["asking_discount_high"],
+        discount_eligible=_is_ebay_only(pricing_listings),
+    )
+    updated.update(_manual_reprice_metadata(result, all_listings, excluded_ids))
+    updated = _apply_source_quote_basis(
+        updated,
+        pricing_listings,
+        warn_below_comparables=options["warn_below_comparables"],
+        wide_iqr_ratio=options["wide_iqr_ratio"],
+        support_limit=options["support_limit"],
+        asking_discount_low=options["asking_discount_low"],
+        asking_discount_high=options["asking_discount_high"],
+    )
+    if updated.get("source_errors"):
+        updated["confidence_flags"] = _append_flag(updated.get("confidence_flags"), "source_unavailable")
+    updated = add_listing_quality_flags(
+        updated,
+        pricing_listings,
+        high_shipping_cad=options["high_shipping_cad"],
+        high_shipping_ratio=options["high_shipping_ratio"],
+    )
+    if not updated.get("queries"):
+        updated["confidence_flags"] = _append_flag(updated.get("confidence_flags"), "no_queries")
+    return updated
 
 
 def _source_list(source: ListingSource | Sequence[ListingSource]) -> list[ListingSource]:
@@ -362,15 +424,7 @@ def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, An
             continue
         verified_or_nonretail.append(listing)
 
-    hard_filtered = verified_or_nonretail
-    verified_retail = [listing for listing in hard_filtered if _is_verified_retail_listing(listing)]
-    if not verified_retail:
-        return hard_filtered, excluded_reasons
-
-    unverified_count = len(hard_filtered) - len(verified_retail)
-    if unverified_count:
-        excluded_reasons["displaced_by_retailer"] = excluded_reasons.get("displaced_by_retailer", 0) + unverified_count
-    return verified_retail, excluded_reasons
+    return verified_or_nonretail, excluded_reasons
 
 
 def _mark_included_in_pricing(all_listings: list[dict[str, Any]], pricing_listings: list[dict[str, Any]]) -> None:
@@ -388,6 +442,58 @@ def _listing_identity(listing: dict[str, Any]) -> str:
     return f"{key_type}:{key_value}"
 
 
+def _public_comparable_listings(listings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    comparables = []
+    for listing in listings:
+        copy = dict(listing)
+        copy.pop("_included_in_pricing", None)
+        copy["comparable_id"] = _listing_identity(listing)
+        comparables.append(copy)
+    return comparables
+
+
+def _result_comparable_listings(result: dict[str, Any]) -> list[dict[str, Any]]:
+    listings = result.get("all_comparable_listings")
+    if not isinstance(listings, list):
+        listings = result.get("supporting_listings") or []
+    return [dict(listing) for listing in listings if isinstance(listing, dict)]
+
+
+def _comparable_id(listing: dict[str, Any]) -> str:
+    value = str(listing.get("comparable_id") or "").strip()
+    if value:
+        return value
+    return _listing_identity(listing)
+
+
+def _manual_reprice_metadata(
+    result: dict[str, Any],
+    all_listings: list[dict[str, Any]],
+    excluded_ids: set[str],
+) -> dict[str, Any]:
+    metadata = _result_metadata(result)
+    all_comparables = []
+    for listing in all_listings:
+        copy = dict(listing)
+        comparable_id = _comparable_id(copy)
+        copy["comparable_id"] = comparable_id
+        copy["excluded_by_user"] = comparable_id in excluded_ids
+        all_comparables.append(copy)
+
+    metadata["all_comparable_listings"] = all_comparables
+    metadata["excluded_comparable_ids"] = sorted(excluded_ids)
+    removed_count = sum(1 for listing in all_comparables if listing.get("excluded_by_user") is True)
+    base_excluded_count = _safe_int(metadata.get("base_excluded_count", metadata.get("excluded_count")))
+    base_excluded_reasons = metadata.get("base_excluded_reasons", metadata.get("excluded_reasons"))
+    metadata["base_excluded_count"] = base_excluded_count
+    metadata["base_excluded_reasons"] = dict(base_excluded_reasons) if isinstance(base_excluded_reasons, dict) else {}
+    metadata["excluded_count"] = base_excluded_count + removed_count
+    metadata["excluded_reasons"] = dict(metadata["base_excluded_reasons"])
+    if removed_count:
+        metadata["excluded_reasons"]["user_removed_comparable"] = removed_count
+    return metadata
+
+
 def _source_match_hard_exclusion_reason(listing: dict[str, Any]) -> str | None:
     source = _source_key(listing)
     if source not in {"refurb_io", "amazon_renewed"}:
@@ -398,10 +504,6 @@ def _source_match_hard_exclusion_reason(listing: dict[str, Any]) -> str | None:
     if "storage_mismatch" in reasons:
         return "storage_mismatch"
     return None
-
-
-def _is_verified_retail_listing(listing: dict[str, Any]) -> bool:
-    return _source_key(listing) in {"refurb_io", "amazon_renewed"} and listing.get("source_match_verified") is True
 
 
 def _merge_reason_counts(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
@@ -449,6 +551,7 @@ def _apply_source_quote_basis(
                 updated,
                 asking_discount_low=asking_discount_low,
                 asking_discount_high=asking_discount_high,
+                discount_eligible=True,
             )
             updated.update(metadata)
             updated["source_quotes"] = source_quotes
@@ -479,7 +582,7 @@ def _apply_source_quote_basis(
         updated.pop("conservative_high_cad", None)
 
     ebay_quote = next((quote for quote in source_quotes if quote.get("source") == "ebay"), None)
-    if ebay_quote and _source_prices_disagree(ebay_quote.get("price_cad"), updated["median_price_cad"]):
+    if ebay_quote and _source_prices_disagree(ebay_quote.get("price_cad"), updated.get("median_price_cad")):
         updated["confidence_flags"] = _append_flag(updated.get("confidence_flags"), "source_disagreement")
     return updated
 
@@ -502,8 +605,46 @@ def _result_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "asking_only_discount_high",
         "conservative_low_cad",
         "conservative_high_cad",
+        "source_quotes",
+        "pricing_limitations",
+        "listing_warnings",
     }
     return {key: value for key, value in result.items() if key not in aggregate_keys}
+
+
+def _reprice_options(
+    warn_below_comparables: int,
+    wide_iqr_ratio: float,
+    support_limit: int,
+    high_shipping_cad: float,
+    high_shipping_ratio: float,
+    asking_discount_low: float,
+    asking_discount_high: float,
+) -> dict[str, Any]:
+    return {
+        "warn_below_comparables": warn_below_comparables,
+        "wide_iqr_ratio": wide_iqr_ratio,
+        "support_limit": support_limit,
+        "high_shipping_cad": high_shipping_cad,
+        "high_shipping_ratio": high_shipping_ratio,
+        "asking_discount_low": asking_discount_low,
+        "asking_discount_high": asking_discount_high,
+    }
+
+
+def _result_reprice_options(result: dict[str, Any]) -> dict[str, Any]:
+    options = result.get("reprice_options")
+    if not isinstance(options, dict):
+        options = {}
+    return {
+        "warn_below_comparables": _positive_int(options.get("warn_below_comparables"), 10),
+        "wide_iqr_ratio": _positive_float(options.get("wide_iqr_ratio"), 0.40),
+        "support_limit": _positive_int(options.get("support_limit"), 5),
+        "high_shipping_cad": _positive_float(options.get("high_shipping_cad"), 75.0),
+        "high_shipping_ratio": _positive_float(options.get("high_shipping_ratio"), 0.25),
+        "asking_discount_low": _non_negative_float(options.get("asking_discount_low"), 0.00),
+        "asking_discount_high": _non_negative_float(options.get("asking_discount_high"), 0.05),
+    }
 
 
 def _source_quotes(
@@ -519,12 +660,14 @@ def _source_quotes(
             ebay_result,
             asking_discount_low=asking_discount_low,
             asking_discount_high=asking_discount_high,
+            discount_eligible=True,
         )
-        if ebay_result.get("median_price_cad") is not None:
+        quote_price = _ebay_source_quote_price(ebay_result)
+        if quote_price is not None:
             quotes.append(
                 {
                     "source": "ebay",
-                    "price_cad": ebay_result.get("median_price_cad"),
+                    "price_cad": quote_price,
                     "basis": ebay_result.get("pricing_basis"),
                     "listing_count": ebay_result.get("count"),
                     "weight": 1,
@@ -564,6 +707,20 @@ def _fallback_source_basis(result: dict[str, Any]) -> str:
     if basis:
         return f"ebay_{basis}"
     return "ebay_fallback"
+
+
+def _is_ebay_only(listings: list[dict[str, Any]]) -> bool:
+    return bool(listings) and all(_source_key(listing) == "ebay" for listing in listings)
+
+
+def _ebay_source_quote_price(result: dict[str, Any]) -> float | None:
+    if result.get("pricing_basis") == "asking_adjusted":
+        low = _safe_float(result.get("conservative_low_cad"))
+        high = _safe_float(result.get("conservative_high_cad"))
+        if low is not None and high is not None:
+            return _round_money((low + high) / 2)
+    price = _safe_float(result.get("median_price_cad"))
+    return _round_money(price) if price is not None else None
 
 
 def _source_prices_disagree(left: Any, right: Any) -> bool:
@@ -760,6 +917,21 @@ def _safe_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _positive_int(value: Any, default: int) -> int:
+    parsed = _safe_int(value)
+    return parsed if parsed > 0 else default
+
+
+def _positive_float(value: Any, default: float) -> float:
+    parsed = _safe_float(value)
+    return parsed if parsed is not None and parsed > 0 else default
+
+
+def _non_negative_float(value: Any, default: float) -> float:
+    parsed = _safe_float(value)
+    return parsed if parsed is not None and parsed >= 0 else default
 
 
 def _round_money(value: float) -> float:

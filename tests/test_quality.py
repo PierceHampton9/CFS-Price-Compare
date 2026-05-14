@@ -8,6 +8,7 @@ class QualityTests(unittest.TestCase):
         result = add_listing_quality_flags(
             {
                 "confidence_flags": [],
+                "pricing_basis": "asking_adjusted",
                 "sold_count": 0,
                 "asking_count": 2,
             },
@@ -16,6 +17,19 @@ class QualityTests(unittest.TestCase):
 
         self.assertIn("asking_prices_only", result["pricing_limitations"])
         self.assertEqual(result["confidence_flags"], [])
+
+    def test_does_not_flag_active_retailer_results_as_asking_only(self):
+        result = add_listing_quality_flags(
+            {
+                "confidence_flags": [],
+                "pricing_basis": "weighted_sources",
+                "sold_count": 0,
+                "asking_count": 2,
+            },
+            [_listing(source="amazon_renewed")],
+        )
+
+        self.assertNotIn("asking_prices_only", result["pricing_limitations"])
 
     def test_flags_unknown_and_high_shipping(self):
         result = add_listing_quality_flags(
@@ -57,8 +71,10 @@ def _listing(
     shipping_cad=0,
     shipping_is_estimated=False,
     location="Calgary, AB, CA",
+    source="ebay",
 ):
     return {
+        "source": source,
         "item_price_cad": item_price_cad,
         "shipping_cad": shipping_cad,
         "shipping_is_estimated": shipping_is_estimated,

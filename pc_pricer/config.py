@@ -36,7 +36,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "base_url": "https://www.amazon.ca",
             "browser": "chromium",
             "channel": "msedge",
-            "headless": False,
+            "headless": True,
             "timeout_ms": 15000,
             "max_product_pages": 5,
         },
