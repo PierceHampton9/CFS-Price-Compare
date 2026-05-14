@@ -15,6 +15,8 @@ class ReporterTests(unittest.TestCase):
                 "median_price_cad": 325,
                 "iqr_low_cad": 300,
                 "iqr_high_cad": 360,
+                "price_low_cad": 250,
+                "price_high_cad": 410,
                 "count": 7,
                 "sold_count": 4,
                 "asking_count": 3,
@@ -26,7 +28,7 @@ class ReporterTests(unittest.TestCase):
         )
 
         self.assertIn("Median price:      $325.00 CAD", report)
-        self.assertIn("Comparable range:  $300.00 CAD - $360.00 CAD", report)
+        self.assertIn("Comparable range:  $250.00 CAD - $410.00 CAD", report)
         self.assertIn("Comparables:       7", report)
         self.assertNotIn("Sold / asking:", report)
         self.assertIn("Sources:           eBay: 5, retailer: 2", report)

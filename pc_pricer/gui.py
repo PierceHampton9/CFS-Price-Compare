@@ -729,9 +729,9 @@ class ReportPage(Page):
         grid.addWidget(
             _metric_card(
                 "Comparable Range",
-                f"{_format_money(result.get('iqr_low_cad'))} - {_format_money(result.get('iqr_high_cad'))}",
-                "Source quote range" if result.get("pricing_basis") == "weighted_sources" else "Middle range of usable listings",
-                "For weighted source pricing, this is the low-to-high source quote range. Otherwise it is the middle range from usable listings.",
+                f"{_format_money(_range_low(result))} - {_format_money(_range_high(result))}",
+                "Source quote range" if result.get("pricing_basis") == "weighted_sources" else "Low-to-high usable listings",
+                "The lowest and highest prices among listings used in the current estimate.",
             ),
             0,
             1,
@@ -1480,6 +1480,14 @@ def _format_money(value: Any) -> str:
         return f"${float(value):,.2f} CAD"
     except (TypeError, ValueError):
         return "Unknown"
+
+
+def _range_low(result: dict[str, Any]) -> Any:
+    return result.get("price_low_cad", result.get("iqr_low_cad"))
+
+
+def _range_high(result: dict[str, Any]) -> Any:
+    return result.get("price_high_cad", result.get("iqr_high_cad"))
 
 
 def _safe_int(value: Any) -> int:
