@@ -230,13 +230,11 @@ def _has_conflicting_variant(
 
     target_variants = _detected_variants(target_text, device_type)
     listing_variants = _detected_variants(title, device_type)
-    if not listing_variants:
-        return False
 
     if not target_variants:
-        return True
+        return bool(listing_variants)
 
-    return bool(listing_variants - target_variants)
+    return not target_variants.issubset(listing_variants)
 
 
 def _detected_variants(text: str, device_type: str) -> set[str]:

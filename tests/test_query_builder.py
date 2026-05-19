@@ -103,6 +103,20 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(queries[0]["tier"], 1)
         self.assertEqual(queries[1]["text"], "HP EliteOne 800 G5 i5-9500 16GB")
 
+    def test_two_in_one_uses_laptop_style_queries(self):
+        specs = {
+            "brand": "Microsoft",
+            "model": "Surface Pro 7",
+            "form_factor": "2-in-1",
+            "cpu_short": "i5-1035G4",
+            "ram_gb": 8,
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Microsoft Surface Pro 7 i5-1035G4 8GB")
+        self.assertEqual(queries[1]["text"], "Microsoft Surface Pro 7")
+
     def test_desktop_queries_are_spec_led(self):
         specs = {
             "brand": "Dell",

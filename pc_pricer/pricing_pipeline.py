@@ -783,7 +783,7 @@ def _verified_refurb_match(
         reasons.append("model_mismatch")
 
     device_type = specs.get("device_type")
-    if device_type and not _device_type_matches(text, device_type):
+    if device_type and not _device_type_matches(text, device_type, specs):
         reasons.append("device_type_mismatch")
 
     ram_gb = _safe_int(specs.get("ram_gb"))
@@ -832,11 +832,45 @@ def _form_factor_matches(text: str, value: Any) -> bool:
     return True
 
 
-def _device_type_matches(text: str, value: Any) -> bool:
+def _device_type_matches(text: str, value: Any, specs: dict[str, Any] | None = None) -> bool:
     device_type = str(value or "").lower()
     if device_type == "computer":
         return True
+    if device_type == "tablet" and _hybrid_computer_tablet_match(text, specs):
+        return True
     return device_type in text
+
+
+def _hybrid_computer_tablet_match(text: str, specs: dict[str, Any] | None) -> bool:
+    target_text = ""
+    if isinstance(specs, dict):
+        target_text = _normalize_match_text(
+            " ".join(
+                str(part)
+                for part in [
+                    specs.get("brand"),
+                    specs.get("search_model"),
+                    specs.get("model"),
+                    specs.get("form_factor"),
+                ]
+                if part
+            )
+        )
+
+    combined = f"{text} {target_text}"
+    hybrid_markers = [
+        " 2 in 1 ",
+        " 2 1 ",
+        " convertible ",
+        " detachable ",
+        " tablet pc ",
+        " surface pro ",
+        " surface go ",
+        " thinkpad x1 tablet ",
+        " elite x2 ",
+        " latitude 7320 detachable ",
+    ]
+    return any(marker in combined for marker in hybrid_markers)
 
 
 def _capacity_matches(text: str, capacity_gb: int) -> bool:
