@@ -153,7 +153,7 @@ class RefurbIoSourceTests(unittest.TestCase):
 
         source.search("ThinkPad X13", 1)
 
-        self.assertEqual(seen_headers[0]["User-Agent"], "CFS-Price-Compare/0.4.1")
+        self.assertEqual(seen_headers[0]["User-Agent"], "CFS-Price-Compare/0.4.2")
 
     def test_parses_newer_cpu_short_names(self):
         apple = parse_product_html(

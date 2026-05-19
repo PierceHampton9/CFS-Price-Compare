@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
+        self.source_page = SourceSelectionPage(self)
         self.credentials_page = CredentialsPage(self)
         self.device_page = DeviceTypePage(self)
         self.computer_mode_page = ComputerModePage(self)
@@ -177,6 +178,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.report_page = ReportPage(self)
 
         for page in [
+            self.source_page,
             self.credentials_page,
             self.device_page,
             self.computer_mode_page,
@@ -187,11 +189,17 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
             self.stack.addWidget(page)
 
         load_env_file(override=True)
+        self.show_source_selection()
 
-        if credentials_present():
-            self.show_device_type()
-        else:
+    def show_source_selection(self) -> None:
+        self.source_page.refresh()
+        self.stack.setCurrentWidget(self.source_page)
+
+    def continue_after_source_selection(self) -> None:
+        if self.state.source_settings.get("ebay", True) and not credentials_present():
             self.show_credentials()
+            return
+        self.show_device_type()
 
     def show_credentials(self) -> None:
         self.credentials_page.refresh()
@@ -254,7 +262,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
 
     def reset_for_new_device(self) -> None:
         self.state = GuiState()
-        self.show_device_type()
+        self.show_source_selection()
 
     def closeEvent(self, event: Any) -> None:
         if self.pricing_thread is not None and self.pricing_thread.isRunning():
@@ -290,6 +298,69 @@ class Page(QWidget):  # type: ignore[misc]
         pass
 
 
+class SourceSelectionPage(Page):
+    def __init__(self, window: MainWindow) -> None:
+        super().__init__(
+            window,
+            "Pricing Sources",
+            "Choose where the app should search before entering device details.",
+        )
+        self.source_checks: dict[str, QCheckBox] = {}
+        self.error = QLabel()
+        self.error.setObjectName("errorText")
+        self.error.setWordWrap(True)
+
+        self.root.addWidget(self._source_panel())
+        self.root.addWidget(self.error)
+        self.root.addStretch()
+        self.root.addLayout(nav_row(None, None, "Next", self.next_page))
+
+    def refresh(self) -> None:
+        self.error.clear()
+        self.main_window.state.source_settings = load_source_settings()
+        for source, checkbox in self.source_checks.items():
+            checkbox.setChecked(self.main_window.state.source_settings.get(source, source != "amazon_renewed"))
+
+    def next_page(self) -> None:
+        errors = self._store_source_settings()
+        if errors:
+            self.error.setText(" ".join(errors))
+            return
+        self.main_window.continue_after_source_selection()
+
+    def _source_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("sectionPanel")
+        panel.setFrameShape(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
+        layout.setSpacing(6)
+
+        labels = {
+            "ebay": "eBay",
+            "refurb_io": "Refurb.io",
+            "amazon_renewed": "Amazon Renewed (experimental)",
+        }
+        for source, label in labels.items():
+            checkbox = QCheckBox(label)
+            self.source_checks[source] = checkbox
+            layout.addWidget(checkbox)
+
+        note = _selectable_label(
+            "eBay requires API credentials. Amazon Renewed uses browser automation through Microsoft Edge in the background when enabled."
+        )
+        note.setObjectName("statusText")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        return panel
+
+    def _store_source_settings(self) -> list[str]:
+        settings = {source: checkbox.isChecked() for source, checkbox in self.source_checks.items()}
+        if not any(settings.values()):
+            return ["Enable at least one pricing source."]
+        self.main_window.state.source_settings = save_source_settings(settings)
+        return []
+
+
 class CredentialsPage(Page):
     def __init__(self, window: MainWindow) -> None:
         super().__init__(
@@ -311,8 +382,11 @@ class CredentialsPage(Page):
         self.root.addStretch()
 
         buttons = QHBoxLayout()
+        back = QPushButton("Back")
+        back.clicked.connect(self.main_window.show_source_selection)
         save = QPushButton("Save and Continue")
         save.clicked.connect(self.save_and_continue)
+        buttons.addWidget(back)
         buttons.addStretch()
         buttons.addWidget(save)
         self.root.addLayout(buttons)
@@ -348,7 +422,7 @@ class DeviceTypePage(Page):
         self.error.setObjectName("errorText")
         self.root.addWidget(self.error)
         self.root.addStretch()
-        self.root.addLayout(nav_row(None, None, "Next", self.next_page))
+        self.root.addLayout(nav_row("Back", self.main_window.show_source_selection, "Next", self.next_page))
 
     def refresh(self) -> None:
         self.error.clear()
@@ -451,13 +525,11 @@ class SpecsPage(Page):
         self.form_container = QWidget()
         self.form = QFormLayout(self.form_container)
         self.inputs: dict[str, QWidget] = {}
-        self.source_checks: dict[str, QCheckBox] = {}
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(self.form_container)
         self.root.addWidget(scroll, 1)
-        self.root.addWidget(self._source_panel())
         self.error = QLabel()
         self.error.setObjectName("errorText")
         self.error.setWordWrap(True)
@@ -474,10 +546,6 @@ class SpecsPage(Page):
             self.inputs[field.name] = widget
             suffix = " *" if field.required else ""
             self.form.addRow(f"{field.label}{suffix}", widget)
-
-        self.main_window.state.source_settings = load_source_settings()
-        for source, checkbox in self.source_checks.items():
-            checkbox.setChecked(self.main_window.state.source_settings.get(source, source != "amazon_renewed"))
 
         if device_type == "computer" and self.main_window.state.computer_mode == "auto":
             self.error.setText("Auto-detected specs are editable before pricing.")
@@ -496,10 +564,6 @@ class SpecsPage(Page):
         if errors:
             self.error.setText(" ".join(errors))
             return
-        source_errors = self._store_source_settings()
-        if source_errors:
-            self.error.setText(" ".join(source_errors))
-            return
         self.main_window.show_loading()
 
     def _store_values(self) -> None:
@@ -515,41 +579,6 @@ class SpecsPage(Page):
         ):
             values["input_method"] = "detected"
         self.main_window.state.specs = values
-
-    def _source_panel(self) -> QFrame:
-        panel = QFrame()
-        panel.setObjectName("sectionPanel")
-        panel.setFrameShape(QFrame.StyledPanel)
-        layout = QVBoxLayout(panel)
-        layout.setSpacing(6)
-        title = _selectable_label("Pricing Sources")
-        title.setObjectName("sectionTitle")
-        layout.addWidget(title)
-
-        labels = {
-            "ebay": "eBay",
-            "refurb_io": "Refurb.io",
-            "amazon_renewed": "Amazon Renewed (experimental)",
-        }
-        for source, label in labels.items():
-            checkbox = QCheckBox(label)
-            self.source_checks[source] = checkbox
-            layout.addWidget(checkbox)
-
-        note = _selectable_label(
-            "Amazon Renewed uses browser automation through Microsoft Edge in the background when enabled."
-        )
-        note.setObjectName("statusText")
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        return panel
-
-    def _store_source_settings(self) -> list[str]:
-        settings = {source: checkbox.isChecked() for source, checkbox in self.source_checks.items()}
-        if not any(settings.values()):
-            return ["Enable at least one pricing source."]
-        self.main_window.state.source_settings = save_source_settings(settings)
-        return []
 
 
 class LoadingPage(Page):

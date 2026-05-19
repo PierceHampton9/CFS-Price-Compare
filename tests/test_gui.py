@@ -18,6 +18,7 @@ class GuiImportTests(unittest.TestCase):
         window = gui.MainWindow()
 
         self.assertEqual(window.windowTitle(), "CFS Price Compare")
+        self.assertIs(window.stack.currentWidget(), window.source_page)
 
         window.close()
 
@@ -257,26 +258,84 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
-    def test_specs_page_renders_pricing_source_toggles_when_pyside_is_available(self):
+    def test_source_selection_page_renders_pricing_source_toggles_when_pyside_is_available(self):
         self._qt_app()
         window = gui.MainWindow()
-        window.state.device_type = "computer"
-        window.state.computer_mode = "manual"
-        window.state.specs = {
-            "form_factor": "laptop",
-            "brand": "Lenovo",
-            "model": "ThinkPad X13",
-            "condition": "good",
-        }
 
-        window.specs_page.refresh()
-        labels = [label.text() for label in window.specs_page.findChildren(gui.QLabel)]
-        checkboxes = [checkbox.text() for checkbox in window.specs_page.findChildren(gui.QCheckBox)]
+        window.source_page.refresh()
+        labels = [label.text() for label in window.source_page.findChildren(gui.QLabel)]
+        checkboxes = [checkbox.text() for checkbox in window.source_page.findChildren(gui.QCheckBox)]
 
         self.assertIn("Pricing Sources", labels)
         self.assertIn("eBay", checkboxes)
         self.assertIn("Refurb.io", checkboxes)
         self.assertIn("Amazon Renewed (experimental)", checkboxes)
+
+        window.close()
+
+    def test_source_selection_skips_credentials_when_ebay_is_disabled_when_pyside_is_available(self):
+        self._qt_app()
+        with patch("pc_pricer.gui.save_source_settings", side_effect=lambda settings: settings), patch(
+            "pc_pricer.gui.credentials_present", return_value=False
+        ):
+            window = gui.MainWindow()
+            window.source_page.source_checks["ebay"].setChecked(False)
+            window.source_page.source_checks["refurb_io"].setChecked(True)
+            window.source_page.source_checks["amazon_renewed"].setChecked(False)
+
+            window.source_page.next_page()
+
+            self.assertIs(window.stack.currentWidget(), window.device_page)
+            self.assertEqual(
+                window.state.source_settings,
+                {"ebay": False, "refurb_io": True, "amazon_renewed": False},
+            )
+
+            window.close()
+
+    def test_source_selection_requires_credentials_only_for_selected_ebay_when_pyside_is_available(self):
+        self._qt_app()
+        with patch("pc_pricer.gui.save_source_settings", side_effect=lambda settings: settings), patch(
+            "pc_pricer.gui.credentials_present", return_value=False
+        ):
+            window = gui.MainWindow()
+            window.source_page.source_checks["ebay"].setChecked(True)
+            window.source_page.source_checks["refurb_io"].setChecked(True)
+            window.source_page.source_checks["amazon_renewed"].setChecked(False)
+
+            window.source_page.next_page()
+
+            self.assertIs(window.stack.currentWidget(), window.credentials_page)
+
+            window.close()
+
+    def test_source_selection_skips_existing_ebay_credentials_when_pyside_is_available(self):
+        self._qt_app()
+        with patch("pc_pricer.gui.save_source_settings", side_effect=lambda settings: settings), patch(
+            "pc_pricer.gui.credentials_present", return_value=True
+        ):
+            window = gui.MainWindow()
+            window.source_page.source_checks["ebay"].setChecked(True)
+            window.source_page.source_checks["refurb_io"].setChecked(True)
+            window.source_page.source_checks["amazon_renewed"].setChecked(False)
+
+            window.source_page.next_page()
+
+            self.assertIs(window.stack.currentWidget(), window.device_page)
+
+            window.close()
+
+    def test_source_selection_requires_at_least_one_source_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        for checkbox in window.source_page.source_checks.values():
+            checkbox.setChecked(False)
+
+        with patch("pc_pricer.gui.save_source_settings") as save_settings:
+            window.source_page.next_page()
+
+        self.assertEqual(window.source_page.error.text(), "Enable at least one pricing source.")
+        save_settings.assert_not_called()
 
         window.close()
 
