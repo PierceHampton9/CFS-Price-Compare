@@ -84,6 +84,21 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(candidates[0].source_specs["brand"], "Apple")
 
+    def test_candidates_prefer_explicit_brand_over_apple_product_word(self):
+        candidates = candidates_from_search_rows(
+            [
+                {
+                    "asin": "B0SAMSUNG1",
+                    "title": "Samsung iPhone compatible wireless charger Renewed",
+                    "url": "https://www.amazon.ca/Samsung-Charger/dp/B0SAMSUNG1",
+                    "price_text": "$39.99",
+                    "text": "Renewed In stock",
+                }
+            ]
+        )
+
+        self.assertEqual(candidates[0].source_specs["brand"], "Samsung")
+
     def test_search_uses_injected_browser_fetcher_and_detail_pages(self):
         fetched = []
 
@@ -94,7 +109,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             return _product_html(price="579.99")
 
         source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=2)
-        listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 5)
+        listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 1)
 
         self.assertEqual(len(listings), 1)
         self.assertEqual(len(fetched), 2)
@@ -116,7 +131,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             return _product_html(price="579.99")
 
         source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=2)
-        listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 5)
+        listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 1)
 
         self.assertEqual(len(listings), 1)
         self.assertEqual(len(fetched), 2)
@@ -151,6 +166,76 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertIn("i=amazon-renewed", fetched[0])
         self.assertNotIn("i=amazon-renewed", fetched[1])
         self.assertEqual(source.last_search_stats["search_urls"], fetched[:2])
+
+    def test_search_tops_up_partial_renewed_department_results_from_broad_search(self):
+        fetched = []
+
+        def fetcher(url):
+            fetched.append(url)
+            if "i=amazon-renewed" in url:
+                return _search_html(
+                    title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                    price="$419.99",
+                    url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                )
+            if "/s?" in url:
+                return _search_html(
+                    title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
+                    price="$399.99",
+                    url="/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02",
+                )
+            if "B09LNW3CY2" in url:
+                return _product_html(
+                    title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                    price="419.99",
+                    asin="B09LNW3CY2",
+                )
+            return _product_html(
+                title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
+                price="399.99",
+                asin="B09PHONE02",
+            )
+
+        source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=1)
+        listings = source.search("Apple iPhone 13 128GB Renewed", 2)
+
+        self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
+        self.assertEqual(len(source.last_search_stats["search_urls"]), 2)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 2)
+
+    def test_each_search_url_gets_its_own_detail_page_budget(self):
+        fetched = []
+
+        def fetcher(url):
+            fetched.append(url)
+            if "i=amazon-renewed" in url:
+                return _search_html(
+                    title="Apple iPhone 13 128GB renewed-style decorative case",
+                    price=None,
+                    url="/Decorative-Case/dp/B0CASE0001",
+                )
+            if "/s?" in url:
+                return _search_html(
+                    title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                    price=None,
+                    url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                )
+            if "B0CASE0001" in url:
+                return "<html><body>Case accessory</body></html>"
+            return _product_html(
+                title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                price="399.99",
+                asin="B09LNW3CY2",
+            )
+
+        source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=1)
+        listings = source.search("Apple iPhone 13 128GB Renewed", 1)
+
+        self.assertEqual(len(listings), 1)
+        self.assertEqual(listings[0]["item_id"], "B09LNW3CY2")
+        self.assertEqual(source.last_search_stats["detail_page_count"], 2)
+        self.assertIn("/Decorative-Case/dp/B0CASE0001", source.last_search_stats["detail_urls"][0])
+        self.assertIn("/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2", source.last_search_stats["detail_urls"][1])
 
     def test_rendered_search_continues_scanning_after_detail_page_limit(self):
         page = _RenderedSearchPage(

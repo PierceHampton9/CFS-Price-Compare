@@ -73,12 +73,12 @@ class AmazonRenewedSource:
         }
 
         listings = []
-        detail_fetches = 0
         fetched_detail_urls: set[str] = set()
         seen_listing_urls: set[str] = set()
-        for search_url in self._search_urls(query):
-            self.last_search_stats["search_urls"].append(search_url)
-            search_html = fetcher(search_url)
+        for current_search_url in self._search_urls(query):
+            search_detail_fetches = 0
+            self.last_search_stats["search_urls"].append(current_search_url)
+            search_html = fetcher(current_search_url)
             if _looks_like_blocked_page(search_html):
                 raise RuntimeError(
                     "Amazon Renewed search returned a robot-check, captcha, or interstitial page instead of results."
@@ -92,10 +92,10 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
                     fetched_detail_urls.add(candidate.url)
-                    detail_fetches += 1
-                    self.last_search_stats["detail_page_count"] = detail_fetches
+                    search_detail_fetches += 1
+                    self.last_search_stats["detail_page_count"] += 1
                     self.last_search_stats["detail_urls"].append(candidate.url)
                     try:
                         detail_html = fetcher(candidate.url)
@@ -110,8 +110,6 @@ class AmazonRenewedSource:
                     listings.append(listing)
                 if len(listings) >= max_results:
                     return listings
-            if listings:
-                break
         return listings
 
     def _search_url(self, query: str, *, renewed_department: bool = True) -> str:
@@ -125,7 +123,7 @@ class AmazonRenewedSource:
     def _search_urls(self, query: str) -> list[str]:
         renewed_url = self._search_url(query, renewed_department=True)
         broad_url = self._search_url(query, renewed_department=False)
-        return [renewed_url, broad_url] if broad_url != renewed_url else [renewed_url]
+        return [renewed_url, broad_url]
 
     def _search_with_browser(self, query: str, max_results: int) -> list[dict[str, Any]]:
         def run(page: Any) -> list[dict[str, Any]]:
@@ -147,9 +145,10 @@ class AmazonRenewedSource:
         listings = []
         fetched_detail_urls: set[str] = set()
         seen_listing_urls: set[str] = set()
-        for search_url in self._search_urls(query):
-            self.last_search_stats["search_urls"].append(search_url)
-            _load_page(page, search_url, self.timeout_ms)
+        for current_search_url in self._search_urls(query):
+            search_detail_fetches = 0
+            self.last_search_stats["search_urls"].append(current_search_url)
+            _load_page(page, current_search_url, self.timeout_ms)
             _scroll_search_results(page)
             search_html = page.content()
             if _looks_like_blocked_page(search_html):
@@ -168,11 +167,9 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if (
-                    self.last_search_stats["detail_page_count"] < self.max_product_pages
-                    and candidate.url not in fetched_detail_urls
-                ):
+                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
                     fetched_detail_urls.add(candidate.url)
+                    search_detail_fetches += 1
                     self.last_search_stats["detail_page_count"] += 1
                     self.last_search_stats["detail_urls"].append(candidate.url)
                     try:
@@ -189,8 +186,6 @@ class AmazonRenewedSource:
                     listings.append(listing)
                 if len(listings) >= max_results:
                     return listings
-            if listings:
-                break
         return listings
 
     def _playwright_fetch(self, url: str) -> str:
@@ -761,8 +756,6 @@ def _specs_from_text(text: str) -> dict[str, Any]:
 
 
 def _brand_from_title(title: str) -> str | None:
-    if re.search(r"\b(i\s*phone|iphone|i\s*pad|ipad|macbook|imac)\b", title, flags=re.IGNORECASE):
-        return "Apple"
     for brand in [
         "Lenovo",
         "Dell",
@@ -780,6 +773,8 @@ def _brand_from_title(title: str) -> str | None:
     ]:
         if re.search(rf"\b{re.escape(brand)}\b", title, flags=re.IGNORECASE):
             return brand
+    if re.search(r"\b(i\s*phones?|iphones?|i\s*pads?|ipads?|macbooks?|imacs?)\b", title, flags=re.IGNORECASE):
+        return "Apple"
     return None
 
 
