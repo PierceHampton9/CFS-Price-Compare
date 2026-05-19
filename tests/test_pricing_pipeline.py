@@ -152,6 +152,24 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 400)
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
+    def test_filters_missing_phone_variant_from_pipeline(self):
+        source = FakeSource(
+            {
+                "Apple iPhone 13 Pro 128GB unlocked": [
+                    _listing("Apple iPhone 13 128GB Unlocked", 400, "https://www.ebay.ca/itm/base"),
+                    _listing("Apple iPhone 13 Pro 128GB Unlocked", 650, "https://www.ebay.ca/itm/pro"),
+                ],
+                "Apple iPhone 13 Pro 128GB": [],
+                "Apple iPhone 13 Pro": [],
+            }
+        )
+
+        result = price_specs(_phone_pro_specs(), source, limit_per_query=5, target_condition="any")
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["median_price_cad"], 650)
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
     def test_verified_refurb_io_quote_weights_with_ebay_pricing(self):
         ebay = FakeSource(
             {
@@ -367,6 +385,30 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 525.00)
         self.assertNotIn("form_factor_mismatch", result["source_diagnostics"][0]["source_match_reasons"])
 
+    def test_surface_pro_tablet_label_does_not_block_verified_source_match(self):
+        refurb = FakeSource(
+            {
+                "Microsoft Surface Pro 7 128GB": [
+                    _refurb_listing(
+                        "Microsoft Surface Pro 7 i5-1035G4 8GB 128GB",
+                        425,
+                        model="Surface Pro 7",
+                        ram_gb=8,
+                        storage_gb=128,
+                        url="https://ca.refurb.io/products/surface-pro-7",
+                    )
+                ],
+                "Microsoft Surface Pro 7": [],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(_surface_pro_tablet_specs(), [refurb], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 425.00)
+        self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
+        self.assertNotIn("device_type_mismatch", result["source_diagnostics"][0]["source_match_reasons"])
+
     def test_ram_and_storage_mismatches_are_excluded_from_pricing(self):
         ebay = FakeSource(
             {
@@ -577,6 +619,28 @@ def _phone_specs():
         "search_model": "iPhone 13",
         "storage_capacity": "128GB",
         "carrier": "unlocked",
+    }
+
+
+def _phone_pro_specs():
+    return {
+        "device_type": "phone",
+        "brand": "Apple",
+        "model": "iPhone 13 Pro",
+        "search_model": "iPhone 13 Pro",
+        "storage_capacity": "128GB",
+        "carrier": "unlocked",
+    }
+
+
+def _surface_pro_tablet_specs():
+    return {
+        "device_type": "tablet",
+        "brand": "Microsoft",
+        "model": "Surface Pro 7",
+        "search_model": "Surface Pro 7",
+        "storage_capacity": "128GB",
+        "form_factor": "2-in-1",
     }
 
 

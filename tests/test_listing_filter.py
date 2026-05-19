@@ -152,7 +152,7 @@ class ListingFilterTests(unittest.TestCase):
         )
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
-    def test_phone_filter_keeps_generic_listing_when_target_has_variant(self):
+    def test_phone_filter_excludes_generic_listing_when_target_has_variant(self):
         listings = [
             _listing("Apple iPhone 13 128GB Unlocked", "good"),
             _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
@@ -167,12 +167,122 @@ class ListingFilterTests(unittest.TestCase):
 
         self.assertEqual(
             [listing["title"] for listing in result["listings"]],
-            [
-                "Apple iPhone 13 128GB Unlocked",
-                "Apple iPhone 13 Pro Max 128GB Unlocked",
-            ],
+            ["Apple iPhone 13 Pro Max 128GB Unlocked"],
         )
-        self.assertEqual(result["excluded_count"], 0)
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_phone_filter_excludes_base_model_when_variant_lives_in_model_name(self):
+        listings = [
+            _listing("Apple iPhone 13 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro 128GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 13 Pro"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPhone 13 Pro 128GB Unlocked"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_phone_filter_excludes_extra_variant_when_target_has_variant(self):
+        listings = [
+            _listing("Apple iPhone 13 Pro 128GB Unlocked", "good"),
+            _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "model": "iPhone 13 Pro"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPhone 13 Pro 128GB Unlocked"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_phone_filter_does_not_treat_windows_pro_as_hardware_variant(self):
+        listing = _listing("Apple iPhone 13 128GB Unlocked Windows 11 Pro setup", "good")
+
+        self.assertIsNone(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="phone",
+                target_specs={"device_type": "phone", "model": "iPhone 13"},
+            )
+        )
+
+    def test_phone_filter_does_not_accept_base_model_because_of_windows_pro(self):
+        listing = _listing("Apple iPhone 13 128GB Unlocked Windows 11 Pro setup", "good")
+
+        self.assertEqual(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="phone",
+                target_specs={"device_type": "phone", "model": "iPhone 13 Pro"},
+            ),
+            "variant_mismatch",
+        )
+
+    def test_tablet_filter_excludes_base_model_when_target_has_variant(self):
+        listings = [
+            _listing("Apple iPad 10.9 64GB Wi-Fi", "good"),
+            _listing("Apple iPad Air 10.9 64GB Wi-Fi", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="tablet",
+            target_specs={"device_type": "tablet", "model": "iPad Air"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPad Air 10.9 64GB Wi-Fi"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_tablet_filter_excludes_extra_variant_when_target_has_variant(self):
+        listings = [
+            _listing("Apple iPad Pro 11 128GB Wi-Fi", "good"),
+            _listing("Apple iPad Air Pro 11 128GB Wi-Fi", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="tablet",
+            target_specs={"device_type": "tablet", "model": "iPad Pro"},
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Apple iPad Pro 11 128GB Wi-Fi"],
+        )
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_tablet_filter_does_not_treat_windows_pro_as_hardware_variant(self):
+        listing = _listing("Microsoft Surface Go 3 8GB 128GB Windows 11 Pro", "good")
+
+        self.assertIsNone(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="tablet",
+                target_specs={"device_type": "tablet", "model": "Surface Go 3"},
+            )
+        )
 
     def test_phone_filter_handles_plus_symbol_variant_on_listing(self):
         listings = [

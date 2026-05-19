@@ -22,7 +22,7 @@ def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
 
     form_factor = _clean(specs.get("form_factor"))
 
-    if form_factor in {"laptop", "all-in-one"}:
+    if _uses_laptop_style_queries(form_factor):
         queries = _laptop_queries(specs, form_factor)
     else:
         queries = _desktop_queries(specs)
@@ -59,6 +59,22 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
         queries.append(_query(_join_terms(brand, cpu, ram, storage, form_factor), 3, f"{form_factor} spec fallback"))
 
     return queries
+
+
+def _uses_laptop_style_queries(form_factor: str | None) -> bool:
+    normalized = (form_factor or "").lower()
+    return normalized in {
+        "laptop",
+        "notebook",
+        "ultrabook",
+        "all-in-one",
+        "2-in-1",
+        "2 in 1",
+        "convertible",
+        "detachable",
+        "tablet pc",
+        "tablet",
+    }
 
 
 def _phone_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:

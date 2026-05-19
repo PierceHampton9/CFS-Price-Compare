@@ -230,16 +230,15 @@ def _has_conflicting_variant(
 
     target_variants = _detected_variants(target_text, device_type)
     listing_variants = _detected_variants(title, device_type)
-    if not listing_variants:
-        return False
 
     if not target_variants:
-        return True
+        return bool(listing_variants)
 
-    return bool(listing_variants - target_variants)
+    return target_variants != listing_variants
 
 
 def _detected_variants(text: str, device_type: str) -> set[str]:
+    text = _variant_detection_text(text)
     variants = set()
     for variant, patterns in DEVICE_VARIANT_PATTERNS.get(device_type, {}).items():
         if any(re.search(pattern, text) for pattern in patterns):
@@ -249,6 +248,18 @@ def _detected_variants(text: str, device_type: str) -> set[str]:
         variants.discard("pro")
         variants.discard("max")
     return variants
+
+
+def _variant_detection_text(text: str) -> str:
+    clean = text.lower()
+    protected_phrases = [
+        r"\bwindows\s+(?:10|11)\s+pro(?:fessional)?\b",
+        r"\bwin(?:dows)?\s*(?:10|11)\s+pro(?:fessional)?\b",
+        r"\boffice\s+(?:pro|professional)(?:\s+plus)?\b",
+    ]
+    for phrase in protected_phrases:
+        clean = re.sub(phrase, " ", clean)
+    return clean
 
 
 def _has_conflicting_screen_size(title: str, target_specs: dict[str, Any]) -> bool:

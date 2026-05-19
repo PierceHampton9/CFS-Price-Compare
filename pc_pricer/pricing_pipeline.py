@@ -13,6 +13,22 @@ from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.quality import add_listing_quality_flags
 from pc_pricer.query_builder import build_queries
 
+HYBRID_FORM_FACTOR_MARKERS = {
+    "2-in-1",
+    "2 in 1",
+    "convertible",
+    "detachable",
+    "tablet pc",
+}
+
+HYBRID_MODEL_MARKERS = {
+    "surface pro",
+    "surface go",
+    "thinkpad x1 tablet",
+    "elite x2",
+    "latitude 7320 detachable",
+}
+
 
 class ListingSource(Protocol):
     def search(self, query: str, max_results: int) -> list[dict[str, Any]]:
@@ -783,7 +799,7 @@ def _verified_refurb_match(
         reasons.append("model_mismatch")
 
     device_type = specs.get("device_type")
-    if device_type and not _device_type_matches(text, device_type):
+    if device_type and not _device_type_matches(text, device_type, specs):
         reasons.append("device_type_mismatch")
 
     ram_gb = _safe_int(specs.get("ram_gb"))
@@ -832,11 +848,39 @@ def _form_factor_matches(text: str, value: Any) -> bool:
     return True
 
 
-def _device_type_matches(text: str, value: Any) -> bool:
+def _device_type_matches(text: str, value: Any, specs: dict[str, Any] | None = None) -> bool:
     device_type = str(value or "").lower()
     if device_type == "computer":
         return True
+    if device_type == "tablet" and _target_is_hybrid_tablet(specs):
+        return True
     return device_type in text
+
+
+def _target_is_hybrid_tablet(specs: dict[str, Any] | None) -> bool:
+    if not isinstance(specs, dict):
+        return False
+
+    form_factor = _normalize_match_text(str(specs.get("form_factor") or ""))
+    if any(_contains_marker(form_factor, marker) for marker in HYBRID_FORM_FACTOR_MARKERS):
+        return True
+
+    model_text = _normalize_match_text(
+        " ".join(
+            str(part)
+            for part in [
+                specs.get("brand"),
+                specs.get("search_model"),
+                specs.get("model"),
+            ]
+            if part
+        )
+    )
+    return any(_contains_marker(model_text, marker) for marker in HYBRID_MODEL_MARKERS)
+
+
+def _contains_marker(text: str, marker: str) -> bool:
+    return f" {marker} " in text
 
 
 def _capacity_matches(text: str, capacity_gb: int) -> bool:
