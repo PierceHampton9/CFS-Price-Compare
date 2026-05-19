@@ -190,6 +190,31 @@ class ListingFilterTests(unittest.TestCase):
         )
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
 
+    def test_phone_filter_does_not_treat_windows_pro_as_hardware_variant(self):
+        listing = _listing("Apple iPhone 13 128GB Unlocked Windows 11 Pro setup", "good")
+
+        self.assertIsNone(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="phone",
+                target_specs={"device_type": "phone", "model": "iPhone 13"},
+            )
+        )
+
+    def test_phone_filter_does_not_accept_base_model_because_of_windows_pro(self):
+        listing = _listing("Apple iPhone 13 128GB Unlocked Windows 11 Pro setup", "good")
+
+        self.assertEqual(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="phone",
+                target_specs={"device_type": "phone", "model": "iPhone 13 Pro"},
+            ),
+            "variant_mismatch",
+        )
+
     def test_tablet_filter_excludes_base_model_when_target_has_variant(self):
         listings = [
             _listing("Apple iPad 10.9 64GB Wi-Fi", "good"),
@@ -208,6 +233,18 @@ class ListingFilterTests(unittest.TestCase):
             ["Apple iPad Air 10.9 64GB Wi-Fi"],
         )
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 1})
+
+    def test_tablet_filter_does_not_treat_windows_pro_as_hardware_variant(self):
+        listing = _listing("Microsoft Surface Go 3 8GB 128GB Windows 11 Pro", "good")
+
+        self.assertIsNone(
+            exclusion_reason(
+                listing,
+                target_condition="any",
+                device_type="tablet",
+                target_specs={"device_type": "tablet", "model": "Surface Go 3"},
+            )
+        )
 
     def test_phone_filter_handles_plus_symbol_variant_on_listing(self):
         listings = [
