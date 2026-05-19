@@ -65,48 +65,65 @@ class AmazonRenewedSource:
         search_url = self._search_url(query)
         self.last_search_stats = {
             "search_url": search_url,
+            "search_urls": [],
             "candidate_count": 0,
             "detail_page_count": 0,
             "detail_urls": [],
             "detail_error_count": 0,
         }
-        search_html = fetcher(search_url)
-        if _looks_like_blocked_page(search_html):
-            raise RuntimeError(
-                "Amazon Renewed search returned a robot-check, captcha, or interstitial page instead of results."
-            )
-        candidates = parse_search_results(search_html, self.base_url, self._base_host)
-        candidates = _rank_search_candidates(candidates, query)
-        self.last_search_stats["candidate_count"] = len(candidates)
 
         listings = []
-        detail_fetches = 0
-        for candidate in candidates:
-            enriched = candidate
-            if detail_fetches < self.max_product_pages:
-                detail_fetches += 1
-                self.last_search_stats["detail_page_count"] = detail_fetches
-                self.last_search_stats["detail_urls"].append(candidate.url)
-                try:
-                    detail_html = fetcher(candidate.url)
-                except Exception:
-                    detail_html = ""
-                    self.last_search_stats["detail_error_count"] += 1
-                if detail_html:
-                    enriched = _merge_candidate(candidate, parse_product_page(detail_html, candidate.url))
-            listing = _listing_from_candidate(enriched)
-            if listing:
-                listings.append(listing)
-            if len(listings) >= max_results:
-                break
+        fetched_detail_urls: set[str] = set()
+        seen_listing_urls: set[str] = set()
+        for current_search_url in self._search_urls(query):
+            search_detail_fetches = 0
+            self.last_search_stats["search_urls"].append(current_search_url)
+            search_html = fetcher(current_search_url)
+            if _looks_like_blocked_page(search_html):
+                raise RuntimeError(
+                    "Amazon Renewed search returned a robot-check, captcha, or interstitial page instead of results."
+                )
+            candidates = parse_search_results(search_html, self.base_url, self._base_host)
+            candidates = _rank_search_candidates(candidates, query)
+            self.last_search_stats["candidate_count"] += len(candidates)
+
+            for candidate in candidates:
+                if candidate.url in seen_listing_urls:
+                    continue
+
+                enriched = candidate
+                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                    fetched_detail_urls.add(candidate.url)
+                    search_detail_fetches += 1
+                    self.last_search_stats["detail_page_count"] += 1
+                    self.last_search_stats["detail_urls"].append(candidate.url)
+                    try:
+                        detail_html = fetcher(candidate.url)
+                    except Exception:
+                        detail_html = ""
+                        self.last_search_stats["detail_error_count"] += 1
+                    if detail_html:
+                        enriched = _merge_candidate(candidate, parse_product_page(detail_html, candidate.url))
+                listing = _listing_from_candidate(enriched)
+                if listing:
+                    seen_listing_urls.add(candidate.url)
+                    listings.append(listing)
+                if len(listings) >= max_results:
+                    return listings
         return listings
 
-    def _search_url(self, query: str) -> str:
+    def _search_url(self, query: str, *, renewed_department: bool = True) -> str:
         params = {
             "k": query,
-            "i": "amazon-renewed",
         }
+        if renewed_department:
+            params["i"] = "amazon-renewed"
         return f"{self.base_url}/s?{parse.urlencode(params)}"
+
+    def _search_urls(self, query: str) -> list[str]:
+        renewed_url = self._search_url(query, renewed_department=True)
+        broad_url = self._search_url(query, renewed_department=False)
+        return [renewed_url, broad_url]
 
     def _search_with_browser(self, query: str, max_results: int) -> list[dict[str, Any]]:
         def run(page: Any) -> list[dict[str, Any]]:
@@ -118,47 +135,57 @@ class AmazonRenewedSource:
         search_url = self._search_url(query)
         self.last_search_stats = {
             "search_url": search_url,
+            "search_urls": [],
             "candidate_count": 0,
             "detail_page_count": 0,
             "detail_urls": [],
             "detail_error_count": 0,
         }
 
-        _load_page(page, search_url, self.timeout_ms)
-        _scroll_search_results(page)
-        search_html = page.content()
-        if _looks_like_blocked_page(search_html):
-            raise RuntimeError(
-                "Amazon Renewed search returned a robot-check, captcha, or interstitial page instead of results."
-            )
-
-        candidates = extract_search_candidates_from_page(page, self.base_url, self._base_host)
-        if not candidates:
-            candidates = parse_search_results(search_html, self.base_url, self._base_host)
-        candidates = _rank_search_candidates(candidates, query)
-        self.last_search_stats["candidate_count"] = len(candidates)
-
         listings = []
-        for candidate in candidates:
-            enriched = candidate
-            if self.last_search_stats["detail_page_count"] < self.max_product_pages:
-                self.last_search_stats["detail_page_count"] += 1
-                self.last_search_stats["detail_urls"].append(candidate.url)
-                try:
-                    _load_page(page, candidate.url, self.timeout_ms)
-                    detail_html = page.content()
-                except Exception:
-                    detail_html = ""
-                    self.last_search_stats["detail_error_count"] += 1
-                if detail_html:
-                    enriched = _merge_candidate(candidate, parse_product_page(detail_html, candidate.url))
-            listing = _listing_from_candidate(enriched)
-            if listing:
-                listings.append(listing)
-            if len(listings) >= max_results:
-                break
-            if self.last_search_stats["detail_page_count"] >= self.max_product_pages:
-                break
+        fetched_detail_urls: set[str] = set()
+        seen_listing_urls: set[str] = set()
+        for current_search_url in self._search_urls(query):
+            search_detail_fetches = 0
+            self.last_search_stats["search_urls"].append(current_search_url)
+            _load_page(page, current_search_url, self.timeout_ms)
+            _scroll_search_results(page)
+            search_html = page.content()
+            if _looks_like_blocked_page(search_html):
+                raise RuntimeError(
+                    "Amazon Renewed search returned a robot-check, captcha, or interstitial page instead of results."
+                )
+
+            candidates = extract_search_candidates_from_page(page, self.base_url, self._base_host)
+            if not candidates:
+                candidates = parse_search_results(search_html, self.base_url, self._base_host)
+            candidates = _rank_search_candidates(candidates, query)
+            self.last_search_stats["candidate_count"] += len(candidates)
+
+            for candidate in candidates:
+                if candidate.url in seen_listing_urls:
+                    continue
+
+                enriched = candidate
+                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                    fetched_detail_urls.add(candidate.url)
+                    search_detail_fetches += 1
+                    self.last_search_stats["detail_page_count"] += 1
+                    self.last_search_stats["detail_urls"].append(candidate.url)
+                    try:
+                        _load_page(page, candidate.url, self.timeout_ms)
+                        detail_html = page.content()
+                    except Exception:
+                        detail_html = ""
+                        self.last_search_stats["detail_error_count"] += 1
+                    if detail_html:
+                        enriched = _merge_candidate(candidate, parse_product_page(detail_html, candidate.url))
+                listing = _listing_from_candidate(enriched)
+                if listing:
+                    seen_listing_urls.add(candidate.url)
+                    listings.append(listing)
+                if len(listings) >= max_results:
+                    return listings
         return listings
 
     def _playwright_fetch(self, url: str) -> str:
@@ -746,6 +773,8 @@ def _brand_from_title(title: str) -> str | None:
     ]:
         if re.search(rf"\b{re.escape(brand)}\b", title, flags=re.IGNORECASE):
             return brand
+    if re.search(r"\b(i\s*phones?|iphones?|i\s*pads?|ipads?|macbooks?|imacs?)\b", title, flags=re.IGNORECASE):
+        return "Apple"
     return None
 
 
