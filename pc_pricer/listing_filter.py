@@ -234,7 +234,7 @@ def _has_conflicting_variant(
     if not target_variants:
         return bool(listing_variants)
 
-    return not target_variants.issubset(listing_variants)
+    return target_variants != listing_variants
 
 
 def _detected_variants(text: str, device_type: str) -> set[str]:
@@ -256,7 +256,6 @@ def _variant_detection_text(text: str) -> str:
         r"\bwindows\s+(?:10|11)\s+pro(?:fessional)?\b",
         r"\bwin(?:dows)?\s*(?:10|11)\s+pro(?:fessional)?\b",
         r"\boffice\s+(?:pro|professional)(?:\s+plus)?\b",
-        r"\bmicrosoft\s+office\s+(?:pro|professional)(?:\s+plus)?\b",
     ]
     for phrase in protected_phrases:
         clean = re.sub(phrase, " ", clean)
