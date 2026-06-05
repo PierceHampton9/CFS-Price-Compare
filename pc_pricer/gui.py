@@ -12,8 +12,10 @@ from typing import Any
 
 from pc_pricer.batch import (
     BatchItem,
+    batch_item_summary,
     batch_summary_rows,
     load_batch_csv,
+    safe_batch_filename,
     validate_batch_items,
     write_batch_summary_csv,
 )
@@ -314,6 +316,8 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.stack.setCurrentWidget(self.report_page)
 
     def import_batch_csv(self) -> None:
+        if self.batch_pricing_thread is not None:
+            return
         path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Import Batch CSV",
@@ -325,6 +329,8 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.load_batch_csv(path)
 
     def load_batch_csv(self, path: str) -> None:
+        if self.batch_pricing_thread is not None:
+            return
         try:
             items = load_batch_csv(path)
         except RuntimeError as exc:
@@ -414,6 +420,8 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.show_report()
 
     def edit_batch_item(self, index: int) -> None:
+        if self.batch_pricing_thread is not None:
+            return
         item = self._batch_item(index)
         if item is None:
             return
@@ -695,32 +703,32 @@ class BatchPage(Page):
         self.root.addWidget(self.status)
 
         row = QHBoxLayout()
-        import_button = QPushButton("Import CSV")
-        import_button.clicked.connect(self.main_window.import_batch_csv)
-        start = QPushButton("Start / Continue")
-        start.clicked.connect(self.main_window.start_batch_pricing)
-        view = QPushButton("View Report")
-        view.clicked.connect(self.view_selected)
-        edit = QPushButton("Edit Row")
-        edit.clicked.connect(self.edit_selected)
-        remove = QPushButton("Remove Row")
-        remove.clicked.connect(self.remove_selected)
-        print_all = QPushButton("Print All")
-        print_all.clicked.connect(self.print_all_reports)
-        export_all = QPushButton("Export All")
-        export_all.clicked.connect(self.export_all_reports)
-        back = QPushButton("Back")
-        back.clicked.connect(self.main_window.show_device_type)
+        self.import_button = QPushButton("Import CSV")
+        self.import_button.clicked.connect(self.main_window.import_batch_csv)
+        self.start_button = QPushButton("Start / Continue")
+        self.start_button.clicked.connect(self.main_window.start_batch_pricing)
+        self.view_button = QPushButton("View Report")
+        self.view_button.clicked.connect(self.view_selected)
+        self.edit_button = QPushButton("Edit Row")
+        self.edit_button.clicked.connect(self.edit_selected)
+        self.remove_button = QPushButton("Remove Row")
+        self.remove_button.clicked.connect(self.remove_selected)
+        self.print_all_button = QPushButton("Print All")
+        self.print_all_button.clicked.connect(self.print_all_reports)
+        self.export_all_button = QPushButton("Export All")
+        self.export_all_button.clicked.connect(self.export_all_reports)
+        self.back_button = QPushButton("Back")
+        self.back_button.clicked.connect(self.main_window.show_device_type)
 
-        row.addWidget(back)
-        row.addWidget(import_button)
+        row.addWidget(self.back_button)
+        row.addWidget(self.import_button)
         row.addStretch()
-        row.addWidget(edit)
-        row.addWidget(remove)
-        row.addWidget(view)
-        row.addWidget(print_all)
-        row.addWidget(export_all)
-        row.addWidget(start)
+        row.addWidget(self.edit_button)
+        row.addWidget(self.remove_button)
+        row.addWidget(self.view_button)
+        row.addWidget(self.print_all_button)
+        row.addWidget(self.export_all_button)
+        row.addWidget(self.start_button)
         self.root.addLayout(row)
 
     def refresh(self) -> None:
@@ -732,7 +740,7 @@ class BatchPage(Page):
                 str(row + 1),
                 str(item.get("item_id") or ""),
                 _display_value(item.get("device_type"), "device_type"),
-                _batch_item_summary(values),
+                batch_item_summary(values),
                 str(item.get("status") or "Ready"),
                 _batch_issue_text(item),
             ]
@@ -740,6 +748,7 @@ class BatchPage(Page):
                 cell = QTableWidgetItem(value)
                 self.table.setItem(row, column, cell)
         self.status.setText(self._status_text(items))
+        self._sync_controls()
 
     def view_selected(self, row: int | None = None) -> None:
         index = self._selected_index(row)
@@ -757,6 +766,8 @@ class BatchPage(Page):
             self.main_window.edit_batch_item(index)
 
     def remove_selected(self) -> None:
+        if self._batch_is_running():
+            return
         index = self._selected_index()
         if index is None:
             return
@@ -793,7 +804,7 @@ class BatchPage(Page):
         for index, item in enumerate(self.main_window.state.batch_items, start=1):
             export_item = _serializable_batch_item(item)
             if item.get("report_text"):
-                report_path = report_dir / f"{index:03d}_{_safe_filename(item.get('item_id'))}.txt"
+                report_path = report_dir / f"{index:03d}_{safe_batch_filename(item.get('item_id'))}.txt"
                 report_path.write_text(str(item.get("report_text") or ""), encoding="utf-8")
                 export_item["report_path"] = str(report_path)
             export_items.append(export_item)
@@ -825,6 +836,26 @@ class BatchPage(Page):
         source = f" File: {self.main_window.state.batch_source_path}" if self.main_window.state.batch_source_path else ""
         parts = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
         return f"{len(items)} rows loaded. {parts}.{source}"
+
+    def _sync_controls(self) -> None:
+        running = self._batch_is_running()
+        has_items = bool(self.main_window.state.batch_items)
+        has_finished = any(
+            item.get("result") or item.get("error")
+            for item in self.main_window.state.batch_items
+        )
+        self.import_button.setEnabled(not running)
+        self.start_button.setEnabled(not running and has_items)
+        self.edit_button.setEnabled(not running and has_items)
+        self.remove_button.setEnabled(not running and has_items)
+        self.back_button.setEnabled(not running)
+        self.view_button.setEnabled(has_items)
+        self.print_all_button.setEnabled(has_finished)
+        self.export_all_button.setEnabled(has_finished)
+
+    def _batch_is_running(self) -> bool:
+        thread = self.main_window.batch_pricing_thread
+        return bool(thread is not None and thread.isRunning())
 
 
 class ComputerModePage(Page):
@@ -1598,19 +1629,6 @@ def _batch_success_status(result: dict[str, Any]) -> str:
     return "Complete"
 
 
-def _batch_item_summary(values: dict[str, Any]) -> str:
-    parts = [
-        values.get("brand"),
-        values.get("model"),
-        values.get("variant"),
-        values.get("cpu"),
-        values.get("ram") and f"{values.get('ram')}GB RAM",
-        values.get("storage") and f"{values.get('storage')}GB",
-        values.get("capacity"),
-    ]
-    return " ".join(str(part) for part in parts if part)
-
-
 def _batch_issue_text(item: dict[str, Any]) -> str:
     errors = item.get("errors") or []
     if errors:
@@ -1629,11 +1647,6 @@ def _serializable_batch_item(item: dict[str, Any]) -> dict[str, Any]:
     for key in ["pending_excluded_comparable_ids", "applied_excluded_comparable_ids"]:
         clean[key] = sorted(str(value) for value in clean.get(key, set()))
     return clean
-
-
-def _safe_filename(value: Any) -> str:
-    text = "".join(character if character.isalnum() or character in "._-" else "_" for character in str(value or "item"))
-    return text.strip("._") or "item"
 
 
 def _section_title(text: str) -> QLabel:  # type: ignore[misc]

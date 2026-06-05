@@ -302,6 +302,31 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
+    def test_batch_page_disables_mutating_controls_while_running_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.batch_items = [
+            {
+                "item_id": "001",
+                "device_type": "computer",
+                "values": {"brand": "Lenovo", "model": "ThinkPad"},
+                "status": "Ready",
+                "errors": [],
+            }
+        ]
+        window.batch_pricing_thread = FakeRunningThread()
+
+        window.batch_page.refresh()
+
+        self.assertFalse(window.batch_page.import_button.isEnabled())
+        self.assertFalse(window.batch_page.start_button.isEnabled())
+        self.assertFalse(window.batch_page.edit_button.isEnabled())
+        self.assertFalse(window.batch_page.remove_button.isEnabled())
+        self.assertFalse(window.batch_page.back_button.isEnabled())
+
+        window.batch_pricing_thread = None
+        window.close()
+
     def test_source_selection_skips_credentials_when_ebay_is_disabled_when_pyside_is_available(self):
         self._qt_app()
         with patch("pc_pricer.gui.save_source_settings", side_effect=lambda settings: settings), patch(
@@ -666,6 +691,11 @@ class FakeTextDocument:
 
     def print_(self, printer):
         self.printed_to = printer
+
+
+class FakeRunningThread:
+    def isRunning(self) -> bool:
+        return True
 
 
 if __name__ == "__main__":

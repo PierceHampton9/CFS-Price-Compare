@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.batch import (
+    BatchItem,
+    batch_item_summary,
     batch_summary_rows,
     batch_template_csv,
     load_batch_csv,
+    safe_batch_filename,
     specs_for_batch_item,
     write_batch_summary_csv,
 )
@@ -357,7 +359,7 @@ def main() -> None:
             invalid_items = [item for item in items if not item.is_valid]
             if invalid_items:
                 raise RuntimeError(_invalid_batch_message(invalid_items))
-            outputs = price_batch_items(args)
+            outputs = price_batch_items(args, items)
         except RuntimeError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
@@ -421,7 +423,7 @@ def print_batch_validation(payload: dict[str, Any]) -> None:
             print(f"  - {error}")
 
 
-def price_batch_items(args: argparse.Namespace) -> dict[str, Any]:
+def price_batch_items(args: argparse.Namespace, batch_items: list[BatchItem]) -> dict[str, Any]:
     config = load_config(args.config)
     source = _pricing_sources(config, args.marketplace)
     output_dir = Path(args.output)
@@ -429,13 +431,13 @@ def price_batch_items(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = output_dir / "reports"
     report_dir.mkdir(exist_ok=True)
 
-    batch_items = load_batch_csv(args.csv_file)
     outputs = []
     for index, item in enumerate(batch_items, start=1):
         output_item: dict[str, Any] = {
             "item_id": item.item_id,
             "device_type": item.device_type,
-            "summary": _batch_item_summary(item.values),
+            "values": dict(item.values),
+            "summary": batch_item_summary(item.values),
             "status": "failed",
             "error": "",
         }
@@ -449,7 +451,7 @@ def price_batch_items(args: argparse.Namespace) -> dict[str, Any]:
             )
             result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
             report = format_price_report(result)
-            report_path = report_dir / f"{index:03d}_{_safe_filename(item.item_id)}.txt"
+            report_path = report_dir / f"{index:03d}_{safe_batch_filename(item.item_id)}.txt"
             report_path.write_text(report, encoding="utf-8")
             output_item.update(
                 {
@@ -458,7 +460,7 @@ def price_batch_items(args: argparse.Namespace) -> dict[str, Any]:
                     "report_path": str(report_path),
                 }
             )
-        except RuntimeError as exc:
+        except Exception as exc:
             output_item["error"] = str(exc)
         outputs.append(output_item)
 
@@ -498,15 +500,6 @@ def _batch_validation_payload(items: list[Any]) -> dict[str, Any]:
 def _invalid_batch_message(items: list[Any]) -> str:
     first = items[0]
     return f"Batch CSV has {len(items)} invalid row(s). First invalid row is {first.row_number}: {' '.join(first.errors)}"
-
-
-def _batch_item_summary(values: dict[str, Any]) -> str:
-    return " ".join(str(values.get(key) or "") for key in ["brand", "model", "variant", "cpu"] if values.get(key)).strip()
-
-
-def _safe_filename(value: Any) -> str:
-    text = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "item")).strip("._")
-    return text or "item"
 
 
 def _format_ram(specs: dict[str, Any]) -> str:

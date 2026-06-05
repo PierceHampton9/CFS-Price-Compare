@@ -38,6 +38,24 @@ class BatchImportTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "item_id"):
                 load_batch_csv(path)
 
+    def test_load_batch_csv_reports_blank_device_type_directly(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "devices.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor",
+                        "001,,Lenovo,ThinkPad,good,laptop",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            items = load_batch_csv(path)
+
+        self.assertFalse(items[0].is_valid)
+        self.assertIn("Device type is required.", items[0].errors)
+
     def test_template_contains_excel_friendly_headers_and_examples(self):
         template = batch_template_csv()
 

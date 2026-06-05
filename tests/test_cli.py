@@ -910,6 +910,38 @@ sources:
         self.assertIn("Price estimate", report_text)
         self.assertIn("Lenovo ThinkPad", report_text)
 
+    def test_price_batch_command_keeps_summary_after_unexpected_row_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "devices.csv"
+            output_dir = Path(temp_dir) / "reports"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,storage_type",
+                        "001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,SSD",
+                        "002,computer,Dell,OptiPlex 7050,good,desktop,i5-7500,16,256,SSD",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            argv = ["pc_pricer", "price-batch", str(input_path), "--output", str(output_dir)]
+
+            with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+                "pc_pricer.cli._pricing_sources", return_value=[UnexpectedOnceSource()]
+            ):
+                cli.main()
+
+            summary_text = (output_dir / "batch_summary.csv").read_text(encoding="utf-8")
+            results_text = (output_dir / "batch_results.json").read_text(encoding="utf-8")
+            second_report_exists = (output_dir / "reports" / "002_002.txt").exists()
+
+        self.assertIn("Batch complete: 1 completed, 1 failed.", stdout.getvalue())
+        self.assertIn("unexpected source failure", summary_text)
+        self.assertIn("Dell OptiPlex 7050", summary_text)
+        self.assertIn("unexpected source failure", results_text)
+        self.assertTrue(second_report_exists)
+
 
 def _listing(title, total_price, is_sold=False, condition_raw="Used"):
     return {
@@ -948,6 +980,20 @@ class StaticSource:
 
     def search(self, _query, _max_results):
         return [_listing("Lenovo ThinkPad listing", 300)]
+
+
+class UnexpectedOnceSource:
+    name = "ebay"
+    enabled = True
+
+    def __init__(self):
+        self.calls = 0
+
+    def search(self, _query, _max_results):
+        self.calls += 1
+        if self.calls == 1:
+            raise ValueError("unexpected source failure")
+        return [_listing("Dell OptiPlex listing", 250)]
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 from pc_pricer.gui_forms import DEVICE_TYPES, fields_for_device, validate_specs
@@ -136,7 +137,7 @@ def batch_summary_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "item_id": item.get("item_id") or "",
                 "device_type": item.get("device_type") or "",
                 "status": item.get("status") or "",
-                "summary": item.get("summary") or "",
+                "summary": item.get("summary") or batch_item_summary(item.get("values") or {}),
                 "estimate_low_cad": result.get("conservative_low_cad") or result.get("price_low_cad") or "",
                 "estimate_high_cad": result.get("conservative_high_cad") or result.get("price_high_cad") or "",
                 "median_price_cad": result.get("median_price_cad") or result.get("asking_median_price_cad") or "",
@@ -177,17 +178,42 @@ def specs_for_batch_item(item: BatchItem) -> dict[str, Any]:
     return specs
 
 
+def batch_item_summary(values: dict[str, Any]) -> str:
+    """Return a compact human-readable device summary for batch tables and CSVs."""
+    parts = [
+        values.get("brand"),
+        values.get("model"),
+        values.get("variant"),
+        values.get("cpu"),
+        values.get("ram") and f"{values.get('ram')}GB RAM",
+        values.get("storage") and f"{values.get('storage')}GB",
+        values.get("capacity"),
+    ]
+    return " ".join(str(part) for part in parts if part)
+
+
+def safe_batch_filename(value: Any) -> str:
+    """Return a filesystem-safe filename stem for batch artifacts."""
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "item")).strip("._")
+    return text or "item"
+
+
 def _batch_item_from_row(row_number: int, row: dict[str, str]) -> BatchItem:
     item_id = row.get("item_id", "").strip()
     errors = []
     if not item_id:
         errors.append("Item ID is required.")
 
-    try:
-        device_type = manual_device_type(row.get("device_type"))
-    except RuntimeError as exc:
-        device_type = row.get("device_type", "").strip().lower()
-        errors.append(str(exc))
+    raw_device_type = row.get("device_type", "").strip()
+    if not raw_device_type:
+        device_type = ""
+        errors.append("Device type is required.")
+    else:
+        try:
+            device_type = manual_device_type(raw_device_type)
+        except RuntimeError as exc:
+            device_type = raw_device_type.lower()
+            errors.append(str(exc))
 
     values = _values_for_device(row, device_type)
     if device_type in DEVICE_TYPES:
