@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from copy import deepcopy
 import html
+import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
+from pc_pricer.batch import (
+    BatchItem,
+    batch_summary_rows,
+    load_batch_csv,
+    validate_batch_items,
+    write_batch_summary_csv,
+)
 from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import default_env_path, load_env_file
 from pc_pricer.gui_forms import (
@@ -57,10 +66,12 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
     from PySide6.QtPrintSupport import QPrintDialog, QPrinter  # type: ignore[import-not-found]
     from PySide6.QtWidgets import (  # type: ignore[import-not-found]
         QApplication,
+        QAbstractItemView,
         QButtonGroup,
         QCheckBox,
         QComboBox,
         QDialog,
+        QFileDialog,
         QFormLayout,
         QFrame,
         QGridLayout,
@@ -73,6 +84,8 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
         QRadioButton,
         QScrollArea,
         QStackedWidget,
+        QTableWidget,
+        QTableWidgetItem,
         QToolButton,
         QVBoxLayout,
         QWidget,
@@ -80,9 +93,11 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
 except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QApplication = None  # type: ignore[assignment]
     QThread = object  # type: ignore[assignment]
+    QAbstractItemView = object  # type: ignore[assignment]
     QButtonGroup = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
-    QGridLayout = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
+    QFileDialog = QGridLayout = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
     QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
+    QTableWidget = QTableWidgetItem = object  # type: ignore[assignment]
     Qt = type(
         "Qt",
         (),
@@ -114,6 +129,9 @@ class GuiState:
         self.pending_excluded_comparable_ids: set[str] = set()
         self.applied_excluded_comparable_ids: set[str] = set()
         self.source_settings: dict[str, bool] = load_source_settings()
+        self.batch_items: list[dict[str, Any]] = []
+        self.batch_source_path: str = ""
+        self.current_batch_index: int | None = None
 
 
 class StableComboBox(QComboBox):  # type: ignore[misc]
@@ -144,6 +162,32 @@ class PricingThread(QThread):  # type: ignore[misc]
             self.completed.emit(result, report)
 
 
+class BatchPricingThread(QThread):  # type: ignore[misc]
+    item_started = Signal(int)
+    item_completed = Signal(int, dict, str)
+    item_failed = Signal(int, str)
+    completed = Signal()
+
+    def __init__(self, items: list[dict[str, Any]], parent: QWidget | None = None) -> None:  # type: ignore[misc]
+        super().__init__(parent)
+        self.items = deepcopy(items)
+
+    def run(self) -> None:
+        for index, item in enumerate(self.items):
+            if item.get("errors") or item.get("status") == "Complete":
+                continue
+            self.item_started.emit(index)
+            try:
+                result, report = price_gui_values(item.get("device_type") or "computer", item.get("values") or {})
+            except RuntimeError as exc:
+                self.item_failed.emit(index, str(exc))
+            except Exception as exc:  # pragma: no cover - defensive GUI boundary.
+                self.item_failed.emit(index, f"Unexpected pricing error: {exc}")
+            else:
+                self.item_completed.emit(index, result, report)
+        self.completed.emit()
+
+
 class DetectionThread(QThread):  # type: ignore[misc]
     completed = Signal(dict)
     failed = Signal(str)
@@ -166,6 +210,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.resize(940, 680)
         self.state = GuiState()
         self.pricing_thread: PricingThread | None = None
+        self.batch_pricing_thread: BatchPricingThread | None = None
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
@@ -175,6 +220,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.computer_mode_page = ComputerModePage(self)
         self.specs_page = SpecsPage(self)
         self.loading_page = LoadingPage(self)
+        self.batch_page = BatchPage(self)
         self.report_page = ReportPage(self)
 
         for page in [
@@ -184,6 +230,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
             self.computer_mode_page,
             self.specs_page,
             self.loading_page,
+            self.batch_page,
             self.report_page,
         ]:
             self.stack.addWidget(page)
@@ -208,6 +255,10 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
     def show_device_type(self) -> None:
         self.device_page.refresh()
         self.stack.setCurrentWidget(self.device_page)
+
+    def show_batch(self) -> None:
+        self.batch_page.refresh()
+        self.stack.setCurrentWidget(self.batch_page)
 
     def show_computer_mode(self) -> None:
         self.computer_mode_page.refresh()
@@ -245,12 +296,14 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.state.report_mode = "standard"
         self.state.pending_excluded_comparable_ids = set()
         self.state.applied_excluded_comparable_ids = set()
+        self._save_current_report_to_batch()
         self.show_report()
 
     def pricing_failed(self, message: str) -> None:
         self.state.report_result = {}
         self.state.report_text = ""
         self.state.report_error = message
+        self._save_current_report_to_batch()
         self.show_report()
 
     def pricing_finished(self) -> None:
@@ -259,6 +312,164 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
     def show_report(self) -> None:
         self.report_page.refresh()
         self.stack.setCurrentWidget(self.report_page)
+
+    def import_batch_csv(self) -> None:
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Import Batch CSV",
+            "",
+            "CSV files (*.csv);;All files (*.*)",
+        )
+        if not path:
+            return
+        self.load_batch_csv(path)
+
+    def load_batch_csv(self, path: str) -> None:
+        try:
+            items = load_batch_csv(path)
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "Batch import failed", str(exc))
+            return
+        self.state.batch_source_path = path
+        self.state.batch_items = [_gui_batch_item(item) for item in items]
+        self.state.current_batch_index = None
+        self.show_batch()
+
+    def start_batch_pricing(self) -> None:
+        if self.batch_pricing_thread is not None:
+            return
+        invalid_count = sum(1 for item in self.state.batch_items if item.get("errors"))
+        if invalid_count:
+            QMessageBox.warning(
+                self,
+                "Fix invalid rows",
+                f"Fix or remove {invalid_count} invalid row(s) before starting the batch.",
+            )
+            return
+        if not self.state.batch_items:
+            QMessageBox.information(self, "No batch loaded", "Import a batch CSV first.")
+            return
+
+        self.batch_pricing_thread = BatchPricingThread(self.state.batch_items, self)
+        self.batch_pricing_thread.item_started.connect(self.batch_item_started)
+        self.batch_pricing_thread.item_completed.connect(self.batch_item_completed)
+        self.batch_pricing_thread.item_failed.connect(self.batch_item_failed)
+        self.batch_pricing_thread.completed.connect(self.batch_pricing_completed)
+        self.batch_pricing_thread.finished.connect(self.batch_pricing_finished)
+        self.batch_pricing_thread.finished.connect(self.batch_pricing_thread.deleteLater)
+        self.batch_pricing_thread.start()
+        self.batch_page.refresh()
+
+    def batch_item_started(self, index: int) -> None:
+        item = self._batch_item(index)
+        if item is None:
+            return
+        item["status"] = "Running"
+        item["error"] = ""
+        self.batch_page.refresh()
+
+    def batch_item_completed(self, index: int, result: dict[str, Any], report: str) -> None:
+        item = self._batch_item(index)
+        if item is None:
+            return
+        item["result"] = result
+        item["base_result"] = result
+        item["report_text"] = report
+        item["error"] = ""
+        item["report_mode"] = "standard"
+        item["pending_excluded_comparable_ids"] = set()
+        item["applied_excluded_comparable_ids"] = set()
+        item["status"] = _batch_success_status(result)
+        self.batch_page.refresh()
+
+    def batch_item_failed(self, index: int, message: str) -> None:
+        item = self._batch_item(index)
+        if item is None:
+            return
+        item["status"] = "Failed"
+        item["error"] = message
+        self.batch_page.refresh()
+
+    def batch_pricing_completed(self) -> None:
+        self.batch_page.refresh()
+
+    def batch_pricing_finished(self) -> None:
+        self.batch_pricing_thread = None
+        self.batch_page.refresh()
+
+    def open_batch_report(self, index: int) -> None:
+        item = self._batch_item(index)
+        if item is None:
+            return
+        self.state.current_batch_index = index
+        self.state.device_type = item.get("device_type") or "computer"
+        self.state.specs = dict(item.get("values") or {})
+        self.state.base_report_result = item.get("base_result") or item.get("result") or {}
+        self.state.report_result = item.get("result") or {}
+        self.state.report_text = item.get("report_text") or ""
+        self.state.report_error = item.get("error") or ""
+        self.state.report_mode = item.get("report_mode") or "standard"
+        self.state.pending_excluded_comparable_ids = set(item.get("pending_excluded_comparable_ids") or set())
+        self.state.applied_excluded_comparable_ids = set(item.get("applied_excluded_comparable_ids") or set())
+        self.show_report()
+
+    def edit_batch_item(self, index: int) -> None:
+        item = self._batch_item(index)
+        if item is None:
+            return
+        if item.get("device_type") not in DEVICE_TYPES:
+            QMessageBox.warning(self, "Invalid device type", "Remove this row or fix the device_type in the CSV and import it again.")
+            return
+        self.state.current_batch_index = index
+        self.state.device_type = item.get("device_type") or "computer"
+        self.state.computer_mode = "manual" if self.state.device_type == "computer" else None
+        self.state.specs = dict(item.get("values") or {})
+        self.show_specs()
+
+    def save_edited_batch_item(self) -> bool:
+        index = self.state.current_batch_index
+        item = self._batch_item(index)
+        if item is None:
+            return False
+        updated = BatchItem(
+            row_number=int(item.get("row_number") or index + 2),
+            item_id=str(item.get("item_id") or ""),
+            device_type=self.state.device_type or item.get("device_type") or "computer",
+            values=dict(self.state.specs),
+        )
+        validated = validate_batch_items([updated])[0]
+        item.update(_gui_batch_item(validated))
+        if item.get("errors"):
+            return False
+        item["status"] = "Ready"
+        item["result"] = {}
+        item["base_result"] = {}
+        item["report_text"] = ""
+        item["error"] = ""
+        return True
+
+    def _save_current_report_to_batch(self) -> None:
+        item = self._batch_item(self.state.current_batch_index)
+        if item is None:
+            return
+        item["result"] = self.state.report_result
+        item["base_result"] = self.state.base_report_result
+        item["report_text"] = self.state.report_text
+        item["error"] = self.state.report_error
+        item["report_mode"] = self.state.report_mode
+        item["pending_excluded_comparable_ids"] = set(self.state.pending_excluded_comparable_ids)
+        item["applied_excluded_comparable_ids"] = set(self.state.applied_excluded_comparable_ids)
+        if self.state.report_error:
+            item["status"] = "Failed"
+        elif self.state.report_result:
+            item["status"] = _batch_success_status(self.state.report_result)
+
+    def _batch_item(self, index: int | None) -> dict[str, Any] | None:
+        if index is None:
+            return None
+        if index < 0 or index >= len(self.state.batch_items):
+            return None
+        return self.state.batch_items[index]
 
     def reset_for_new_device(self) -> None:
         self.state = GuiState()
@@ -270,6 +481,14 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
                 self,
                 "Pricing in progress",
                 "Wait for the current price search to finish before closing.",
+            )
+            event.ignore()
+            return
+        if self.batch_pricing_thread is not None and self.batch_pricing_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Batch pricing in progress",
+                "Wait for the current batch run to finish before closing.",
             )
             event.ignore()
             return
@@ -422,7 +641,18 @@ class DeviceTypePage(Page):
         self.error.setObjectName("errorText")
         self.root.addWidget(self.error)
         self.root.addStretch()
-        self.root.addLayout(nav_row("Back", self.main_window.show_source_selection, "Next", self.next_page))
+        buttons = QHBoxLayout()
+        back = QPushButton("Back")
+        back.clicked.connect(self.main_window.show_source_selection)
+        batch = QPushButton("Import Batch CSV")
+        batch.clicked.connect(self.main_window.import_batch_csv)
+        next_button = QPushButton("Next")
+        next_button.clicked.connect(self.next_page)
+        buttons.addWidget(back)
+        buttons.addStretch()
+        buttons.addWidget(batch)
+        buttons.addWidget(next_button)
+        self.root.addLayout(buttons)
 
     def refresh(self) -> None:
         self.error.clear()
@@ -442,6 +672,159 @@ class DeviceTypePage(Page):
         else:
             self.main_window.state.computer_mode = None
             self.main_window.show_specs()
+
+
+class BatchPage(Page):
+    def __init__(self, window: MainWindow) -> None:
+        super().__init__(
+            window,
+            "Batch Pricing",
+            "Import a CSV, fix invalid rows, then run devices in order. Completed reports stay in this batch view.",
+        )
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Order", "Item ID", "Device", "Summary", "Status", "Issue"])
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.cellDoubleClicked.connect(lambda row, _column: self.view_selected(row))
+        self.root.addWidget(self.table, 1)
+
+        self.status = QLabel()
+        self.status.setObjectName("statusText")
+        self.status.setWordWrap(True)
+        self.root.addWidget(self.status)
+
+        row = QHBoxLayout()
+        import_button = QPushButton("Import CSV")
+        import_button.clicked.connect(self.main_window.import_batch_csv)
+        start = QPushButton("Start / Continue")
+        start.clicked.connect(self.main_window.start_batch_pricing)
+        view = QPushButton("View Report")
+        view.clicked.connect(self.view_selected)
+        edit = QPushButton("Edit Row")
+        edit.clicked.connect(self.edit_selected)
+        remove = QPushButton("Remove Row")
+        remove.clicked.connect(self.remove_selected)
+        print_all = QPushButton("Print All")
+        print_all.clicked.connect(self.print_all_reports)
+        export_all = QPushButton("Export All")
+        export_all.clicked.connect(self.export_all_reports)
+        back = QPushButton("Back")
+        back.clicked.connect(self.main_window.show_device_type)
+
+        row.addWidget(back)
+        row.addWidget(import_button)
+        row.addStretch()
+        row.addWidget(edit)
+        row.addWidget(remove)
+        row.addWidget(view)
+        row.addWidget(print_all)
+        row.addWidget(export_all)
+        row.addWidget(start)
+        self.root.addLayout(row)
+
+    def refresh(self) -> None:
+        items = self.main_window.state.batch_items
+        self.table.setRowCount(len(items))
+        for row, item in enumerate(items):
+            values = item.get("values") or {}
+            cells = [
+                str(row + 1),
+                str(item.get("item_id") or ""),
+                _display_value(item.get("device_type"), "device_type"),
+                _batch_item_summary(values),
+                str(item.get("status") or "Ready"),
+                _batch_issue_text(item),
+            ]
+            for column, value in enumerate(cells):
+                cell = QTableWidgetItem(value)
+                self.table.setItem(row, column, cell)
+        self.status.setText(self._status_text(items))
+
+    def view_selected(self, row: int | None = None) -> None:
+        index = self._selected_index(row)
+        if index is None:
+            return
+        item = self.main_window.state.batch_items[index]
+        if not item.get("result") and not item.get("error"):
+            QMessageBox.information(self, "No report yet", "Run this row before opening its report.")
+            return
+        self.main_window.open_batch_report(index)
+
+    def edit_selected(self) -> None:
+        index = self._selected_index()
+        if index is not None:
+            self.main_window.edit_batch_item(index)
+
+    def remove_selected(self) -> None:
+        index = self._selected_index()
+        if index is None:
+            return
+        del self.main_window.state.batch_items[index]
+        if self.main_window.state.current_batch_index == index:
+            self.main_window.state.current_batch_index = None
+        self.refresh()
+
+    def print_all_reports(self) -> None:
+        reports = self._completed_report_texts()
+        if not reports:
+            QMessageBox.information(self, "No reports to print", "Run at least one batch row before printing.")
+            return
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        document = QTextDocument()
+        document.setHtml(_printable_report_html("\n\n".join(reports), title="CFS Batch Price Reports"))
+        document.print_(printer)
+
+    def export_all_reports(self) -> None:
+        completed = [item for item in self.main_window.state.batch_items if item.get("result") or item.get("error")]
+        if not completed:
+            QMessageBox.information(self, "No reports to export", "Run at least one batch row before exporting.")
+            return
+        folder = QFileDialog.getExistingDirectory(self, "Export Batch Reports")
+        if not folder:
+            return
+        output_dir = Path(folder)
+        report_dir = output_dir / "reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        export_items = []
+        for index, item in enumerate(self.main_window.state.batch_items, start=1):
+            export_item = _serializable_batch_item(item)
+            if item.get("report_text"):
+                report_path = report_dir / f"{index:03d}_{_safe_filename(item.get('item_id'))}.txt"
+                report_path.write_text(str(item.get("report_text") or ""), encoding="utf-8")
+                export_item["report_path"] = str(report_path)
+            export_items.append(export_item)
+        write_batch_summary_csv(output_dir / "batch_summary.csv", batch_summary_rows(export_items))
+        (output_dir / "batch_results.json").write_text(json.dumps(export_items, indent=2, default=str), encoding="utf-8")
+        QMessageBox.information(self, "Batch exported", f"Exported batch reports to:\n{output_dir}")
+
+    def _completed_report_texts(self) -> list[str]:
+        reports = []
+        for item in self.main_window.state.batch_items:
+            if item.get("report_text"):
+                reports.append(str(item.get("report_text")))
+        return reports
+
+    def _selected_index(self, row: int | None = None) -> int | None:
+        index = row if row is not None else self.table.currentRow()
+        if index is None or index < 0 or index >= len(self.main_window.state.batch_items):
+            QMessageBox.information(self, "Select a row", "Select a batch row first.")
+            return None
+        return index
+
+    def _status_text(self, items: list[dict[str, Any]]) -> str:
+        if not items:
+            return "No batch CSV loaded."
+        counts: dict[str, int] = {}
+        for item in items:
+            status = str(item.get("status") or "Ready")
+            counts[status] = counts.get(status, 0) + 1
+        source = f" File: {self.main_window.state.batch_source_path}" if self.main_window.state.batch_source_path else ""
+        parts = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+        return f"{len(items)} rows loaded. {parts}.{source}"
 
 
 class ComputerModePage(Page):
@@ -564,6 +947,11 @@ class SpecsPage(Page):
         if errors:
             self.error.setText(" ".join(errors))
             return
+        if self.main_window.state.current_batch_index is not None and not self.main_window.save_edited_batch_item():
+            item = self.main_window._batch_item(self.main_window.state.current_batch_index)
+            item_errors = item.get("errors") if item else []
+            self.error.setText(" ".join(item_errors or ["Fix this batch row before pricing."]))
+            return
         self.main_window.show_loading()
 
     def _store_values(self) -> None:
@@ -591,7 +979,10 @@ class LoadingPage(Page):
         self.root.addStretch()
 
     def refresh(self) -> None:
-        self.message.setText("Preparing report preview...")
+        if self.main_window.state.current_batch_index is not None:
+            self.message.setText("Repricing selected batch row...")
+        else:
+            self.message.setText("Preparing report preview...")
 
 
 class ReportPage(Page):
@@ -625,24 +1016,31 @@ class ReportPage(Page):
         self.root.addLayout(mode_row)
         self.root.addWidget(self.scroll, 1)
         buttons = QHBoxLayout()
-        back = QPushButton("Back to Specs")
-        back.clicked.connect(self.main_window.show_specs)
-        another = QPushButton("Price Another Device")
-        another.clicked.connect(self.main_window.reset_for_new_device)
+        self.back_button = QPushButton("Back to Specs")
+        self.back_button.clicked.connect(self.back_to_specs)
+        self.previous_button = QPushButton("Previous")
+        self.previous_button.clicked.connect(self.previous_report)
+        self.next_button = QPushButton("Next")
+        self.next_button.clicked.connect(self.next_report)
+        self.another_button = QPushButton("Price Another Device")
+        self.another_button.clicked.connect(self.secondary_action)
         self.print_button = QPushButton("Print")
         self.print_button.clicked.connect(self.print_report)
-        finish = QPushButton("Finish")
-        finish.clicked.connect(self.main_window.close)
-        buttons.addWidget(back)
+        self.finish_button = QPushButton("Finish")
+        self.finish_button.clicked.connect(self.main_window.close)
+        buttons.addWidget(self.back_button)
+        buttons.addWidget(self.previous_button)
+        buttons.addWidget(self.next_button)
         buttons.addStretch()
         buttons.addWidget(self.print_button)
-        buttons.addWidget(another)
-        buttons.addWidget(finish)
+        buttons.addWidget(self.another_button)
+        buttons.addWidget(self.finish_button)
         self.root.addLayout(buttons)
 
     def refresh(self) -> None:
         clear_layout(self.content_layout)
         self.print_button.setEnabled(self._can_print())
+        self._sync_batch_controls()
         self._sync_mode_controls()
         if self.main_window.state.report_error:
             self._add_message("Pricing failed", self.main_window.state.report_error, "errorPanel")
@@ -703,6 +1101,58 @@ class ReportPage(Page):
         document = QTextDocument()
         document.setHtml(_printable_report_html(self._printable_report_text()))
         document.print_(printer)
+
+    def back_to_specs(self) -> None:
+        if self.main_window.state.current_batch_index is not None:
+            self.main_window.edit_batch_item(self.main_window.state.current_batch_index)
+            return
+        self.main_window.show_specs()
+
+    def secondary_action(self) -> None:
+        if self.main_window.state.current_batch_index is not None:
+            self.main_window.show_batch()
+            return
+        self.main_window.reset_for_new_device()
+
+    def previous_report(self) -> None:
+        index = self.main_window.state.current_batch_index
+        if index is None:
+            return
+        for candidate in range(index - 1, -1, -1):
+            item = self.main_window.state.batch_items[candidate]
+            if item.get("result") or item.get("error"):
+                self.main_window.open_batch_report(candidate)
+                return
+
+    def next_report(self) -> None:
+        index = self.main_window.state.current_batch_index
+        if index is None:
+            return
+        for candidate in range(index + 1, len(self.main_window.state.batch_items)):
+            item = self.main_window.state.batch_items[candidate]
+            if item.get("result") or item.get("error"):
+                self.main_window.open_batch_report(candidate)
+                return
+
+    def _sync_batch_controls(self) -> None:
+        index = self.main_window.state.current_batch_index
+        in_batch = index is not None
+        self.back_button.setText("Edit Row" if in_batch else "Back to Specs")
+        self.another_button.setText("Back to Batch" if in_batch else "Price Another Device")
+        self.previous_button.setVisible(in_batch)
+        self.next_button.setVisible(in_batch)
+        self.previous_button.setEnabled(bool(in_batch and self._has_report_before(index)))
+        self.next_button.setEnabled(bool(in_batch and self._has_report_after(index)))
+
+    def _has_report_before(self, index: int | None) -> bool:
+        if index is None:
+            return False
+        return any(item.get("result") or item.get("error") for item in self.main_window.state.batch_items[:index])
+
+    def _has_report_after(self, index: int | None) -> bool:
+        if index is None:
+            return False
+        return any(item.get("result") or item.get("error") for item in self.main_window.state.batch_items[index + 1 :])
 
     def _can_print(self) -> bool:
         return bool(
@@ -1011,6 +1461,7 @@ class ReportPage(Page):
         self.main_window.state.report_result = reprice_existing_result(base_result, excluded_ids)
         self.main_window.state.applied_excluded_comparable_ids = excluded_ids
         self.main_window.state.report_text = self._printable_report_text()
+        self.main_window._save_current_report_to_batch()
         self.refresh()
 
     def _use_all_comparables(self, *_args: Any) -> None:
@@ -1119,6 +1570,70 @@ class ReportPage(Page):
         layout.addWidget(heading)
         layout.addWidget(body)
         self.content_layout.addWidget(panel)
+
+
+def _gui_batch_item(item: BatchItem) -> dict[str, Any]:
+    return {
+        "row_number": item.row_number,
+        "item_id": item.item_id,
+        "device_type": item.device_type,
+        "values": dict(item.values),
+        "errors": list(item.errors),
+        "status": "Invalid" if item.errors else "Ready",
+        "result": {},
+        "base_result": {},
+        "report_text": "",
+        "error": "",
+        "report_mode": "standard",
+        "pending_excluded_comparable_ids": set(),
+        "applied_excluded_comparable_ids": set(),
+    }
+
+
+def _batch_success_status(result: dict[str, Any]) -> str:
+    if _safe_int(result.get("count")) <= 0:
+        return "Needs Review"
+    if result.get("confidence_flags"):
+        return "Needs Review"
+    return "Complete"
+
+
+def _batch_item_summary(values: dict[str, Any]) -> str:
+    parts = [
+        values.get("brand"),
+        values.get("model"),
+        values.get("variant"),
+        values.get("cpu"),
+        values.get("ram") and f"{values.get('ram')}GB RAM",
+        values.get("storage") and f"{values.get('storage')}GB",
+        values.get("capacity"),
+    ]
+    return " ".join(str(part) for part in parts if part)
+
+
+def _batch_issue_text(item: dict[str, Any]) -> str:
+    errors = item.get("errors") or []
+    if errors:
+        return " ".join(str(error) for error in errors)
+    if item.get("error"):
+        return str(item.get("error"))
+    result = item.get("result") if isinstance(item.get("result"), dict) else {}
+    flags = result.get("confidence_flags") if result else []
+    if flags:
+        return ", ".join(_sentence_case(str(flag).replace("_", " ")) for flag in flags)
+    return ""
+
+
+def _serializable_batch_item(item: dict[str, Any]) -> dict[str, Any]:
+    clean = dict(item)
+    for key in ["pending_excluded_comparable_ids", "applied_excluded_comparable_ids"]:
+        clean[key] = sorted(str(value) for value in clean.get(key, set()))
+    return clean
+
+
+def _safe_filename(value: Any) -> str:
+    text = "".join(character if character.isalnum() or character in "._-" else "_" for character in str(value or "item"))
+    return text.strip("._") or "item"
 
 
 def _section_title(text: str) -> QLabel:  # type: ignore[misc]
@@ -1298,8 +1813,9 @@ def _comparable_id(listing: dict[str, Any]) -> str:
     return f"title_price:{title}|{price}"
 
 
-def _printable_report_html(text: str) -> str:
+def _printable_report_html(text: str, title: str = "CFS Price Report") -> str:
     escaped = html.escape(text)
+    escaped_title = html.escape(title)
     return f"""
 <!doctype html>
 <html>
@@ -1324,7 +1840,7 @@ def _printable_report_html(text: str) -> str:
   </style>
 </head>
 <body>
-  <h1>CFS Price Report</h1>
+  <h1>{escaped_title}</h1>
   <pre>{escaped}</pre>
 </body>
 </html>

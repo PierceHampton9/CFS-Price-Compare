@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from pathlib import Path
 from typing import Any
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.batch import (
+    batch_summary_rows,
+    batch_template_csv,
+    load_batch_csv,
+    specs_for_batch_item,
+    write_batch_summary_csv,
+)
 from pc_pricer.config import load_config
 from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import load_env_file
@@ -160,6 +169,41 @@ def main() -> None:
     price_detect_parser.add_argument("--raw", action="store_true", help="Include raw detected specs in JSON output.")
     price_detect_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
+    validate_batch_parser = subparsers.add_parser(
+        "validate-batch",
+        help="Validate a CSV file for batch pricing without running searches.",
+    )
+    validate_batch_parser.add_argument("csv_file", help="Path to the batch CSV file.")
+    validate_batch_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    template_parser = subparsers.add_parser(
+        "export-template",
+        help="Print a batch CSV template that can be saved and opened in Excel.",
+    )
+    template_parser.add_argument("--output", help="Optional path to write the template CSV.")
+
+    price_batch_parser = subparsers.add_parser(
+        "price-batch",
+        help="Price every valid row in a batch CSV and write reports to an output folder.",
+    )
+    price_batch_parser.add_argument("csv_file", help="Path to the batch CSV file.")
+    price_batch_parser.add_argument("--output", required=True, help="Folder where batch reports will be written.")
+    price_batch_parser.add_argument(
+        "--limit-per-query",
+        type=int,
+        default=None,
+        help="Maximum listings to fetch for each generated query.",
+    )
+    price_batch_parser.add_argument("--marketplace", default=None, help="eBay marketplace ID.")
+    price_batch_parser.add_argument(
+        "--condition",
+        choices=["good", "excellent", "mint", "any"],
+        default=None,
+        help="Override target condition for every row.",
+    )
+    price_batch_parser.add_argument("--config", default=None, help="Path to config file.")
+    price_batch_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary.")
+
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -286,6 +330,44 @@ def main() -> None:
             print(json.dumps(result, indent=2, default=str))
         else:
             print(format_price_report(result))
+    elif args.command == "validate-batch":
+        try:
+            items = load_batch_csv(args.csv_file)
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        payload = _batch_validation_payload(items)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print_batch_validation(payload)
+        if payload["invalid_count"]:
+            raise SystemExit(1)
+    elif args.command == "export-template":
+        template = batch_template_csv()
+        if args.output:
+            Path(args.output).write_text(template, encoding="utf-8")
+            print(f"Saved batch CSV template to: {args.output}")
+        else:
+            print(template, end="")
+    elif args.command == "price-batch":
+        try:
+            items = load_batch_csv(args.csv_file)
+            invalid_items = [item for item in items if not item.is_valid]
+            if invalid_items:
+                raise RuntimeError(_invalid_batch_message(invalid_items))
+            outputs = price_batch_items(args)
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        if args.json:
+            print(json.dumps(outputs["summary"], indent=2, default=str))
+        else:
+            print(f"Batch complete: {outputs['completed_count']} completed, {outputs['failed_count']} failed.")
+            print(f"Output folder: {outputs['output_dir']}")
+            print(f"Summary CSV:   {outputs['summary_csv']}")
 
 
 def print_detected_specs(specs: dict[str, Any]) -> None:
@@ -323,6 +405,108 @@ def print_ebay_listings(query: str, listings: list[dict]) -> None:
         print(f"   Condition: {format_condition(listing)}")
         print(f"   Location:  {format_location(listing.get('location'))}")
         print(f"   URL:       {listing.get('url') or 'Unknown'}")
+
+
+def print_batch_validation(payload: dict[str, Any]) -> None:
+    print("Batch validation")
+    print("----------------")
+    print(f"Rows:    {payload['row_count']}")
+    print(f"Valid:   {payload['valid_count']}")
+    print(f"Invalid: {payload['invalid_count']}")
+    for item in payload["items"]:
+        if item["valid"]:
+            continue
+        print(f"Row {item['row_number']} ({item['item_id'] or 'missing item_id'}):")
+        for error in item["errors"]:
+            print(f"  - {error}")
+
+
+def price_batch_items(args: argparse.Namespace) -> dict[str, Any]:
+    config = load_config(args.config)
+    source = _pricing_sources(config, args.marketplace)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = output_dir / "reports"
+    report_dir.mkdir(exist_ok=True)
+
+    batch_items = load_batch_csv(args.csv_file)
+    outputs = []
+    for index, item in enumerate(batch_items, start=1):
+        output_item: dict[str, Any] = {
+            "item_id": item.item_id,
+            "device_type": item.device_type,
+            "summary": _batch_item_summary(item.values),
+            "status": "failed",
+            "error": "",
+        }
+        try:
+            result = price_specs(
+                specs_for_batch_item(item),
+                source,
+                limit_per_query=_limit_per_query(args.limit_per_query, config),
+                target_condition=_condition(args.condition or item.values.get("condition"), config),
+                **_pricing_options(config),
+            )
+            result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
+            report = format_price_report(result)
+            report_path = report_dir / f"{index:03d}_{_safe_filename(item.item_id)}.txt"
+            report_path.write_text(report, encoding="utf-8")
+            output_item.update(
+                {
+                    "status": "complete",
+                    "result": result,
+                    "report_path": str(report_path),
+                }
+            )
+        except RuntimeError as exc:
+            output_item["error"] = str(exc)
+        outputs.append(output_item)
+
+    summary_rows = batch_summary_rows(outputs)
+    summary_csv = output_dir / "batch_summary.csv"
+    results_json = output_dir / "batch_results.json"
+    write_batch_summary_csv(summary_csv, summary_rows)
+    results_json.write_text(json.dumps(outputs, indent=2, default=str), encoding="utf-8")
+    return {
+        "output_dir": str(output_dir),
+        "summary_csv": str(summary_csv),
+        "results_json": str(results_json),
+        "summary": summary_rows,
+        "completed_count": sum(1 for item in outputs if item["status"] == "complete"),
+        "failed_count": sum(1 for item in outputs if item["status"] == "failed"),
+    }
+
+
+def _batch_validation_payload(items: list[Any]) -> dict[str, Any]:
+    return {
+        "row_count": len(items),
+        "valid_count": sum(1 for item in items if item.is_valid),
+        "invalid_count": sum(1 for item in items if not item.is_valid),
+        "items": [
+            {
+                "row_number": item.row_number,
+                "item_id": item.item_id,
+                "device_type": item.device_type,
+                "valid": item.is_valid,
+                "errors": item.errors,
+            }
+            for item in items
+        ],
+    }
+
+
+def _invalid_batch_message(items: list[Any]) -> str:
+    first = items[0]
+    return f"Batch CSV has {len(items)} invalid row(s). First invalid row is {first.row_number}: {' '.join(first.errors)}"
+
+
+def _batch_item_summary(values: dict[str, Any]) -> str:
+    return " ".join(str(values.get(key) or "") for key in ["brand", "model", "variant", "cpu"] if values.get(key)).strip()
+
+
+def _safe_filename(value: Any) -> str:
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "item")).strip("._")
+    return text or "item"
 
 
 def _format_ram(specs: dict[str, Any]) -> str:

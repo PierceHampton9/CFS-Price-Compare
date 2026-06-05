@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -270,6 +272,33 @@ class GuiImportTests(unittest.TestCase):
         self.assertIn("eBay", checkboxes)
         self.assertIn("Refurb.io", checkboxes)
         self.assertIn("Amazon Renewed (experimental)", checkboxes)
+
+        window.close()
+
+    def test_main_window_loads_batch_csv_into_batch_page_when_pyside_is_available(self):
+        self._qt_app()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "devices.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,storage_type",
+                        "001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,SSD",
+                        "002,computer,Lenovo,ThinkPad,good,,i5-1135G7,16,512,SSD",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            window = gui.MainWindow()
+
+            window.load_batch_csv(str(path))
+
+        self.assertIs(window.stack.currentWidget(), window.batch_page)
+        self.assertEqual(len(window.state.batch_items), 2)
+        self.assertEqual(window.state.batch_items[0]["status"], "Ready")
+        self.assertEqual(window.state.batch_items[1]["status"], "Invalid")
+        self.assertEqual(window.batch_page.table.item(0, 1).text(), "001")
+        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 5).text())
 
         window.close()
 

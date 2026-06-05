@@ -110,6 +110,32 @@ Reports show the estimate, comparable range, source quote basis, source counts, 
 
 The GUI defaults to a Standard report view. Advanced view shows search/source diagnostics and all comparable listings; users can exclude bad comparables and reevaluate the estimate from the already fetched listings without running another online search.
 
+## Batch Pricing from CSV
+
+The GUI can import a batch CSV after pricing sources and credentials are selected. Use `Import Batch CSV`, review the batch table, fix invalid rows with `Edit Row`, then run `Start / Continue`. Reports stay inside the GUI in CSV order, with previous/next navigation, per-device comparable review, `Print All`, and optional `Export All`.
+
+Windows release zips include a `batch-templates` folder with Excel-friendly starter CSV files for all devices, computers, phones/tablets, monitors, printers, and storage devices.
+
+For CLI use, create a template:
+
+```powershell
+pc_pricer export-template --output devices-template.csv
+```
+
+Validate before running searches:
+
+```powershell
+pc_pricer validate-batch devices.csv
+```
+
+Run the batch and choose the output folder:
+
+```powershell
+pc_pricer price-batch devices.csv --output reports
+```
+
+The CLI writes `batch_summary.csv`, `batch_results.json`, and one text report per completed device.
+
 ## Optional Amazon Renewed Source
 
 Amazon Renewed uses Playwright browser automation and is disabled by default. To test it locally:

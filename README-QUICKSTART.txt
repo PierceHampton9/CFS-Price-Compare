@@ -91,6 +91,34 @@ Auto-detection is only for Windows computers. Run this on the computer being ins
 
    .\pc_pricer.exe price-detect --condition good
 
+Batch pricing from CSV
+----------------------
+
+In the GUI, choose pricing sources and enter credentials first. On the Device Type screen, click Import Batch CSV, review the imported rows, fix invalid rows with Edit Row, then click Start / Continue. Reports stay inside the GUI in CSV order. Use Previous and Next to move between completed reports, Print All to print the completed batch, or Export All to choose a folder for report files.
+
+The extracted release folder includes a batch-templates folder with CSV files you can open in Excel:
+
+   batch-template-all-devices.csv
+   batch-template-computers.csv
+   batch-template-phones-tablets.csv
+   batch-template-monitors.csv
+   batch-template-printers.csv
+   batch-template-storage.csv
+
+For command-line batch testing, create a CSV template:
+
+   .\pc_pricer.exe export-template --output devices-template.csv
+
+Validate the CSV before searching:
+
+   .\pc_pricer.exe validate-batch devices.csv
+
+Run the batch and choose the output folder:
+
+   .\pc_pricer.exe price-batch devices.csv --output reports
+
+The command-line batch output includes batch_summary.csv, batch_results.json, and one text report per completed device.
+
 Reading the report (Line-By-Line) ... CLI or print-off only, GUI contains information indicators:
 -------------------------------------------------------------------------------------------------
 

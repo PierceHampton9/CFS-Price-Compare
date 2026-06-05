@@ -50,6 +50,7 @@ Copy-Item -Path (Join-Path $PyInstallerCliOutput "pc_pricer.exe") -Destination $
 Copy-Item -Path "config.yaml" -Destination $ReleaseDir
 Copy-Item -Path ".env.example" -Destination $ReleaseDir
 Copy-Item -Path "README-QUICKSTART.txt" -Destination $ReleaseDir
+Copy-Item -Path "batch-templates" -Destination $ReleaseDir -Recurse
 
 if (Test-Path $ZipPath) {
     Remove-Item -LiteralPath $ZipPath -Force

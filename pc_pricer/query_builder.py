@@ -50,13 +50,23 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
 
     if model:
         spec_query = _join_terms(brand, model, variant, screen_size, cpu, ram)
-        queries.append(_query(spec_query, 2, f"{form_factor} brand/model/spec fallback"))
+        queries.append(
+            _query(spec_query, 2, f"{form_factor} brand/model/spec fallback")
+        )
 
         family_query = _join_terms(brand, model, variant, screen_size)
         if family_query:
-            queries.append(_query(family_query, 3, f"{form_factor} brand/model family fallback"))
+            queries.append(
+                _query(family_query, 3, f"{form_factor} brand/model family fallback")
+            )
     elif cpu and ram:
-        queries.append(_query(_join_terms(brand, cpu, ram, storage, form_factor), 3, f"{form_factor} spec fallback"))
+        queries.append(
+            _query(
+                _join_terms(brand, cpu, ram, storage, form_factor),
+                3,
+                f"{form_factor} spec fallback",
+            )
+        )
 
     return queries
 
@@ -86,9 +96,21 @@ def _phone_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     carrier = _clean(specs.get("carrier"))
 
     return [
-        _query(_join_terms(brand, model, variant, screen_size, storage, carrier), 1, "phone brand/model/variant/storage/carrier match"),
-        _query(_join_terms(brand, model, variant, screen_size, storage), 2, "phone brand/model/variant/storage match"),
-        _query(_join_terms(brand, model, variant, screen_size), 3, "phone brand/model/variant fallback"),
+        _query(
+            _join_terms(brand, model, variant, screen_size, storage, carrier),
+            1,
+            "phone brand/model/variant/storage/carrier match",
+        ),
+        _query(
+            _join_terms(brand, model, variant, screen_size, storage),
+            2,
+            "phone brand/model/variant/storage match",
+        ),
+        _query(
+            _join_terms(brand, model, variant, screen_size),
+            3,
+            "phone brand/model/variant fallback",
+        ),
     ]
 
 
@@ -101,9 +123,21 @@ def _tablet_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     connectivity = _clean(specs.get("connectivity"))
 
     return [
-        _query(_join_terms(brand, model, variant, screen_size, storage, connectivity), 1, "tablet brand/model/variant/storage/connectivity match"),
-        _query(_join_terms(brand, model, variant, screen_size, storage), 2, "tablet brand/model/variant/storage match"),
-        _query(_join_terms(brand, model, variant, screen_size), 3, "tablet brand/model/variant fallback"),
+        _query(
+            _join_terms(brand, model, variant, screen_size, storage, connectivity),
+            1,
+            "tablet brand/model/variant/storage/connectivity match",
+        ),
+        _query(
+            _join_terms(brand, model, variant, screen_size, storage),
+            2,
+            "tablet brand/model/variant/storage match",
+        ),
+        _query(
+            _join_terms(brand, model, variant, screen_size),
+            3,
+            "tablet brand/model/variant fallback",
+        ),
     ]
 
 
@@ -115,8 +149,16 @@ def _monitor_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     refresh_rate = _refresh_rate_term(specs.get("refresh_rate"))
 
     return [
-        _query(_join_terms(brand, model, size, resolution, refresh_rate, "monitor"), 1, "monitor exact spec match"),
-        _query(_join_terms(brand, model, size, resolution, "monitor"), 2, "monitor brand/model/display match"),
+        _query(
+            _join_terms(brand, model, size, resolution, refresh_rate, "monitor"),
+            1,
+            "monitor exact spec match",
+        ),
+        _query(
+            _join_terms(brand, model, size, resolution, "monitor"),
+            2,
+            "monitor brand/model/display match",
+        ),
         _query(_join_terms(brand, model, "monitor"), 3, "monitor brand/model fallback"),
     ]
 
@@ -128,8 +170,14 @@ def _printer_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     color = _clean(specs.get("color"))
 
     return [
-        _query(_join_terms(brand, model, printer_type, color, "printer"), 1, "printer exact spec match"),
-        _query(_join_terms(brand, model, printer_type, "printer"), 2, "printer type match"),
+        _query(
+            _join_terms(brand, model, printer_type, color, "printer"),
+            1,
+            "printer exact spec match",
+        ),
+        _query(
+            _join_terms(brand, model, printer_type, "printer"), 2, "printer type match"
+        ),
         _query(_join_terms(brand, model, "printer"), 3, "printer brand/model fallback"),
     ]
 
@@ -143,9 +191,21 @@ def _storage_device_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     interface = _clean(specs.get("interface"))
 
     return [
-        _query(_join_terms(brand, model, capacity, drive_type, form_factor, interface), 1, "storage exact spec match"),
-        _query(_join_terms(brand, model, capacity, drive_type), 2, "storage brand/model/capacity match"),
-        _query(_join_terms(capacity, drive_type, form_factor, interface), 3, "storage spec fallback"),
+        _query(
+            _join_terms(brand, model, capacity, drive_type, form_factor, interface),
+            1,
+            "storage exact spec match",
+        ),
+        _query(
+            _join_terms(brand, model, capacity, drive_type),
+            2,
+            "storage brand/model/capacity match",
+        ),
+        _query(
+            _join_terms(capacity, drive_type, form_factor, interface),
+            3,
+            "storage spec fallback",
+        ),
     ]
 
 
@@ -238,7 +298,9 @@ def _storage_term(specs: dict[str, Any]) -> str | None:
         return None
 
     drives = [
-        drive for drive in storage if isinstance(drive, dict) and _safe_int(drive.get("size_gb")) > 0
+        drive
+        for drive in storage
+        if isinstance(drive, dict) and _safe_int(drive.get("size_gb")) > 0
     ]
     if not drives:
         return None
@@ -277,7 +339,9 @@ def _screen_size_term(value: Any) -> str | None:
     text = _clean(value)
     if not text:
         return None
-    lowered = text.lower().replace("inch", "").replace("in", "").replace('"', "").strip()
+    lowered = (
+        text.lower().replace("inch", "").replace("in", "").replace('"', "").strip()
+    )
     return f'{lowered}"' if lowered else None
 
 
