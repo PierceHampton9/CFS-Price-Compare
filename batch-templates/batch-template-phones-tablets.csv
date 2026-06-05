@@ -1,0 +1,5 @@
+item_id,device_type,brand,model,condition,storage,variant,screen_size,carrier,connectivity,notes
+001,phone,Apple,iPhone 13,good,128,Pro Max,6.7,unlocked,,Phone example
+002,phone,Samsung,Galaxy S21,good,128,,,unlocked,,Android phone example
+003,tablet,Samsung,Galaxy Tab S7,good,256,FE,12.4,,Wi-Fi,Tablet example
+004,tablet,Apple,iPad Air,good,64,Air,10.9,,Wi-Fi,Apple tablet example

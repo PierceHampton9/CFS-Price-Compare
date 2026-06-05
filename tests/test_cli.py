@@ -1,5 +1,6 @@
 import io
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -835,6 +836,112 @@ sources:
         self.assertEqual(exc.exception.code, 1)
         self.assertIn("Windows only", stderr.getvalue())
 
+    def test_validate_batch_command_reports_invalid_rows(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "devices.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor",
+                        "001,computer,Lenovo,ThinkPad,good,",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            argv = ["pc_pricer", "validate-batch", str(path)]
+
+            with patch("sys.argv", argv), patch("sys.stdout", stdout):
+                with self.assertRaises(SystemExit) as exc:
+                    cli.main()
+
+        self.assertEqual(exc.exception.code, 1)
+        output = stdout.getvalue()
+        self.assertIn("Batch validation", output)
+        self.assertIn("Invalid: 1", output)
+        self.assertIn("Form factor is required.", output)
+
+    def test_export_template_command_writes_csv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "template.csv"
+            stdout = io.StringIO()
+            argv = ["pc_pricer", "export-template", "--output", str(path)]
+
+            with patch("sys.argv", argv), patch("sys.stdout", stdout):
+                cli.main()
+
+            contents = path.read_text(encoding="utf-8")
+
+        self.assertIn("Saved batch CSV template", stdout.getvalue())
+        self.assertIn("item_id,device_type,brand,model,condition", contents)
+        self.assertIn("ThinkPad X13 Yoga", contents)
+
+    def test_price_batch_command_writes_reports_and_summary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "devices.csv"
+            output_dir = Path(temp_dir) / "reports"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,storage_type",
+                        "001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,SSD",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            argv = ["pc_pricer", "price-batch", str(input_path), "--output", str(output_dir)]
+
+            with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+                "pc_pricer.cli._pricing_sources", return_value=[StaticSource()]
+            ):
+                cli.main()
+
+            summary = output_dir / "batch_summary.csv"
+            results = output_dir / "batch_results.json"
+            report = output_dir / "reports" / "001_001.txt"
+            results_exists = results.exists()
+            summary_text = summary.read_text(encoding="utf-8")
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertIn("Batch complete: 1 completed, 0 failed.", stdout.getvalue())
+        self.assertTrue(results_exists)
+        self.assertIn("001", summary_text)
+        self.assertIn("Price estimate", report_text)
+        self.assertIn("Lenovo ThinkPad", report_text)
+
+    def test_price_batch_command_keeps_summary_after_unexpected_row_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "devices.csv"
+            output_dir = Path(temp_dir) / "reports"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,storage_type",
+                        "001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,SSD",
+                        "002,computer,Dell,OptiPlex 7050,good,desktop,i5-7500,16,256,SSD",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            argv = ["pc_pricer", "price-batch", str(input_path), "--output", str(output_dir)]
+
+            with patch("sys.argv", argv), patch("sys.stdout", stdout), patch(
+                "pc_pricer.cli._pricing_sources", return_value=[UnexpectedOnceSource()]
+            ):
+                cli.main()
+
+            summary_text = (output_dir / "batch_summary.csv").read_text(encoding="utf-8")
+            results_text = (output_dir / "batch_results.json").read_text(encoding="utf-8")
+            second_report_exists = (output_dir / "reports" / "002_002.txt").exists()
+
+        self.assertIn("Batch complete: 1 completed, 1 failed.", stdout.getvalue())
+        self.assertIn("unexpected source failure", summary_text)
+        self.assertIn("Dell OptiPlex 7050", summary_text)
+        self.assertIn("unexpected source failure", results_text)
+        self.assertTrue(second_report_exists)
+
 
 def _listing(title, total_price, is_sold=False, condition_raw="Used"):
     return {
@@ -865,6 +972,28 @@ class DisabledRefurbSource:
 class DelegatingEbaySource:
     def __new__(cls, *args, **kwargs):
         return cli.EbaySource(*args, **kwargs)
+
+
+class StaticSource:
+    name = "ebay"
+    enabled = True
+
+    def search(self, _query, _max_results):
+        return [_listing("Lenovo ThinkPad listing", 300)]
+
+
+class UnexpectedOnceSource:
+    name = "ebay"
+    enabled = True
+
+    def __init__(self):
+        self.calls = 0
+
+    def search(self, _query, _max_results):
+        self.calls += 1
+        if self.calls == 1:
+            raise ValueError("unexpected source failure")
+        return [_listing("Dell OptiPlex listing", 250)]
 
 
 if __name__ == "__main__":

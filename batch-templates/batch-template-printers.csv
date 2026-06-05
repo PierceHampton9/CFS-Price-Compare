@@ -1,0 +1,3 @@
+item_id,device_type,brand,model,condition,printer_type,color,notes
+001,printer,Brother,HL-L2390DW,good,laser,mono,Printer example
+002,printer,HP,OfficeJet Pro 9015,good,inkjet,color,Inkjet example
