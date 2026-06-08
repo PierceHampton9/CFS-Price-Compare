@@ -7,8 +7,9 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
-from pc_pricer.device_lookup import enrich_specs_from_model_lookup, model_identifier as lookup_model_identifier
+from pc_pricer.device_lookup import enrich_specs_from_model_lookup
 from pc_pricer.listing_filter import exclusion_reason, filter_listings
+from pc_pricer.model_identifier import looks_like_model_number, model_identifier
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.quality import add_listing_quality_flags
@@ -52,13 +53,19 @@ def price_specs(
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     sources = _source_list(source)
-    pricing_specs, device_identification = enrich_specs_from_model_lookup(
+    pricing_specs, device_identification, lookup_results = enrich_specs_from_model_lookup(
         specs,
         sources,
-        max_results=min(max(1, limit_per_query), 3),
+        max_results=max(1, limit_per_query),
     )
     queries = build_queries(pricing_specs)
-    raw_listings, source_errors, source_statuses = _search_queries(sources, queries, limit_per_query, pricing_specs)
+    raw_listings, source_errors, source_statuses = _search_queries(
+        sources,
+        queries,
+        limit_per_query,
+        pricing_specs,
+        seeded_results=lookup_results,
+    )
     deduped_listings = _dedupe_listings(raw_listings)
     normalized_listings = normalize_listings(deduped_listings)
     normalized_listings = _add_source_match_flags(normalized_listings, pricing_specs)
@@ -205,6 +212,7 @@ def _search_queries(
     queries: list[dict[str, Any]],
     limit_per_query: int,
     specs: dict[str, Any],
+    seeded_results: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[dict[str, Any]]]:
     listings = []
     errors = []
@@ -222,6 +230,7 @@ def _search_queries(
         for source in sources
     }
     searched = set()
+    seeded_by_key = _seeded_results_by_key(seeded_results)
     for query in queries:
         generated_query_text = str(query.get("text") or "").strip()
         if not generated_query_text:
@@ -252,21 +261,26 @@ def _search_queries(
             status["searched"] = True
             status["query_count"] += 1
             status["queries"].append(query_text)
-            try:
-                source_listings = source.search(query_text, limit_per_query)
-            except RuntimeError as exc:
-                status["error_count"] += 1
-                status["errors"].append(str(exc))
-                errors.append(
-                    {
-                        "source": source_name,
-                        "query": query_text,
-                        "message": str(exc),
-                    }
-                )
-                continue
+            seeded = seeded_by_key.get(searched_key)
+            if seeded is not None:
+                source_listings = seeded["listings"]
+            else:
+                try:
+                    source_listings = source.search(query_text, limit_per_query)
+                except RuntimeError as exc:
+                    status["error_count"] += 1
+                    status["errors"].append(str(exc))
+                    errors.append(
+                        {
+                            "source": source_name,
+                            "query": query_text,
+                            "message": str(exc),
+                        }
+                    )
+                    continue
 
-            _add_source_runtime_stats(status, getattr(source, "last_search_stats", None))
+            if seeded is None:
+                _add_source_runtime_stats(status, getattr(source, "last_search_stats", None))
             status["raw_listing_count"] += len(source_listings)
             for listing in source_listings:
                 tagged = dict(listing)
@@ -275,9 +289,25 @@ def _search_queries(
                 tagged["query_text"] = query_text
                 if query_text != generated_query_text:
                     tagged["generated_query_text"] = generated_query_text
+                if seeded is not None:
+                    tagged["lookup_reused"] = True
                 listings.append(tagged)
 
     return listings, errors, list(statuses.values())
+
+
+def _seeded_results_by_key(seeded_results: list[dict[str, Any]] | None) -> dict[tuple[str, str], dict[str, Any]]:
+    seeded = {}
+    for result in seeded_results or []:
+        if not isinstance(result, dict):
+            continue
+        source = str(result.get("source") or "").strip().lower()
+        query = str(result.get("query") or "").strip()
+        listings = result.get("listings")
+        if not source or not query or not isinstance(listings, list):
+            continue
+        seeded[(source, query.lower())] = {"listings": listings}
+    return seeded
 
 
 def _add_source_runtime_stats(status: dict[str, Any], stats: Any) -> None:
@@ -334,7 +364,7 @@ def _is_exact_identifier_query(query: dict[str, Any], specs: dict[str, Any]) -> 
 
 
 def _model_identifier_text(specs: dict[str, Any]) -> str | None:
-    return lookup_model_identifier(specs)
+    return model_identifier(specs)
 
 
 def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
@@ -361,17 +391,6 @@ def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
 def _clean_text(value: Any) -> str | None:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     return text or None
-
-
-def _looks_like_model_number(value: str) -> bool:
-    text = value.strip()
-    if len(text) < 6 or len(text) > 24:
-        return False
-    if " " in text:
-        return False
-    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _amazon_query_text(query_text: str) -> str:
@@ -877,7 +896,7 @@ def _model_matches_listing(
 ) -> bool:
     if _all_tokens_present(text, model):
         return True
-    if not _looks_like_model_number(model):
+    if not looks_like_model_number(model):
         return False
     identifier = _model_identifier_text(specs)
     query_text = _clean_text(listing.get("query_text"))

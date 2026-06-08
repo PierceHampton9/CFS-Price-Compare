@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pc_pricer.model_identifier import looks_like_model_number
+
 
 def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     """Return search queries ordered from most specific to broadest."""
@@ -296,27 +298,16 @@ def _model_identifier_term(specs: dict[str, Any]) -> str | None:
     if oem_sku:
         return oem_sku
     search_model = _clean(specs.get("search_model"))
-    if search_model and not _looks_like_model_number(search_model):
+    if search_model and not looks_like_model_number(search_model):
         return None
     model = _clean(specs.get("model"))
     if specs.get("model_is_machine_type") and model:
         return model
-    if model and _looks_like_model_number(model):
+    if model and looks_like_model_number(model):
         return model
-    if search_model and _looks_like_model_number(search_model):
+    if search_model and looks_like_model_number(search_model):
         return search_model
     return None
-
-
-def _looks_like_model_number(value: str) -> bool:
-    text = value.strip()
-    if len(text) < 6 or len(text) > 24:
-        return False
-    if " " in text:
-        return False
-    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _ram_term(specs: dict[str, Any]) -> str | None:

@@ -24,7 +24,7 @@ class DeviceLookupTests(unittest.TestCase):
             }
         )
 
-        enriched, status = enrich_specs_from_model_lookup(
+        enriched, status, lookup_results = enrich_specs_from_model_lookup(
             {
                 "device_type": "computer",
                 "brand": "Lenovo",
@@ -36,6 +36,7 @@ class DeviceLookupTests(unittest.TestCase):
 
         self.assertEqual(source.calls, [("Lenovo 20W9S23S00", 3), ("20W9S23S00", 3)])
         self.assertEqual(status["status"], "identified")
+        self.assertEqual(lookup_results[0]["query"], "Lenovo 20W9S23S00")
         self.assertEqual(enriched["search_model"], "ThinkPad X1 Carbon Gen 9")
         self.assertEqual(enriched["form_factor"], "laptop")
         self.assertEqual(enriched["cpu_short"], "i7-1185G7")
@@ -56,7 +57,7 @@ class DeviceLookupTests(unittest.TestCase):
         )
         specs = {"device_type": "computer", "brand": "Lenovo", "model": "20W9S23S00"}
 
-        enriched, status = enrich_specs_from_model_lookup(specs, [source])
+        enriched, status, _lookup_results = enrich_specs_from_model_lookup(specs, [source])
 
         self.assertEqual(enriched, specs)
         self.assertEqual(status["status"], "not_found")

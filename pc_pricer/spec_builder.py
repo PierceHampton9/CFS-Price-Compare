@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pc_pricer.model_identifier import looks_like_model_number
+
 
 VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
 VALID_DEVICE_TYPES = {"computer", "phone", "tablet", "monitor", "printer", "storage"}
@@ -67,7 +69,7 @@ def manual_device_type(value: Any) -> str:
 def _manual_computer_specs(values: dict[str, Any]) -> dict[str, Any]:
     form_factor = _clean_text(values.get("form_factor"))
     model = _clean_text(values.get("model"))
-    model_is_identifier = _looks_like_model_number(model)
+    model_is_identifier = looks_like_model_number(model)
     if not form_factor and not (model_is_identifier or _clean_text(values.get("oem_sku"))):
         raise RuntimeError("Computer pricing requires a form factor: laptop, desktop, or all-in-one.")
 
@@ -289,19 +291,6 @@ def _clean_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
-
-
-def _looks_like_model_number(value: Any) -> bool:
-    text = _clean_text(value)
-    if not text:
-        return False
-    if len(text) < 6 or len(text) > 24:
-        return False
-    if " " in text:
-        return False
-    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _positive_int_or_none(value: Any) -> int | None:

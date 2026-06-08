@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 import re
 
+from pc_pricer.model_identifier import looks_like_model_number, model_identifier
+
 
 LOOKUP_SOURCE_NAMES = {"refurb_io", "amazon_renewed"}
 
@@ -23,15 +25,15 @@ def enrich_specs_from_model_lookup(
     specs: dict[str, Any],
     sources: Sequence[DeviceLookupSource],
     max_results: int = 3,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
     """Return specs enriched by a trusted exact-identifier lookup when possible."""
     identifier = model_identifier(specs)
     if not identifier:
-        return dict(specs), None
+        return dict(specs), None, []
 
     device_type = str(specs.get("device_type") or "computer").strip().lower()
     if device_type != "computer":
-        return dict(specs), None
+        return dict(specs), None, []
 
     brand = _clean(specs.get("brand"))
     queries = _dedupe([_join_terms(brand, identifier), identifier])
@@ -41,34 +43,52 @@ def enrich_specs_from_model_lookup(
         if getattr(source, "enabled", True) and str(getattr(source, "name", "")).lower() in LOOKUP_SOURCE_NAMES
     ]
     if not lookup_sources:
-        return dict(specs), _lookup_status(identifier, queries, "not_available", errors=["No enabled device lookup source."])
+        return (
+            dict(specs),
+            _lookup_status(identifier, queries, "not_available", errors=["No enabled device lookup source."]),
+            [],
+        )
 
     candidates = []
     errors = []
+    lookup_results = []
     for source in lookup_sources:
         source_name = str(getattr(source, "name", source.__class__.__name__) or "unknown")
         for query in queries:
+            source_query = _source_lookup_query(source_name, query)
             try:
-                listings = source.search(query, max(1, max_results))
+                listings = source.search(source_query, max(1, max_results))
             except Exception as exc:  # pragma: no cover - defensive boundary around optional lookup.
-                errors.append({"source": source_name, "query": query, "message": str(exc)})
+                errors.append({"source": source_name, "query": source_query, "message": str(exc)})
                 continue
+            lookup_results.append(
+                {
+                    "source": source_name,
+                    "query": source_query,
+                    "generated_query": query if query != source_query else None,
+                    "listings": listings[:max_results],
+                }
+            )
             for listing in listings[:max_results]:
-                candidate = _candidate_from_listing(listing, specs, identifier, source_name, query)
+                candidate = _candidate_from_listing(listing, specs, identifier, source_name, source_query)
                 if candidate:
                     candidates.append(candidate)
 
     if not candidates:
-        return dict(specs), _lookup_status(identifier, queries, "not_found", errors=errors)
+        return dict(specs), _lookup_status(identifier, queries, "not_found", errors=errors), lookup_results
 
     best = max(candidates, key=lambda candidate: candidate["score"])
     if best["score"] < 6:
-        return dict(specs), _lookup_status(
-            identifier,
-            queries,
-            "low_confidence",
-            candidates=_public_candidates(candidates),
-            errors=errors,
+        return (
+            dict(specs),
+            _lookup_status(
+                identifier,
+                queries,
+                "low_confidence",
+                candidates=_public_candidates(candidates),
+                errors=errors,
+            ),
+            lookup_results,
         )
 
     enriched, added_fields = _merge_enriched_specs(specs, identifier, best["enriched_specs"])
@@ -85,26 +105,7 @@ def enrich_specs_from_model_lookup(
         candidates=_public_candidates(candidates),
         errors=errors,
     )
-    return enriched, status
-
-
-def model_identifier(specs: dict[str, Any]) -> str | None:
-    """Return the exact model identifier worth looking up, if one is present."""
-    oem_sku = _clean(specs.get("oem_sku"))
-    if oem_sku:
-        return oem_sku
-    model = _clean(specs.get("model"))
-    search_model = _clean(specs.get("search_model"))
-    if model and (specs.get("model_is_machine_type") or _looks_like_model_number(model)):
-        return model
-    if search_model and _looks_like_model_number(search_model):
-        return search_model
-    return None
-
-
-def looks_like_model_number(value: Any) -> bool:
-    text = _clean(value)
-    return bool(text and _looks_like_model_number(text))
+    return enriched, status, lookup_results
 
 
 def _candidate_from_listing(
@@ -204,8 +205,8 @@ def _merge_enriched_specs(
         if key == "search_model":
             current = _clean(enriched.get("search_model"))
             original_model = _clean(enriched.get("model"))
-            user_supplied_family = original_model and original_model != identifier and not _looks_like_model_number(original_model)
-            if not user_supplied_family and (not current or current == identifier or _looks_like_model_number(current)):
+            user_supplied_family = original_model and original_model != identifier and not looks_like_model_number(original_model)
+            if not user_supplied_family and (not current or current == identifier or looks_like_model_number(current)):
                 enriched[key] = value
                 added_fields.append(key)
             continue
@@ -326,20 +327,15 @@ def _identifier_in_text(identifier: str, text: str) -> bool:
     return bool(compact_identifier and compact_identifier in compact_text)
 
 
+def _source_lookup_query(source_name: str, query: str) -> str:
+    if source_name == "amazon_renewed" and not re.search(r"\brenewed\b", query, flags=re.IGNORECASE):
+        return f"{query} Renewed"
+    return query
+
+
 def _all_tokens_present(text: str, value: str) -> bool:
     tokens = re.findall(r"[a-z0-9]+", value.lower())
     return all(token in text for token in tokens)
-
-
-def _looks_like_model_number(value: str) -> bool:
-    text = value.strip()
-    if len(text) < 6 or len(text) > 24:
-        return False
-    if " " in text:
-        return False
-    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _normalized_text(value: Any) -> str:

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-import re
+
+from pc_pricer.model_identifier import looks_like_model_number
 
 
 DEVICE_TYPES = ["computer", "phone", "tablet", "monitor", "printer", "storage"]
@@ -148,20 +149,7 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
 def _field_can_be_lookup_deferred(device_type: str, field_name: str, values: dict[str, Any]) -> bool:
     if device_type != "computer" or field_name != "form_factor":
         return False
-    return _present(values.get("oem_sku")) or _looks_like_model_number(values.get("model"))
-
-
-def _looks_like_model_number(value: Any) -> bool:
-    if not _present(value):
-        return False
-    text = str(value).strip()
-    if len(text) < 6 or len(text) > 24:
-        return False
-    if " " in text:
-        return False
-    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
+    return _present(values.get("oem_sku")) or looks_like_model_number(values.get("model"))
 
 
 def _present(value: Any) -> bool:
