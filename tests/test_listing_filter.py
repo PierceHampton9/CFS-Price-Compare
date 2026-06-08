@@ -156,6 +156,23 @@ class ListingFilterTests(unittest.TestCase):
         )
         self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 3})
 
+    def test_phone_filter_excludes_fe_variant_when_base_model_requested(self):
+        listings = [
+            _listing("Samsung Galaxy S21 5G 128GB Unlocked", "good"),
+            _listing("Samsung Galaxy S21 FE 128GB Unlocked", "good"),
+            _listing("Samsung Galaxy S21FE Unlocked 128GB", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={"device_type": "phone", "brand": "Samsung", "model": "Galaxy S21"},
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung Galaxy S21 5G 128GB Unlocked"])
+        self.assertEqual(result["excluded_reasons"], {"variant_mismatch": 2})
+
     def test_phone_filter_keeps_requested_variant(self):
         listings = [
             _listing("Apple iPhone 13 Pro Max 128GB Unlocked", "good"),
@@ -470,6 +487,7 @@ class ListingFilterTests(unittest.TestCase):
         listings = [
             _listing('Dell U2419H 24" monitor', "good"),
             _listing('LOT OF 2 Dell U2419H 24" monitor', "good"),
+            _listing('LOT-10 Dell U2419H 24" monitor', "good"),
             _listing('Dell U2419H 24" monitor no stand', "good"),
         ]
 
@@ -486,12 +504,13 @@ class ListingFilterTests(unittest.TestCase):
         )
 
         self.assertEqual([listing["title"] for listing in result["listings"]], ['Dell U2419H 24" monitor'])
-        self.assertEqual(result["excluded_reasons"], {"quantity_or_bundle": 1, "incomplete_listing": 1})
+        self.assertEqual(result["excluded_reasons"], {"quantity_or_bundle": 2, "incomplete_listing": 1})
 
     def test_monitor_filter_keeps_full_monitor_lcd_panel_phrasing(self):
         listings = [
             _listing('Dell U2419H 24" IPS LCD Panel Monitor', "good"),
             _listing("Dell U2419H replacement LCD panel", "good"),
+            _listing("Dell U2419H monitor main board with video cable", "good"),
         ]
 
         result = filter_listings(listings, target_condition="any", device_type="monitor")
@@ -500,7 +519,7 @@ class ListingFilterTests(unittest.TestCase):
             [listing["title"] for listing in result["listings"]],
             ['Dell U2419H 24" IPS LCD Panel Monitor'],
         )
-        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 1})
+        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 2})
 
     def test_printer_filter_excludes_consumables_and_parts(self):
         listings = [
@@ -508,13 +527,15 @@ class ListingFilterTests(unittest.TestCase):
             _listing("Brother HL-L2390DW toner cartridge", "good"),
             _listing("Brother HL-L2390DW toner cartridges 4 pack", "good"),
             _listing("Compatible ink cartridges for Brother HL-L2390DW printer", "good"),
+            _listing("TN760 Toner Cartrigde High Yeild with Chip for Brother HL-L2390DW Printer", "good"),
             _listing("Brother HL-L2390DW printhead replacement", "good"),
+            _listing("HP LaserJet Pro M404dn printer no toner", "good"),
         ]
 
         result = filter_listings(listings, target_condition="any", device_type="printer")
 
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Brother HL-L2390DW laser printer"])
-        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 4})
+        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 5, "incomplete_listing": 1})
 
     def test_storage_filter_excludes_enclosures_and_adapters(self):
         listings = [
@@ -533,9 +554,11 @@ class ListingFilterTests(unittest.TestCase):
 
     def test_storage_filter_excludes_wrong_brand_and_model_fallbacks(self):
         listings = [
-            _listing("Samsung 970 EVO Plus 1TB SSD NVMe", "good"),
-            _listing("Western Digital SN570 1TB M.2 NVMe SSD", "good"),
-            _listing("Samsung SM961 1TB NVMe M.2 SSD", "good"),
+            _listing("Samsung 970 EVO Plus 1TB SSD NVMe", "good", query_tier=1),
+            _listing("Western Digital SN570 1TB M.2 NVMe SSD", "good", query_tier=3),
+            _listing("SK hynix Gold P31 1TB NVMe PCIe Gen3 M.2 SSD", "good", query_tier=3),
+            _listing("Oyen Digital MiniPro USB-C 2TB HDD External Drive", "good", query_tier=3),
+            _listing("Samsung SM961 1TB NVMe M.2 SSD", "good", query_tier=2),
         ]
 
         result = filter_listings(
@@ -553,7 +576,7 @@ class ListingFilterTests(unittest.TestCase):
         )
 
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung 970 EVO Plus 1TB SSD NVMe"])
-        self.assertEqual(result["excluded_reasons"], {"brand_mismatch": 1, "model_mismatch": 1})
+        self.assertEqual(result["excluded_reasons"], {"brand_mismatch": 3, "model_mismatch": 1})
 
     def test_computer_filter_excludes_wrong_generation_model_and_specs(self):
         listings = [
@@ -587,6 +610,32 @@ class ListingFilterTests(unittest.TestCase):
             {"model_mismatch": 1, "ram_mismatch": 1, "cpu_mismatch": 1, "storage_mismatch": 1},
         )
 
+    def test_computer_filter_excludes_bios_only_and_wrong_apple_silicon_generation(self):
+        listings = [
+            _listing("Apple MacBook Air 13 M1 8GB 256GB", "good"),
+            _listing("Apple MacBook Air 13 A1466 Intel i5 8GB 256GB", "good"),
+            _listing("APPLE MACBOOK AIR 13 A1466 i5 BOOST FAST UPGRADES", "good"),
+            _listing("Apple MacBook Air 13 M2 8GB 256GB", "good"),
+            _listing("Lenovo ThinkPad X1 Carbon Gen 9 boots to BIOS as is", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "brand": "Apple",
+                "model": "MacBook Air",
+                "cpu_short": "M1",
+                "ram_gb": 8,
+                "storage": [{"size_gb": 256, "type": "SSD"}],
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Apple MacBook Air 13 M1 8GB 256GB"])
+        self.assertEqual(result["excluded_reasons"], {"cpu_mismatch": 3, "parts_or_accessory": 1})
+
     def test_storage_filter_keeps_bundled_cables_but_excludes_cable_only(self):
         listings = [
             _listing("Seagate 2TB Portable HDD with USB-C Cable", "good"),
@@ -608,10 +657,11 @@ class ListingFilterTests(unittest.TestCase):
         self.assertIsNone(exclusion_reason(listing, target_condition="good", device_type="computer"))
 
 
-def _listing(title, condition_norm):
+def _listing(title, condition_norm, query_tier=None):
     return {
         "title": title,
         "condition_norm": condition_norm,
+        "query_tier": query_tier,
     }
 
 

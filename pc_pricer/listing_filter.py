@@ -12,6 +12,8 @@ GLOBAL_PARTS_TITLE_PATTERNS = [
     r"\bparts only\b",
     r"\bnot working\b",
     r"\bnot functional\b",
+    r"\bas[-\s]?is\b",
+    r"\bfor repair\b",
 ]
 
 DEVICE_PARTS_TITLE_PATTERNS = {
@@ -68,18 +70,20 @@ DEVICE_PARTS_TITLE_PATTERNS = {
         r"\bpower adapter\b",
         r"\bac adapter\b",
         r"\bcontroller board\b",
+        r"\bmain board\b",
+        r"\bvideo board\b",
         r"\breplacement panel\b",
         r"\breplacement\s+lcd\s+panel\b",
         r"\blcd panel\s+(only|for)\b",
         r"\bpanel replacement\b",
     ],
     "printer": [
-        r"\bink\s+(?:cartridge|cartridges|toner|refill|refills)\b",
-        r"\btoner\s+(?:cartridge|cartridges|refill|refills)\b",
-        r"\b(?:cartridge|cartridges)\s+for\b",
-        r"\b(?:compatible|replacement)\s+(?:ink|toner|cartridge|cartridges)\b",
-        r"\b(?:ink|toner|cartridge|cartridges)\s+(?:compatible|replacement)\b",
-        r"\bprinter\s+(?:ink|toner|cartridge|cartridges)\b",
+        r"\bink\s+(?:cartri\w*|toner|refill|refills)\b",
+        r"\btoner\s+(?:cartri\w*|refill|refills)\b",
+        r"\bcartri\w*\s+for\b",
+        r"\b(?:compatible|replacement)\s+(?:ink|toner|cartri\w*)\b",
+        r"\b(?:ink|toner|cartri\w*)\s+(?:compatible|replacement)\b",
+        r"\bprinter\s+(?:ink|toner|cartri\w*)\b",
         r"\bdrum unit\b",
         r"\bprinthead\b",
         r"\bprint head\b",
@@ -112,6 +116,7 @@ DEVICE_VARIANT_PATTERNS = {
         "mini": [r"\bmini\b"],
         "plus": [r"\bplus\b", r"(?<=\d)\+"],
         "max": [r"\bmax\b"],
+        "fe": [r"\bfe\b", r"\bs\d+\s*fe\b"],
     },
     "tablet": {
         "pro": [r"\bpro\b"],
@@ -128,16 +133,23 @@ KNOWN_BRANDS = {
     "asus",
     "brother",
     "canon",
+    "crucial",
     "dell",
     "epson",
     "hp",
+    "hynix",
+    "kingston",
     "lenovo",
     "lexmark",
     "lg",
     "microsoft",
     "msi",
+    "oyen",
+    "pny",
     "samsung",
+    "sandisk",
     "seagate",
+    "sk hynix",
     "toshiba",
     "western digital",
     "wd",
@@ -241,25 +253,24 @@ def _listing_spec_mismatch_reason(
     device_type: str | None = None,
     target_specs: dict[str, Any] | None = None,
 ) -> str | None:
-    if not isinstance(target_specs, dict):
-        return None
-
     title = str(listing.get("title") or "")
     if not title.strip():
         return None
 
-    clean_device_type = _clean_device_type(device_type or target_specs.get("device_type"))
+    clean_device_type = _clean_device_type(device_type or (target_specs or {}).get("device_type"))
     if _looks_like_multi_unit_listing(title):
         return "quantity_or_bundle"
     if _looks_like_incomplete_listing(title, clean_device_type):
         return "incomplete_listing"
+    if not isinstance(target_specs, dict):
+        return None
     if _has_conflicting_brand(title, target_specs):
         return "brand_mismatch"
     if _has_conflicting_model(title, clean_device_type, target_specs):
         return "model_mismatch"
     if clean_device_type in {"computer", "phone", "tablet"} and _has_conflicting_storage_capacity(title, target_specs):
         return "storage_mismatch"
-    if clean_device_type == "storage" and _has_conflicting_storage_device(title, target_specs):
+    if clean_device_type == "storage" and _has_conflicting_storage_device(title, target_specs, listing):
         return "model_mismatch"
     if clean_device_type == "computer" and _has_conflicting_ram(title, target_specs):
         return "ram_mismatch"
@@ -274,6 +285,7 @@ def _looks_like_multi_unit_listing(title: str) -> bool:
     lowered = title.lower()
     patterns = [
         r"\blot\s+of\s+\d+\b",
+        r"\blot[-\s]*\d+\b",
         r"\bpack\s+of\s+\d+\b",
         r"\bbundle\s+of\s+\d+\b",
         r"^\s*\d+\s*x\b",
@@ -289,6 +301,12 @@ def _looks_like_incomplete_listing(title: str, device_type: str) -> bool:
     if device_type == "monitor" and re.search(r"\b(no|without)\s+(?:monitor\s+)?stand\b|\bstand\s+not\s+included\b|\bno\s+base\b", lowered):
         return True
     if device_type == "computer" and re.search(r"\b(no|without)\s+(?:hdd|ssd|hard\s+drive|storage|ram|memory)\b", lowered):
+        return True
+    if device_type == "computer" and re.search(r"\bboots?\s+(?:only\s+)?to\s+bios\b|\bbios\s+only\b", lowered):
+        return True
+    if device_type in {"phone", "tablet"} and re.search(r"\b(?:lcd|screen|display).{0,25}\b(?:shadow|burn[-\s]?in|defect|damage)\b|\bno\s+touch\s+id\b", lowered):
+        return True
+    if device_type == "printer" and re.search(r"\b(no|without)\s+(?:ink|toner|cartridge|cartridges)\b", lowered):
         return True
     if device_type == "storage" and re.search(r"\b(no|without)\s+(?:drive|ssd|hdd)\b", lowered):
         return True
@@ -338,7 +356,7 @@ def _has_conflicting_model(title: str, device_type: str, target_specs: dict[str,
     return False
 
 
-def _has_conflicting_storage_device(title: str, target_specs: dict[str, Any]) -> bool:
+def _has_conflicting_storage_device(title: str, target_specs: dict[str, Any], listing: dict[str, Any] | None = None) -> bool:
     model = str(target_specs.get("search_model") or target_specs.get("model") or "").strip()
     if not model:
         return False
@@ -347,6 +365,8 @@ def _has_conflicting_storage_device(title: str, target_specs: dict[str, Any]) ->
     if not tokens:
         return False
     if not _model_context_present(title_text, target_specs, tokens):
+        if listing and _safe_int(listing.get("query_tier")) >= 3:
+            return True
         return False
     return not all(token in title_text for token in tokens)
 
@@ -378,6 +398,16 @@ def _has_conflicting_cpu(title: str, target_specs: dict[str, Any]) -> bool:
     target_cpu = str(target_specs.get("cpu_short") or target_specs.get("cpu") or "").strip()
     if not target_cpu:
         return False
+    apple_target = _apple_silicon_token(target_cpu)
+    if apple_target:
+        listing_apple = _apple_silicon_token(title)
+        if listing_apple and listing_apple != apple_target:
+            return True
+        title_text = _normalized_text(title)
+        return any(
+            marker in title_text
+            for marker in [" intel ", " core i3 ", " core i5 ", " core i7 ", " core i9 ", " i3 ", " i5 ", " i7 ", " i9 ", " ryzen "]
+        )
     listing_cpus = _cpu_tokens(title)
     if not listing_cpus:
         return False
@@ -514,6 +544,15 @@ def _cpu_tokens(title: str) -> set[str]:
             if prefix_match:
                 tokens.add(f"i{prefix_match.group(1)}{match.group(1)}")
     return {re.sub(r"[^a-z0-9]+", "", token) for token in tokens}
+
+
+def _apple_silicon_token(value: Any) -> str | None:
+    text = str(value or "").lower()
+    match = re.search(r"\bm([1-4])(?:\s+(pro|max|ultra))?\b", text)
+    if not match:
+        return None
+    suffix = match.group(2) or ""
+    return f"m{match.group(1)}{suffix}"
 
 
 def _capacity_text_gb(value: Any) -> int:
