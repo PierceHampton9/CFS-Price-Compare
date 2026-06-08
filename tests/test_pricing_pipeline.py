@@ -117,6 +117,42 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["conservative_high_cad"], 510.0)
         self.assertEqual(len(result["supporting_listings"]), 1)
 
+    def test_ignores_broad_fallback_when_specific_tier_has_enough_comparables(self):
+        source = FakeSource(
+            {
+                "Dell OptiPlex 7060 i5-8500 16GB 256GB SSD": [
+                    _listing(f"Dell OptiPlex 7060 i5-8500 16GB 256GB SSD #{index}", price, f"https://www.ebay.ca/itm/{index}")
+                    for index, price in enumerate([300, 310, 320, 330, 340], start=1)
+                ],
+                "i5-8500 16GB 256GB SSD desktop": [
+                    _listing("Dell OptiPlex 7060 i5-8500 16GB 256GB SSD", 150, "https://www.ebay.ca/itm/broad")
+                ],
+                "i5-8500 16GB desktop": [],
+            },
+            name="ebay",
+        )
+
+        result = price_specs(
+            {
+                "device_type": "computer",
+                "brand": "Dell",
+                "model": "OptiPlex 7060",
+                "search_model": "OptiPlex 7060",
+                "form_factor": "desktop",
+                "cpu_short": "i5-8500",
+                "ram_gb": 16,
+                "storage": [{"size_gb": 256, "type": "SSD"}],
+            },
+            source,
+            limit_per_query=5,
+            target_condition="any",
+        )
+
+        self.assertEqual(result["count"], 5)
+        self.assertEqual(result["median_price_cad"], 320.00)
+        self.assertEqual(result["excluded_reasons"], {"lower_tier_fallback": 1})
+        self.assertEqual({listing["query_tier"] for listing in result["all_comparable_listings"]}, {1})
+
     def test_passes_device_type_to_listing_filter(self):
         source = FakeSource(
             {
@@ -291,6 +327,54 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["median_price_cad"], 650.00)
         self.assertEqual(result["source_diagnostics"][0]["source_match_reasons"], [])
         self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
+
+    def test_manufacturer_lookup_enriches_model_number_before_pricing_queries(self):
+        specs = {
+            "device_type": "computer",
+            "brand": "Lenovo",
+            "model": "20W9S23S00",
+            "model_is_machine_type": True,
+        }
+        source = FakeSource(
+            {
+                "Lenovo 20W9S23S00": [],
+                "20W9S23S00": [],
+                "Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB": [
+                    _listing(
+                        "Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB 512GB",
+                        700,
+                        "https://www.ebay.ca/itm/x1",
+                    )
+                ],
+                "Lenovo ThinkPad X1 Carbon Gen 9": [],
+            },
+            name="ebay",
+        )
+
+        result = price_specs(
+            specs,
+            [source],
+            limit_per_query=5,
+            manufacturer_lookup=lambda _specs, _identifier: {
+                "source": "manufacturer:lenovo",
+                "title": "Lenovo ThinkPad X1 Carbon Gen 9 Laptop",
+                "url": "https://psref.lenovo.com/Search?kw=20W9S23S00",
+                "score": 13,
+                "confidence": "high",
+                "enriched_specs": {
+                    "search_model": "ThinkPad X1 Carbon Gen 9",
+                    "form_factor": "laptop",
+                    "cpu_short": "i7-1185G7",
+                    "ram_gb": 16,
+                    "storage": [{"size_gb": 512, "type": "NVMe"}],
+                },
+            },
+        )
+
+        self.assertEqual(result["device_identification"]["source"], "manufacturer:lenovo")
+        self.assertEqual(result["specs"]["search_model"], "ThinkPad X1 Carbon Gen 9")
+        self.assertEqual(result["median_price_cad"], 700.00)
+        self.assertIn(("Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB", 5), source.calls)
 
     def test_refurb_io_only_verified_result_works(self):
         refurb = FakeSource(

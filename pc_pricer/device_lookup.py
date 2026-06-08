@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 import re
 
 from pc_pricer.model_identifier import looks_like_model_number, model_identifier
@@ -25,6 +25,7 @@ def enrich_specs_from_model_lookup(
     specs: dict[str, Any],
     sources: Sequence[DeviceLookupSource],
     max_results: int = 3,
+    manufacturer_lookup: Callable[[dict[str, Any], str], dict[str, Any] | None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
     """Return specs enriched by a trusted exact-identifier lookup when possible."""
     identifier = model_identifier(specs)
@@ -37,6 +38,35 @@ def enrich_specs_from_model_lookup(
 
     brand = _clean(specs.get("brand"))
     queries = _dedupe([_join_terms(brand, identifier), identifier])
+    if manufacturer_lookup is not None:
+        try:
+            manufacturer_candidate = manufacturer_lookup(specs, identifier)
+        except Exception as exc:  # pragma: no cover - defensive boundary around optional lookup.
+            manufacturer_candidate = {
+                "status": "error",
+                "errors": [{"source": "manufacturer", "message": str(exc)}],
+            }
+        if manufacturer_candidate and _safe_int(manufacturer_candidate.get("score")) >= 8:
+            enriched, added_fields = _merge_enriched_specs(
+                specs,
+                identifier,
+                manufacturer_candidate.get("enriched_specs") or {},
+            )
+            status = _lookup_status(
+                identifier,
+                list(manufacturer_candidate.get("queries") or queries),
+                "identified",
+                source=str(manufacturer_candidate.get("source") or "manufacturer"),
+                title=_clean(manufacturer_candidate.get("title")),
+                url=manufacturer_candidate.get("url"),
+                confidence=str(manufacturer_candidate.get("confidence") or _confidence_label(_safe_int(manufacturer_candidate.get("score")))),
+                score=_safe_int(manufacturer_candidate.get("score")),
+                added_fields=added_fields,
+                candidates=_public_candidates([manufacturer_candidate]),
+                errors=list(manufacturer_candidate.get("errors") or []),
+            )
+            return enriched, status, []
+
     lookup_sources = [
         source
         for source in sources
@@ -265,7 +295,7 @@ def _public_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
     return [
         {
             "source": candidate["source"],
-            "query": candidate["query"],
+            "query": candidate.get("query") or candidate.get("url"),
             "title": candidate["title"],
             "url": candidate.get("url"),
             "score": candidate["score"],

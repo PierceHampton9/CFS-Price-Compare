@@ -28,8 +28,15 @@ WARNING_LABELS = {
 
 FILTER_LABELS = {
     "condition_mismatch": "condition mismatch",
+    "brand_mismatch": "brand mismatch",
+    "carrier_mismatch": "carrier mismatch",
+    "cpu_mismatch": "CPU mismatch",
     "displaced_by_retailer": "displaced by verified retailer listing",
+    "incomplete_listing": "incomplete listing",
+    "lower_tier_fallback": "lower-tier fallback listing",
+    "model_mismatch": "model mismatch",
     "parts_or_accessory": "parts/accessory listing",
+    "quantity_or_bundle": "quantity/bundle listing",
     "ram_mismatch": "RAM mismatch",
     "storage_mismatch": "storage mismatch",
     "unavailable_listing": "unavailable listing",

@@ -62,6 +62,41 @@ class DeviceLookupTests(unittest.TestCase):
         self.assertEqual(enriched, specs)
         self.assertEqual(status["status"], "not_found")
 
+    def test_manufacturer_lookup_runs_before_pricing_source_lookup(self):
+        source = FakeLookupSource({})
+
+        enriched, status, lookup_results = enrich_specs_from_model_lookup(
+            {
+                "device_type": "computer",
+                "brand": "Lenovo",
+                "model": "20W9S23S00",
+                "model_is_machine_type": True,
+            },
+            [source],
+            manufacturer_lookup=lambda _specs, _identifier: {
+                "source": "manufacturer:lenovo",
+                "title": "Lenovo ThinkPad X1 Carbon Gen 9 Laptop",
+                "url": "https://psref.lenovo.com/Search?kw=20W9S23S00",
+                "queries": ["https://psref.lenovo.com/Search?kw=20W9S23S00"],
+                "score": 13,
+                "confidence": "high",
+                "enriched_specs": {
+                    "search_model": "ThinkPad X1 Carbon Gen 9",
+                    "form_factor": "laptop",
+                    "cpu_short": "i7-1185G7",
+                    "ram_gb": 16,
+                    "storage": [{"size_gb": 512, "type": "NVMe"}],
+                },
+            },
+        )
+
+        self.assertEqual(source.calls, [])
+        self.assertEqual(lookup_results, [])
+        self.assertEqual(status["status"], "identified")
+        self.assertEqual(status["source"], "manufacturer:lenovo")
+        self.assertEqual(enriched["search_model"], "ThinkPad X1 Carbon Gen 9")
+        self.assertEqual(enriched["storage"], [{"size_gb": 512, "type": "NVMe"}])
+
     def test_model_identifier_accepts_oem_sku_or_sku_like_model(self):
         self.assertEqual(model_identifier({"oem_sku": "7YX45UT"}), "7YX45UT")
         self.assertEqual(model_identifier({"model": "20W9S23S00"}), "20W9S23S00")

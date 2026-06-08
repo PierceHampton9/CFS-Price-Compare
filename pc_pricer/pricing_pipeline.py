@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.device_lookup import enrich_specs_from_model_lookup
@@ -50,6 +50,7 @@ def price_specs(
     high_shipping_ratio: float = 0.25,
     asking_discount_low: float = 0.00,
     asking_discount_high: float = 0.05,
+    manufacturer_lookup: Callable[[dict[str, Any], str], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     sources = _source_list(source)
@@ -57,6 +58,7 @@ def price_specs(
         specs,
         sources,
         max_results=max(1, limit_per_query),
+        manufacturer_lookup=manufacturer_lookup,
     )
     queries = build_queries(pricing_specs)
     raw_listings, source_errors, source_statuses = _search_queries(
@@ -79,6 +81,13 @@ def price_specs(
     if pricing_excluded_reasons:
         filtered["excluded_count"] += sum(pricing_excluded_reasons.values())
         filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], pricing_excluded_reasons)
+    pricing_listings, tier_excluded_reasons = _tier_gated_pricing_listings(
+        pricing_listings,
+        min_specific_count=max(1, min(5, warn_below_comparables)),
+    )
+    if tier_excluded_reasons:
+        filtered["excluded_count"] += sum(tier_excluded_reasons.values())
+        filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], tier_excluded_reasons)
     _mark_included_in_pricing(normalized_listings, pricing_listings)
     source_diagnostics = _source_diagnostics(
         normalized_listings,
@@ -498,6 +507,33 @@ def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, An
         verified_or_nonretail.append(listing)
 
     return verified_or_nonretail, excluded_reasons
+
+
+def _tier_gated_pricing_listings(
+    listings: list[dict[str, Any]],
+    min_specific_count: int,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    tiers = sorted({_safe_int(listing.get("query_tier")) for listing in listings if _safe_int(listing.get("query_tier")) > 0})
+    if not tiers:
+        return listings, {}
+
+    selected_tier = None
+    for tier in tiers:
+        if sum(1 for listing in listings if 0 < _safe_int(listing.get("query_tier")) <= tier) >= min_specific_count:
+            selected_tier = tier
+            break
+    if selected_tier is None:
+        return listings, {}
+
+    kept = [
+        listing
+        for listing in listings
+        if _safe_int(listing.get("query_tier")) <= 0 or _safe_int(listing.get("query_tier")) <= selected_tier
+    ]
+    excluded_count = len(listings) - len(kept)
+    if excluded_count <= 0:
+        return listings, {}
+    return kept, {"lower_tier_fallback": excluded_count}
 
 
 def _mark_included_in_pricing(all_listings: list[dict[str, Any]], pricing_listings: list[dict[str, Any]]) -> None:
