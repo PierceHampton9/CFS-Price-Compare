@@ -110,13 +110,13 @@ Reports show the estimate, comparable range, source quote basis, source counts, 
 
 The GUI defaults to a Standard report view. Advanced view shows search/source diagnostics and all comparable listings; users can exclude bad comparables and reevaluate the estimate from the already fetched listings without running another online search.
 
-For computers with an exact OEM SKU or machine-type model number, the CLI and GUI first try a confidence-gated manufacturer lookup against official/support pages. When the lookup identifies the device, it fills missing model family, form factor, CPU, RAM, and storage details before pricing searches are generated. To disable or tune this best-effort lookup, add:
+For computers with an exact OEM SKU or machine-type model number, the CLI and GUI can optionally try a confidence-gated manufacturer lookup against official/support pages. When the lookup identifies the device, it fills missing model family, form factor, CPU, RAM, and storage details before pricing searches are generated. This sends the brand and identifier to manufacturer/support websites, so it is disabled by default. To enable or tune this best-effort lookup, add:
 
 ```yaml
 manufacturer_lookup:
-  enabled: true
-  timeout_seconds: 8
-  max_pages: 4
+  enabled: false
+  timeout_seconds: 5
+  max_pages: 2
 ```
 
 ## Batch Pricing from CSV

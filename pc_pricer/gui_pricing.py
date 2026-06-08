@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from pc_pricer.config import load_config
 from pc_pricer.env_loader import load_env_file
-from pc_pricer.manufacturer_lookup import lookup_manufacturer_specs
+from pc_pricer.manufacturer_lookup import build_manufacturer_lookup
 from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
 from pc_pricer.source_status import merge_config_source_statuses
@@ -20,23 +20,32 @@ def price_gui_values(
     values: dict[str, Any],
     source: ListingSource | None = None,
     config_path: str | None = None,
+    manufacturer_lookup: Callable[[dict[str, Any], str], dict[str, Any] | None] | None = None,
+    build_lookup: bool = True,
 ) -> tuple[dict[str, Any], str]:
     """Price GUI form values and return both raw result and formatted report."""
     load_env_file(override=True)
     config = load_config(config_path)
     specs = build_manual_specs(device_type, values)
     sources = source or _pricing_sources(config)
+    lookup = manufacturer_lookup
+    if source is None and build_lookup and lookup is None:
+        lookup = build_manufacturer_lookup(config)
     result = price_specs(
         specs,
         sources,
         limit_per_query=_limit_per_query(config),
         target_condition=_condition(values.get("condition"), config),
-        manufacturer_lookup=_manufacturer_lookup(config) if source is None else None,
+        manufacturer_lookup=lookup if source is None else None,
         **_pricing_options(config),
     )
     if source is None:
         result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
     return result, format_price_report(result)
+
+
+def build_gui_manufacturer_lookup(config_path: str | None = None):
+    return build_manufacturer_lookup(load_config(config_path))
 
 
 def _ebay_source(config: dict[str, Any]) -> EbaySource:
@@ -83,22 +92,6 @@ def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
         "high_shipping_ratio": _positive_float(config.get("high_shipping_ratio"), 0.25),
         **_asking_adjustment_options(config),
     }
-
-
-def _manufacturer_lookup(config: dict[str, Any]):
-    lookup_config = config.get("manufacturer_lookup")
-    if not isinstance(lookup_config, dict):
-        lookup_config = {}
-    if not _bool_value(lookup_config.get("enabled"), True):
-        return None
-    max_pages = _positive_int(lookup_config.get("max_pages"), 4)
-    timeout_seconds = _positive_float(lookup_config.get("timeout_seconds"), 8.0)
-    return lambda specs, identifier: lookup_manufacturer_specs(
-        specs,
-        identifier,
-        max_pages=max_pages,
-        timeout_seconds=timeout_seconds,
-    )
 
 
 def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:

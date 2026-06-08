@@ -23,7 +23,7 @@ from pc_pricer.config import load_config
 from pc_pricer.detector import detect_specs
 from pc_pricer.env_loader import load_env_file
 from pc_pricer.listing_filter import filter_listings
-from pc_pricer.manufacturer_lookup import lookup_manufacturer_specs
+from pc_pricer.manufacturer_lookup import build_manufacturer_lookup
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.pricing_pipeline import price_specs
@@ -299,7 +299,7 @@ def main() -> None:
                 source,
                 limit_per_query=_limit_per_query(args.limit_per_query, config),
                 target_condition=_condition(args.condition, config),
-                manufacturer_lookup=_manufacturer_lookup(config),
+                manufacturer_lookup=build_manufacturer_lookup(config),
                 **_pricing_options(config),
             )
             result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
@@ -321,7 +321,7 @@ def main() -> None:
                 source,
                 limit_per_query=_limit_per_query(args.limit_per_query, config),
                 target_condition=_condition(args.condition, config),
-                manufacturer_lookup=_manufacturer_lookup(config),
+                manufacturer_lookup=build_manufacturer_lookup(config),
                 **_pricing_options(config),
             )
             result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
@@ -429,6 +429,7 @@ def print_batch_validation(payload: dict[str, Any]) -> None:
 def price_batch_items(args: argparse.Namespace, batch_items: list[BatchItem]) -> dict[str, Any]:
     config = load_config(args.config)
     source = _pricing_sources(config, args.marketplace)
+    manufacturer_lookup = build_manufacturer_lookup(config)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
     report_dir = output_dir / "reports"
@@ -450,7 +451,7 @@ def price_batch_items(args: argparse.Namespace, batch_items: list[BatchItem]) ->
                 source,
                 limit_per_query=_limit_per_query(args.limit_per_query, config),
                 target_condition=_condition(args.condition or item.values.get("condition"), config),
-                manufacturer_lookup=_manufacturer_lookup(config),
+                manufacturer_lookup=manufacturer_lookup,
                 **_pricing_options(config),
             )
             result["source_statuses"] = merge_config_source_statuses(result.get("source_statuses"), config)
@@ -602,22 +603,6 @@ def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
         **_quality_options(config),
         **_asking_adjustment_options(config),
     }
-
-
-def _manufacturer_lookup(config: dict[str, Any]):
-    lookup_config = config.get("manufacturer_lookup")
-    if not isinstance(lookup_config, dict):
-        lookup_config = {}
-    if not _bool_value(lookup_config.get("enabled"), True):
-        return None
-    max_pages = _positive_int(lookup_config.get("max_pages"), 4)
-    timeout_seconds = _positive_float(lookup_config.get("timeout_seconds"), 8.0)
-    return lambda specs, identifier: lookup_manufacturer_specs(
-        specs,
-        identifier,
-        max_pages=max_pages,
-        timeout_seconds=timeout_seconds,
-    )
 
 
 def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:

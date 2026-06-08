@@ -80,8 +80,8 @@ def lookup_manufacturer_specs(
     specs: dict[str, Any],
     identifier: str,
     fetcher: ManufacturerFetcher | None = None,
-    max_pages: int = 4,
-    timeout_seconds: float = 8.0,
+    max_pages: int = 2,
+    timeout_seconds: float = 5.0,
 ) -> dict[str, Any] | None:
     """Return a high-confidence manufacturer lookup candidate, or None."""
     brand = _clean(specs.get("brand"))
@@ -95,7 +95,8 @@ def lookup_manufacturer_specs(
     fetch = fetcher or (lambda url: _fetch_url(url, timeout_seconds=timeout_seconds))
     candidates = []
     errors = []
-    for url in urls[: max(1, max_pages)]:
+    attempted_urls = urls[: max(1, max_pages)]
+    for url in attempted_urls:
         try:
             html = fetch(url)
         except Exception as exc:  # pragma: no cover - network boundary.
@@ -103,6 +104,11 @@ def lookup_manufacturer_specs(
             continue
         candidate = candidate_from_manufacturer_page(html, brand, identifier, url)
         if candidate:
+            candidate["queries"] = attempted_urls
+            if candidate["score"] >= 11:
+                if errors:
+                    candidate["errors"] = errors
+                return candidate
             candidates.append(candidate)
 
     if not candidates:
@@ -111,10 +117,39 @@ def lookup_manufacturer_specs(
     best = max(candidates, key=lambda candidate: candidate["score"])
     if best["score"] < 8:
         return None
-    best["queries"] = urls[: max(1, max_pages)]
+    best["queries"] = attempted_urls
     if errors:
         best["errors"] = errors
     return best
+
+
+def build_manufacturer_lookup(config: dict[str, Any]) -> Callable[[dict[str, Any], str], dict[str, Any] | None] | None:
+    """Return a configured manufacturer lookup callable, or None when disabled."""
+    lookup_config = config.get("manufacturer_lookup")
+    if not isinstance(lookup_config, dict):
+        lookup_config = {}
+    if not _bool_value(lookup_config.get("enabled"), False):
+        return None
+
+    max_pages = _positive_int(lookup_config.get("max_pages"), 2)
+    timeout_seconds = _positive_float(lookup_config.get("timeout_seconds"), 5.0)
+    cache: dict[tuple[str, str], dict[str, Any] | None] = {}
+
+    def lookup(specs: dict[str, Any], identifier: str) -> dict[str, Any] | None:
+        brand = _brand_key(str(specs.get("brand") or ""))
+        cache_key = (brand, str(identifier or "").strip().lower())
+        if cache_key in cache:
+            return cache[cache_key]
+        result = lookup_manufacturer_specs(
+            specs,
+            identifier,
+            max_pages=max_pages,
+            timeout_seconds=timeout_seconds,
+        )
+        cache[cache_key] = result
+        return result
+
+    return lookup
 
 
 def manufacturer_lookup_urls(brand: str, identifier: str) -> list[str]:
@@ -187,6 +222,8 @@ def candidate_from_manufacturer_page(
         return None
 
     specs = _canonical_specs(title, labels, text, brand)
+    if not _has_useful_enrichment(specs):
+        return None
     score = 0
     score += 5
     score += 3 if brand else 0
@@ -206,6 +243,10 @@ def candidate_from_manufacturer_page(
         "confidence": _confidence_label(score),
         "enriched_specs": specs,
     }
+
+
+def _has_useful_enrichment(specs: dict[str, Any]) -> bool:
+    return any(specs.get(key) for key in ["search_model", "form_factor", "cpu_short", "ram_gb", "storage"])
 
 
 def _canonical_specs(
@@ -474,3 +515,28 @@ def _safe_int(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return parsed if parsed > 0 else 0
+
+
+def _positive_int(value: Any, default: int) -> int:
+    parsed = _safe_int(value)
+    return parsed if parsed > 0 else default
+
+
+def _positive_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    return default

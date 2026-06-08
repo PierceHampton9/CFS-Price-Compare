@@ -30,7 +30,7 @@ from pc_pricer.gui_forms import (
     validate_device_type,
     validate_specs,
 )
-from pc_pricer.gui_pricing import price_gui_values
+from pc_pricer.gui_pricing import build_gui_manufacturer_lookup, price_gui_values
 from pc_pricer.gui_source_settings import load_source_settings, save_source_settings
 from pc_pricer.pricing_pipeline import reprice_existing_result
 from pc_pricer.reporter import (
@@ -174,6 +174,7 @@ class BatchPricingThread(QThread):  # type: ignore[misc]
     def __init__(self, items: list[dict[str, Any]], parent: QWidget | None = None) -> None:  # type: ignore[misc]
         super().__init__(parent)
         self.items = deepcopy(items)
+        self.manufacturer_lookup = build_gui_manufacturer_lookup()
 
     def run(self) -> None:
         for index, item in enumerate(self.items):
@@ -181,7 +182,12 @@ class BatchPricingThread(QThread):  # type: ignore[misc]
                 continue
             self.item_started.emit(index)
             try:
-                result, report = price_gui_values(item.get("device_type") or "computer", item.get("values") or {})
+                result, report = price_gui_values(
+                    item.get("device_type") or "computer",
+                    item.get("values") or {},
+                    manufacturer_lookup=self.manufacturer_lookup,
+                    build_lookup=False,
+                )
             except RuntimeError as exc:
                 self.item_failed.emit(index, str(exc))
             except Exception as exc:  # pragma: no cover - defensive GUI boundary.

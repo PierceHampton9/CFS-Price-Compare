@@ -1,6 +1,7 @@
 import unittest
 
 from pc_pricer.manufacturer_lookup import (
+    build_manufacturer_lookup,
     candidate_from_manufacturer_page,
     lookup_manufacturer_specs,
     manufacturer_lookup_urls,
@@ -115,6 +116,93 @@ class ManufacturerLookupTests(unittest.TestCase):
         )
 
         self.assertIsNone(result)
+
+    def test_brand_identifier_only_page_is_not_enough_to_identify(self):
+        html = "<html><title>Lenovo support</title><body>Lenovo 20W9S23S00</body></html>"
+
+        result = candidate_from_manufacturer_page(
+            html,
+            "Lenovo",
+            "20W9S23S00",
+            "https://pcsupport.lenovo.com/search?query=20W9S23S00",
+        )
+
+        self.assertIsNone(result)
+
+    def test_lookup_exits_after_first_high_confidence_candidate(self):
+        calls = []
+        good_html = """
+        <html>
+          <title>Lenovo ThinkPad X1 Carbon Gen 9</title>
+          <body>
+            <h1>Lenovo ThinkPad X1 Carbon Gen 9 Laptop</h1>
+            <table>
+              <tr><th>Product Name</th><td>ThinkPad X1 Carbon Gen 9</td></tr>
+              <tr><th>Processor</th><td>Intel Core i7-1185G7</td></tr>
+              <tr><th>Memory</th><td>16GB RAM</td></tr>
+              <tr><th>Storage</th><td>512GB SSD</td></tr>
+            </table>
+            20W9S23S00
+          </body>
+        </html>
+        """
+
+        def fetcher(url):
+            calls.append(url)
+            return good_html
+
+        result = lookup_manufacturer_specs(
+            {"brand": "Lenovo"},
+            "20W9S23S00",
+            fetcher=fetcher,
+            max_pages=4,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(calls), 1)
+
+    def test_configured_lookup_is_opt_in_and_caches_by_brand_identifier(self):
+        self.assertIsNone(build_manufacturer_lookup({}))
+
+        calls = []
+        html = """
+        <html>
+          <title>HP EliteOne 800 G5 All-in-One PC</title>
+          <body>
+            <h1>HP EliteOne 800 G5 All-in-One PC</h1>
+            <dl>
+              <dt>Product Name</dt><dd>HP EliteOne 800 G5 All-in-One</dd>
+              <dt>Processor</dt><dd>Intel Core i5-9500</dd>
+            </dl>
+            7YX45UT
+          </body>
+        </html>
+        """
+
+        lookup = build_manufacturer_lookup(
+            {
+                "manufacturer_lookup": {
+                    "enabled": True,
+                    "max_pages": 1,
+                    "timeout_seconds": 1,
+                }
+            }
+        )
+        self.assertIsNotNone(lookup)
+
+        from pc_pricer import manufacturer_lookup as manufacturer_module
+
+        original_fetch = manufacturer_module._fetch_url
+        try:
+            manufacturer_module._fetch_url = lambda url, timeout_seconds: calls.append((url, timeout_seconds)) or html
+            first = lookup({"brand": "HP"}, "7YX45UT")
+            second = lookup({"brand": "HP"}, "7YX45UT")
+        finally:
+            manufacturer_module._fetch_url = original_fetch
+
+        self.assertIs(first, second)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], 1)
 
     def test_unknown_brand_still_gets_generic_official_search_urls(self):
         urls = manufacturer_lookup_urls("Framework", "FRANBMCP07")

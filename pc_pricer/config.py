@@ -23,9 +23,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "max_sold_listing_age_days": 90,
     "max_asking_listing_age_days": 30,
     "manufacturer_lookup": {
-        "enabled": True,
-        "timeout_seconds": 8,
-        "max_pages": 4,
+        "enabled": False,
+        "timeout_seconds": 5,
+        "max_pages": 2,
     },
     "sources": {
         "ebay": {
