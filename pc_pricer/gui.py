@@ -78,6 +78,7 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
         QFrame,
         QGridLayout,
         QHBoxLayout,
+        QHeaderView,
         QLabel,
         QLineEdit,
         QMainWindow,
@@ -97,7 +98,7 @@ except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
     QThread = object  # type: ignore[assignment]
     QAbstractItemView = object  # type: ignore[assignment]
     QButtonGroup = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
-    QFileDialog = QGridLayout = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
+    QFileDialog = QGridLayout = QHeaderView = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
     QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
     QTableWidget = QTableWidgetItem = object  # type: ignore[assignment]
     Qt = type(
@@ -339,6 +340,7 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
         self.state.batch_source_path = path
         self.state.batch_items = [_gui_batch_item(item) for item in items]
         self.state.current_batch_index = None
+        self.batch_page.edit_mode = False
         self.show_batch()
 
     def start_batch_pricing(self) -> None:
@@ -689,30 +691,50 @@ class BatchPage(Page):
             "Batch Pricing",
             "Import a CSV, fix invalid rows, then run devices in order. Completed reports stay in this batch view.",
         )
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Order", "Item ID", "Device", "Summary", "Status", "Issue"])
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.cellDoubleClicked.connect(lambda row, _column: self.view_selected(row))
-        self.root.addWidget(self.table, 1)
+        self.edit_mode = False
 
-        self.status = QLabel()
-        self.status.setObjectName("statusText")
-        self.status.setWordWrap(True)
-        self.root.addWidget(self.status)
-
-        row = QHBoxLayout()
+        top_actions = QHBoxLayout()
+        top_actions.addStretch()
         self.import_button = QPushButton("Import CSV")
         self.import_button.clicked.connect(self.main_window.import_batch_csv)
         self.start_button = QPushButton("Start / Continue")
         self.start_button.clicked.connect(self.main_window.start_batch_pricing)
-        self.view_button = QPushButton("View Report")
-        self.view_button.clicked.connect(self.view_selected)
-        self.edit_button = QPushButton("Edit Row")
-        self.edit_button.clicked.connect(self.edit_selected)
-        self.remove_button = QPushButton("Remove Row")
-        self.remove_button.clicked.connect(self.remove_selected)
+        top_actions.addWidget(self.import_button)
+        top_actions.addWidget(self.start_button)
+        self.root.addLayout(top_actions)
+
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Order", "Device", "Summary", "Status", "Issue", "Action"])
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setWordWrap(True)
+        self.table.verticalHeader().setVisible(False)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.cellDoubleClicked.connect(lambda row, _column: self.view_selected(row))
+        self.root.addWidget(self.table, 1)
+
+        self.status_panel = QFrame()
+        self.status_panel.setObjectName("sectionPanel")
+        self.status_panel.setFrameShape(QFrame.StyledPanel)
+        self.status_layout = QGridLayout(self.status_panel)
+        self.status_layout.setColumnStretch(1, 1)
+        self.status_layout.setHorizontalSpacing(12)
+        self.status_layout.setVerticalSpacing(6)
+        self.root.addWidget(self.status_panel)
+
+        row = QHBoxLayout()
+        self.edit_button = QPushButton("Edit Batch")
+        self.edit_button.clicked.connect(self.toggle_edit_mode)
+        self.view_button = QPushButton("View All Reports")
+        self.view_button.clicked.connect(self.view_all_reports)
         self.print_all_button = QPushButton("Print All")
         self.print_all_button.clicked.connect(self.print_all_reports)
         self.export_all_button = QPushButton("Export All")
@@ -721,33 +743,33 @@ class BatchPage(Page):
         self.back_button.clicked.connect(self.main_window.show_device_type)
 
         row.addWidget(self.back_button)
-        row.addWidget(self.import_button)
         row.addStretch()
         row.addWidget(self.edit_button)
-        row.addWidget(self.remove_button)
         row.addWidget(self.view_button)
         row.addWidget(self.print_all_button)
         row.addWidget(self.export_all_button)
-        row.addWidget(self.start_button)
         self.root.addLayout(row)
 
     def refresh(self) -> None:
         items = self.main_window.state.batch_items
+        self.table.clearContents()
         self.table.setRowCount(len(items))
         for row, item in enumerate(items):
             values = item.get("values") or {}
             cells = [
-                str(row + 1),
-                str(item.get("item_id") or ""),
+                _batch_order_label(row, item),
                 _display_value(item.get("device_type"), "device_type"),
                 batch_item_summary(values),
                 str(item.get("status") or "Ready"),
                 _batch_issue_text(item),
+                "",
             ]
             for column, value in enumerate(cells):
                 cell = QTableWidgetItem(value)
                 self.table.setItem(row, column, cell)
-        self.status.setText(self._status_text(items))
+            self.table.setCellWidget(row, 5, self._row_action_widget(row, item))
+        self.table.resizeRowsToContents()
+        self._refresh_status_panel(items)
         self._sync_controls()
 
     def view_selected(self, row: int | None = None) -> None:
@@ -760,20 +782,35 @@ class BatchPage(Page):
             return
         self.main_window.open_batch_report(index)
 
-    def edit_selected(self) -> None:
-        index = self._selected_index()
+    def view_all_reports(self) -> None:
+        if not self._all_rows_reportable():
+            return
+        for index, item in enumerate(self.main_window.state.batch_items):
+            if item.get("result") or item.get("error"):
+                self.main_window.open_batch_report(index)
+                return
+
+    def edit_selected(self, row: int | None = None) -> None:
+        index = self._selected_index(row)
         if index is not None:
             self.main_window.edit_batch_item(index)
 
-    def remove_selected(self) -> None:
+    def delete_row(self, row: int) -> None:
         if self._batch_is_running():
             return
-        index = self._selected_index()
-        if index is None:
+        if row < 0 or row >= len(self.main_window.state.batch_items):
             return
-        del self.main_window.state.batch_items[index]
-        if self.main_window.state.current_batch_index == index:
+        del self.main_window.state.batch_items[row]
+        if self.main_window.state.current_batch_index == row:
             self.main_window.state.current_batch_index = None
+        elif self.main_window.state.current_batch_index is not None and self.main_window.state.current_batch_index > row:
+            self.main_window.state.current_batch_index -= 1
+        self.refresh()
+
+    def toggle_edit_mode(self) -> None:
+        if self._batch_is_running():
+            return
+        self.edit_mode = not self.edit_mode
         self.refresh()
 
     def print_all_reports(self) -> None:
@@ -826,16 +863,63 @@ class BatchPage(Page):
             return None
         return index
 
-    def _status_text(self, items: list[dict[str, Any]]) -> str:
+    def _row_action_widget(self, row: int, item: dict[str, Any]) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addStretch()
+        if self.edit_mode:
+            edit = QPushButton("Edit")
+            edit.clicked.connect(lambda _checked=False, row_index=row: self.edit_selected(row_index))
+            delete = QPushButton("Delete")
+            delete.clicked.connect(lambda _checked=False, row_index=row: self.delete_row(row_index))
+            edit.setEnabled(not self._batch_is_running())
+            delete.setEnabled(not self._batch_is_running())
+            layout.addWidget(edit)
+            layout.addWidget(delete)
+        else:
+            open_button = QPushButton("Open Report")
+            open_button.clicked.connect(lambda _checked=False, row_index=row: self.view_selected(row_index))
+            open_button.setEnabled(bool(item.get("result") or item.get("error")))
+            open_button.setToolTip("Open this row's report." if open_button.isEnabled() else "Run this row before opening its report.")
+            layout.addWidget(open_button)
+        return container
+
+    def _refresh_status_panel(self, items: list[dict[str, Any]]) -> None:
+        clear_layout(self.status_layout)
         if not items:
-            return "No batch CSV loaded."
+            self._add_status_row(0, "File", "No batch CSV loaded.", "statusText")
+            return
         counts: dict[str, int] = {}
         for item in items:
             status = str(item.get("status") or "Ready")
             counts[status] = counts.get(status, 0) + 1
-        source = f" File: {self.main_window.state.batch_source_path}" if self.main_window.state.batch_source_path else ""
-        parts = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
-        return f"{len(items)} rows loaded. {parts}.{source}"
+        self._add_status_row(0, "File", self.main_window.state.batch_source_path or "Imported batch", "statusText")
+        self._add_status_row(1, "Rows", str(len(items)), "statusText")
+        status_order = [
+            ("Ready", "Ready"),
+            ("Running", "Running"),
+            ("Complete", "Complete"),
+            ("Needs Review", "Needs Review"),
+            ("Failed", "Failed"),
+            ("Invalid", "Invalid"),
+        ]
+        row = 2
+        for status, label in status_order:
+            count = counts.get(status, 0)
+            if count:
+                self._add_status_row(row, label, str(count), _batch_status_object_name(status))
+                row += 1
+
+    def _add_status_row(self, row: int, label: str, value: str, object_name: str) -> None:
+        label_widget = _selectable_label(label)
+        label_widget.setObjectName("detailLabel")
+        value_widget = _selectable_label(value)
+        value_widget.setObjectName(object_name)
+        value_widget.setWordWrap(True)
+        self.status_layout.addWidget(label_widget, row, 0)
+        self.status_layout.addWidget(value_widget, row, 1)
 
     def _sync_controls(self) -> None:
         running = self._batch_is_running()
@@ -847,15 +931,19 @@ class BatchPage(Page):
         self.import_button.setEnabled(not running)
         self.start_button.setEnabled(not running and has_items)
         self.edit_button.setEnabled(not running and has_items)
-        self.remove_button.setEnabled(not running and has_items)
         self.back_button.setEnabled(not running)
-        self.view_button.setEnabled(has_items)
+        self.edit_button.setText("Done Editing" if self.edit_mode else "Edit Batch")
+        self.view_button.setEnabled(self._all_rows_reportable())
         self.print_all_button.setEnabled(has_finished)
         self.export_all_button.setEnabled(has_finished)
 
     def _batch_is_running(self) -> bool:
         thread = self.main_window.batch_pricing_thread
         return bool(thread is not None and thread.isRunning())
+
+    def _all_rows_reportable(self) -> bool:
+        items = self.main_window.state.batch_items
+        return bool(items) and all(item.get("result") or item.get("error") for item in items)
 
 
 class ComputerModePage(Page):
@@ -1629,6 +1717,20 @@ def _batch_success_status(result: dict[str, Any]) -> str:
     return "Complete"
 
 
+def _batch_order_label(index: int, _item: dict[str, Any]) -> str:
+    return str(index + 1)
+
+
+def _batch_status_object_name(status: str) -> str:
+    return {
+        "Complete": "batchStatusComplete",
+        "Needs Review": "batchStatusReview",
+        "Failed": "batchStatusFailed",
+        "Invalid": "batchStatusFailed",
+        "Running": "batchStatusRunning",
+    }.get(status, "statusText")
+
+
 def _batch_issue_text(item: dict[str, Any]) -> str:
     errors = item.get("errors") or []
     if errors:
@@ -2166,6 +2268,22 @@ QWidget {
 }
 #statusText {
     color: #4b5563;
+}
+#batchStatusComplete {
+    color: #047857;
+    font-weight: 700;
+}
+#batchStatusReview {
+    color: #b45309;
+    font-weight: 700;
+}
+#batchStatusFailed {
+    color: #b91c1c;
+    font-weight: 700;
+}
+#batchStatusRunning {
+    color: #2563eb;
+    font-weight: 700;
 }
 QLineEdit, QComboBox {
     padding: 6px;
