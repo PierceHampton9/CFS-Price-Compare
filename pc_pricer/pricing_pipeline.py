@@ -295,6 +295,10 @@ def _source_query_text(source_name: str, query: dict[str, Any], specs: dict[str,
     query_text = str(query.get("text") or "").strip()
     if source_name not in {"refurb_io", "amazon_renewed"}:
         return query_text
+    if _is_exact_identifier_query(query, specs):
+        if source_name == "amazon_renewed":
+            return _amazon_query_text(query_text)
+        return query_text
     if (
         source_name == "refurb_io"
         and _safe_int(query.get("tier")) == 1
@@ -308,6 +312,29 @@ def _source_query_text(source_name: str, query: dict[str, Any], specs: dict[str,
             return _amazon_query_text(retailer_query or query_text)
         return _amazon_query_text(query_text)
     return retailer_query or query_text
+
+
+def _is_exact_identifier_query(query: dict[str, Any], specs: dict[str, Any]) -> bool:
+    if _safe_int(query.get("tier")) != 1:
+        return False
+    query_text = _clean_text(query.get("text"))
+    identifier = _model_identifier_text(specs)
+    if not query_text or not identifier:
+        return False
+    brand = _clean_text(specs.get("brand"))
+    return query_text == identifier or query_text == " ".join(part for part in [brand, identifier] if part)
+
+
+def _model_identifier_text(specs: dict[str, Any]) -> str | None:
+    oem_sku = _clean_text(specs.get("oem_sku"))
+    if oem_sku:
+        return oem_sku
+    if _clean_text(specs.get("search_model")):
+        return None
+    model = _clean_text(specs.get("model"))
+    if model and (specs.get("model_is_machine_type") or _looks_like_model_number(model)):
+        return model
+    return None
 
 
 def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
@@ -334,6 +361,17 @@ def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
 def _clean_text(value: Any) -> str | None:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     return text or None
+
+
+def _looks_like_model_number(value: str) -> bool:
+    text = value.strip()
+    if len(text) < 6 or len(text) > 24:
+        return False
+    if " " in text:
+        return False
+    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _amazon_query_text(query_text: str) -> str:
@@ -795,7 +833,7 @@ def _verified_refurb_match(
         reasons.append("brand_mismatch")
 
     model = specs.get("search_model") or specs.get("model")
-    if model and not _all_tokens_present(text, str(model)):
+    if model and not _model_matches_listing(text, str(model), listing, specs):
         reasons.append("model_mismatch")
 
     device_type = specs.get("device_type")
@@ -829,6 +867,33 @@ def _text_matches_value(text: str, value: Any) -> bool:
     if not value:
         return True
     return _all_tokens_present(text, str(value))
+
+
+def _model_matches_listing(
+    text: str,
+    model: str,
+    listing: dict[str, Any],
+    specs: dict[str, Any],
+) -> bool:
+    if _all_tokens_present(text, model):
+        return True
+    if not _looks_like_model_number(model):
+        return False
+    identifier = _model_identifier_text(specs)
+    query_text = _clean_text(listing.get("query_text"))
+    generated_query_text = _clean_text(listing.get("generated_query_text"))
+    searched_exact_identifier = any(
+        identifier and identifier.lower() in str(value or "").lower()
+        for value in [query_text, generated_query_text]
+    )
+    has_target_hardware = any(
+        [
+            _safe_int(specs.get("ram_gb")),
+            _target_storage_gb(specs),
+            specs.get("cpu_short"),
+        ]
+    )
+    return bool(searched_exact_identifier or has_target_hardware)
 
 
 def _all_tokens_present(text: str, value: str) -> bool:

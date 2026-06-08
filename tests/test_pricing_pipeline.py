@@ -25,6 +25,7 @@ class PricingPipelineTests(unittest.TestCase):
         result = price_specs(_laptop_specs(), source, limit_per_query=5, target_condition="good")
 
         self.assertEqual(source.calls, [
+            ("Lenovo 20XW004AUS", 5),
             ("20XW004AUS", 5),
             ("Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", 5),
             ("Lenovo ThinkPad X13 Yoga", 5),
@@ -39,7 +40,7 @@ class PricingPipelineTests(unittest.TestCase):
             "parts_or_accessory": 1,
         })
         self.assertEqual([listing["query_tier"] for listing in result["supporting_listings"]], [1, 1, 3])
-        self.assertEqual(result["queries"][0]["text"], "20XW004AUS")
+        self.assertEqual(result["queries"][0]["text"], "Lenovo 20XW004AUS")
         self.assertNotIn("raw", result["specs"])
         self.assertNotIn("serial_number", result["specs"])
 
@@ -244,13 +245,43 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(_laptop_specs(), [refurb], limit_per_query=5)
 
-        self.assertEqual(refurb.calls, [("20XW004AUS", 5), ("Lenovo ThinkPad X13 Yoga", 5)])
+        self.assertEqual(refurb.calls, [("Lenovo 20XW004AUS", 5), ("20XW004AUS", 5), ("Lenovo ThinkPad X13 Yoga", 5)])
         self.assertEqual(result["median_price_cad"], 525.00)
         self.assertEqual(result["source_diagnostics"][0]["query_text"], "Lenovo ThinkPad X13 Yoga")
         self.assertEqual(
             result["source_diagnostics"][0]["generated_query_text"],
             "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB",
         )
+
+    def test_model_number_query_can_verify_retailer_result_by_specs(self):
+        specs = {
+            "device_type": "computer",
+            "brand": "Lenovo",
+            "model": "20W9S23S00",
+            "form_factor": "laptop",
+            "cpu_short": "i7-1185G7",
+            "ram_gb": 16,
+            "storage": [{"size_gb": 512, "type": "SSD"}],
+        }
+        refurb = FakeSource(
+            {
+                "Lenovo 20W9S23S00": [
+                    _refurb_listing(
+                        "Lenovo ThinkPad X1 Carbon Gen 9 Laptop i7-1185G7 16GB 512GB",
+                        650,
+                        model="ThinkPad X1 Carbon Gen 9",
+                    )
+                ],
+            },
+            name="refurb_io",
+        )
+
+        result = price_specs(specs, [refurb], limit_per_query=5)
+
+        self.assertEqual(refurb.calls[0], ("Lenovo 20W9S23S00", 5))
+        self.assertEqual(result["median_price_cad"], 650.00)
+        self.assertEqual(result["source_diagnostics"][0]["source_match_reasons"], [])
+        self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
 
     def test_refurb_io_only_verified_result_works(self):
         refurb = FakeSource(
@@ -293,12 +324,14 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(
             amazon.calls,
             [
-                ("Lenovo ThinkPad X13 Yoga Renewed", 5),
+                ("Lenovo 20XW004AUS Renewed", 5),
+                ("20XW004AUS Renewed", 5),
                 ("Lenovo ThinkPad X13 Yoga i5-1135G7 16GB Renewed", 5),
+                ("Lenovo ThinkPad X13 Yoga Renewed", 5),
             ],
         )
         amazon_status = next(status for status in result["source_statuses"] if status["source"] == "amazon_renewed")
-        self.assertEqual(amazon_status["query_count"], 2)
+        self.assertEqual(amazon_status["query_count"], 4)
         self.assertEqual(amazon_status["raw_listing_count"], 1)
         self.assertEqual(result["median_price_cad"], 497.50)
         self.assertEqual(result["iqr_low_cad"], 292.50)
@@ -492,8 +525,8 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertIn("source_unavailable", result["confidence_flags"])
         self.assertEqual(result["source_errors"][0]["source"], "refurb_io")
         refurb_status = next(status for status in result["source_statuses"] if status["source"] == "refurb_io")
-        self.assertEqual(refurb_status["error_count"], 2)
-        self.assertEqual(refurb_status["errors"], ["source unavailable", "source unavailable"])
+        self.assertEqual(refurb_status["error_count"], 3)
+        self.assertEqual(refurb_status["errors"], ["source unavailable", "source unavailable", "source unavailable"])
 
     def test_ebay_only_behavior_remains_asking_adjusted(self):
         source = FakeSource(

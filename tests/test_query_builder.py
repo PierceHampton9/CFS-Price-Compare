@@ -16,13 +16,15 @@ class QueryBuilderTests(unittest.TestCase):
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "20XH001NUS")
+        self.assertEqual(queries[0]["text"], "Lenovo 20XH001NUS")
         self.assertEqual(queries[0]["tier"], 1)
+        self.assertEqual(queries[1]["text"], "20XH001NUS")
+        self.assertEqual(queries[1]["tier"], 1)
         self.assertEqual(
-            queries[1]["text"],
+            queries[2]["text"],
             "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB",
         )
-        self.assertEqual(queries[2]["text"], "Lenovo ThinkPad X13 Yoga Gen 2")
+        self.assertEqual(queries[3]["text"], "Lenovo ThinkPad X13 Yoga Gen 2")
 
     def test_laptop_without_oem_sku_skips_exact_tier(self):
         specs = {
@@ -83,9 +85,25 @@ class QueryBuilderTests(unittest.TestCase):
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "Lenovo i7-1185G7 16GB 256GB SSD laptop")
-        self.assertEqual(queries[0]["tier"], 3)
-        self.assertNotIn("20W9S23S00", queries[0]["text"])
+        self.assertEqual(queries[0]["text"], "Lenovo 20W9S23S00")
+        self.assertEqual(queries[0]["tier"], 1)
+        self.assertEqual(queries[1]["text"], "20W9S23S00")
+        self.assertEqual(queries[2]["text"], "Lenovo i7-1185G7 16GB 256GB SSD laptop")
+
+    def test_laptop_model_number_without_family_still_drives_exact_search(self):
+        specs = {
+            "brand": "Lenovo",
+            "model": "20W9S23S00",
+            "form_factor": "laptop",
+            "cpu_short": "i7-1185G7",
+            "ram_gb": 16,
+        }
+
+        queries = build_queries(specs)
+
+        self.assertEqual(queries[0]["text"], "Lenovo 20W9S23S00")
+        self.assertEqual(queries[1]["text"], "20W9S23S00")
+        self.assertEqual(queries[2]["text"], "Lenovo 20W9S23S00 i7-1185G7 16GB")
 
     def test_all_in_one_uses_laptop_style_queries(self):
         specs = {
@@ -99,9 +117,10 @@ class QueryBuilderTests(unittest.TestCase):
 
         queries = build_queries(specs)
 
-        self.assertEqual(queries[0]["text"], "7YX45UT")
+        self.assertEqual(queries[0]["text"], "HP 7YX45UT")
         self.assertEqual(queries[0]["tier"], 1)
-        self.assertEqual(queries[1]["text"], "HP EliteOne 800 G5 i5-9500 16GB")
+        self.assertEqual(queries[1]["text"], "7YX45UT")
+        self.assertEqual(queries[2]["text"], "HP EliteOne 800 G5 i5-9500 16GB")
 
     def test_two_in_one_uses_laptop_style_queries(self):
         specs = {
