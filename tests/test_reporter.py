@@ -95,6 +95,40 @@ class ReporterTests(unittest.TestCase):
         self.assertIn("Queries used:", report)
         self.assertIn("T2: Lenovo ThinkPad X13 Yoga i5-1135G7 16GB", report)
 
+    def test_formats_device_identification_when_present(self):
+        report = format_price_report(
+            {
+                "median_price_cad": 650,
+                "iqr_low_cad": 650,
+                "iqr_high_cad": 650,
+                "count": 1,
+                "source_counts": {"refurb_io": 1},
+                "query_tier": 2,
+                "device_identification": {
+                    "attempted": True,
+                    "status": "identified",
+                    "source": "refurb_io",
+                    "title": "Lenovo ThinkPad X1 Carbon Gen 9",
+                    "confidence": "high",
+                    "added_fields": ["search_model", "cpu_short"],
+                },
+                "specs": {
+                    "device_type": "computer",
+                    "brand": "Lenovo",
+                    "model": "20W9S23S00",
+                    "search_model": "ThinkPad X1 Carbon Gen 9",
+                    "cpu_short": "i7-1185G7",
+                    "ram_gb": 16,
+                },
+                "confidence_flags": [],
+                "supporting_listings": [],
+            }
+        )
+
+        self.assertIn("Device lookup:     identified", report)
+        self.assertIn("Lookup source:     Refurb.io", report)
+        self.assertIn("Lookup added:      search_model, cpu_short", report)
+
     def test_formats_manual_non_computer_specs(self):
         report = format_price_report(
             {

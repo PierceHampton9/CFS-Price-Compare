@@ -245,7 +245,16 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(_laptop_specs(), [refurb], limit_per_query=5)
 
-        self.assertEqual(refurb.calls, [("Lenovo 20XW004AUS", 5), ("20XW004AUS", 5), ("Lenovo ThinkPad X13 Yoga", 5)])
+        self.assertEqual(
+            refurb.calls,
+            [
+                ("Lenovo 20XW004AUS", 3),
+                ("20XW004AUS", 3),
+                ("Lenovo 20XW004AUS", 5),
+                ("20XW004AUS", 5),
+                ("Lenovo ThinkPad X13 Yoga", 5),
+            ],
+        )
         self.assertEqual(result["median_price_cad"], 525.00)
         self.assertEqual(result["source_diagnostics"][0]["query_text"], "Lenovo ThinkPad X13 Yoga")
         self.assertEqual(
@@ -278,7 +287,9 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(specs, [refurb], limit_per_query=5)
 
-        self.assertEqual(refurb.calls[0], ("Lenovo 20W9S23S00", 5))
+        self.assertEqual(refurb.calls[0], ("Lenovo 20W9S23S00", 3))
+        self.assertEqual(result["device_identification"]["status"], "identified")
+        self.assertEqual(result["specs"]["search_model"], "ThinkPad X1 Carbon Gen 9")
         self.assertEqual(result["median_price_cad"], 650.00)
         self.assertEqual(result["source_diagnostics"][0]["source_match_reasons"], [])
         self.assertIs(result["source_diagnostics"][0]["source_match_verified"], True)
@@ -324,6 +335,8 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(
             amazon.calls,
             [
+                ("Lenovo 20XW004AUS", 3),
+                ("20XW004AUS", 3),
                 ("Lenovo 20XW004AUS Renewed", 5),
                 ("20XW004AUS Renewed", 5),
                 ("Lenovo ThinkPad X13 Yoga i5-1135G7 16GB Renewed", 5),

@@ -1173,6 +1173,7 @@ class ReportPage(Page):
         advanced = self.main_window.state.report_mode == "advanced"
         self._add_price_summary(result, advanced=advanced)
         self._add_signal_section(result)
+        self._add_device_identification_section(result.get("device_identification"))
         self._add_specs_section(result.get("specs"))
         if advanced:
             self._add_search_section(result)
@@ -1425,6 +1426,35 @@ class ReportPage(Page):
                 seen_labels.add(label)
 
         self._add_key_value_section("Specs Used", rows)
+
+    def _add_device_identification_section(self, identification: Any) -> None:
+        if not isinstance(identification, dict) or not identification.get("attempted"):
+            return
+
+        rows = [
+            (
+                "Status",
+                str(identification.get("status") or "unknown").replace("_", " ").title(),
+                "Shows whether the exact model identifier could be matched before pricing.",
+            )
+        ]
+        if identification.get("source"):
+            rows.append(("Source", _format_source_name(identification.get("source")), "The source used for model-number lookup."))
+        if identification.get("title"):
+            rows.append(("Matched Device", str(identification.get("title")), "The device record selected by the lookup step."))
+        if identification.get("confidence"):
+            rows.append(("Confidence", str(identification.get("confidence")).title(), "Deterministic confidence for the selected lookup match."))
+        added_fields = identification.get("added_fields") or []
+        if added_fields:
+            rows.append(("Fields Added", ", ".join(str(field) for field in added_fields), "Fields filled from the lookup before pricing."))
+        url = _safe_link_url(identification.get("url"))
+        if url:
+            link = QLabel(f'<a href="{html.escape(url, quote=True)}">Open lookup match</a>')
+            link.setOpenExternalLinks(True)
+            link.setWordWrap(True)
+            rows.append(("Lookup Link", link, "Opens the device record used for lookup."))
+
+        self._add_key_value_section("Device Identification", rows)
 
     def _add_search_section(self, result: dict[str, Any]) -> None:
         rows = []

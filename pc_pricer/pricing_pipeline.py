@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.device_lookup import enrich_specs_from_model_lookup, model_identifier as lookup_model_identifier
 from pc_pricer.listing_filter import exclusion_reason, filter_listings
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.price_adjustment import apply_pricing_basis
@@ -50,17 +51,22 @@ def price_specs(
     asking_discount_high: float = 0.05,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
-    queries = build_queries(specs)
     sources = _source_list(source)
-    raw_listings, source_errors, source_statuses = _search_queries(sources, queries, limit_per_query, specs)
+    pricing_specs, device_identification = enrich_specs_from_model_lookup(
+        specs,
+        sources,
+        max_results=min(max(1, limit_per_query), 3),
+    )
+    queries = build_queries(pricing_specs)
+    raw_listings, source_errors, source_statuses = _search_queries(sources, queries, limit_per_query, pricing_specs)
     deduped_listings = _dedupe_listings(raw_listings)
     normalized_listings = normalize_listings(deduped_listings)
-    normalized_listings = _add_source_match_flags(normalized_listings, specs)
+    normalized_listings = _add_source_match_flags(normalized_listings, pricing_specs)
     filtered = filter_listings(
         normalized_listings,
         target_condition=target_condition,
-        device_type=specs.get("device_type"),
-        target_specs=specs,
+        device_type=pricing_specs.get("device_type"),
+        target_specs=pricing_specs,
     )
     pricing_listings, pricing_excluded_reasons = _pricing_listings(filtered["listings"])
     if pricing_excluded_reasons:
@@ -69,7 +75,7 @@ def price_specs(
     _mark_included_in_pricing(normalized_listings, pricing_listings)
     source_diagnostics = _source_diagnostics(
         normalized_listings,
-        specs,
+        pricing_specs,
         target_condition=target_condition,
     )
 
@@ -87,7 +93,7 @@ def price_specs(
     )
     result.update(
         {
-            "specs": _public_specs(specs),
+            "specs": _public_specs(pricing_specs),
             "queries": queries,
             "raw_listing_count": len(raw_listings),
             "deduped_listing_count": len(deduped_listings),
@@ -110,6 +116,8 @@ def price_specs(
             ),
         }
     )
+    if device_identification:
+        result["device_identification"] = device_identification
     result = _apply_source_quote_basis(
         result,
         pricing_listings,
@@ -326,15 +334,7 @@ def _is_exact_identifier_query(query: dict[str, Any], specs: dict[str, Any]) -> 
 
 
 def _model_identifier_text(specs: dict[str, Any]) -> str | None:
-    oem_sku = _clean_text(specs.get("oem_sku"))
-    if oem_sku:
-        return oem_sku
-    if _clean_text(specs.get("search_model")):
-        return None
-    model = _clean_text(specs.get("model"))
-    if model and (specs.get("model_is_machine_type") or _looks_like_model_number(model)):
-        return model
-    return None
+    return lookup_model_identifier(specs)
 
 
 def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:

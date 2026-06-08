@@ -66,14 +66,17 @@ def manual_device_type(value: Any) -> str:
 
 def _manual_computer_specs(values: dict[str, Any]) -> dict[str, Any]:
     form_factor = _clean_text(values.get("form_factor"))
-    if not form_factor:
+    model = _clean_text(values.get("model"))
+    model_is_identifier = _looks_like_model_number(model)
+    if not form_factor and not (model_is_identifier or _clean_text(values.get("oem_sku"))):
         raise RuntimeError("Computer pricing requires a form factor: laptop, desktop, or all-in-one.")
 
     specs = {
         "device_type": "computer",
         "brand": _clean_text(values.get("brand")),
-        "model": _clean_text(values.get("model")),
-        "search_model": _clean_text(values.get("model")),
+        "model": model,
+        "search_model": None if model_is_identifier else model,
+        "model_is_machine_type": model_is_identifier,
         "oem_sku": _clean_text(values.get("oem_sku")),
         "form_factor": form_factor,
         "variant": _variant(values.get("variant")),
@@ -286,6 +289,19 @@ def _clean_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _looks_like_model_number(value: Any) -> bool:
+    text = _clean_text(value)
+    if not text:
+        return False
+    if len(text) < 6 or len(text) > 24:
+        return False
+    if " " in text:
+        return False
+    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _positive_int_or_none(value: Any) -> int | None:

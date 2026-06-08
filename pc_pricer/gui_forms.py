@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import re
 
 
 DEVICE_TYPES = ["computer", "phone", "tablet", "monitor", "printer", "storage"]
@@ -133,7 +134,7 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
     errors = [
         f"{field.label} is required."
         for field in fields
-        if field.required and not _present(values.get(field.name))
+        if field.required and not _field_can_be_lookup_deferred(device_type, field.name, values) and not _present(values.get(field.name))
     ]
 
     if device_type == "computer" and not (
@@ -142,6 +143,25 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
         errors.append("Enter at least a model or CPU for computer pricing.")
 
     return errors
+
+
+def _field_can_be_lookup_deferred(device_type: str, field_name: str, values: dict[str, Any]) -> bool:
+    if device_type != "computer" or field_name != "form_factor":
+        return False
+    return _present(values.get("oem_sku")) or _looks_like_model_number(values.get("model"))
+
+
+def _looks_like_model_number(value: Any) -> bool:
+    if not _present(value):
+        return False
+    text = str(value).strip()
+    if len(text) < 6 or len(text) > 24:
+        return False
+    if " " in text:
+        return False
+    if not re.search(r"[A-Za-z]", text) or not re.search(r"\d", text):
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", text))
 
 
 def _present(value: Any) -> bool:

@@ -30,6 +30,24 @@ class BatchImportTests(unittest.TestCase):
         self.assertFalse(items[1].is_valid)
         self.assertIn("Form factor is required.", items[1].errors)
 
+    def test_load_batch_csv_allows_model_number_without_computer_form_factor(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "devices.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,form_factor",
+                        "001,computer,Lenovo,20W9S23S00,good,",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            items = load_batch_csv(path)
+
+        self.assertTrue(items[0].is_valid)
+        self.assertEqual(items[0].values["model"], "20W9S23S00")
+
     def test_load_batch_csv_requires_key_columns(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "devices.csv"

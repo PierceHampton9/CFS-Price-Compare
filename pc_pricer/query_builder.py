@@ -295,13 +295,16 @@ def _model_identifier_term(specs: dict[str, Any]) -> str | None:
     oem_sku = _clean(specs.get("oem_sku"))
     if oem_sku:
         return oem_sku
-    if _clean(specs.get("search_model")):
+    search_model = _clean(specs.get("search_model"))
+    if search_model and not _looks_like_model_number(search_model):
         return None
     model = _clean(specs.get("model"))
     if specs.get("model_is_machine_type") and model:
         return model
     if model and _looks_like_model_number(model):
         return model
+    if search_model and _looks_like_model_number(search_model):
+        return search_model
     return None
 
 
