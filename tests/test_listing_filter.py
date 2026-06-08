@@ -98,6 +98,29 @@ class ListingFilterTests(unittest.TestCase):
         )
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 4})
 
+    def test_phone_filter_excludes_wrong_model_and_locked_carrier_titles(self):
+        listings = [
+            _listing("Apple iPhone 13 128GB Unlocked", "good"),
+            _listing("Apple iPhone 5C Unlocked New Battery 8/16/32GB", "good"),
+            _listing("Apple iPhone 13 A2482 128GB AT&T Midnight", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="phone",
+            target_specs={
+                "device_type": "phone",
+                "brand": "Apple",
+                "model": "iPhone 13",
+                "storage_capacity": "128GB",
+                "carrier": "unlocked",
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Apple iPhone 13 128GB Unlocked"])
+        self.assertEqual(result["excluded_reasons"], {"model_mismatch": 1, "carrier_mismatch": 1})
+
     def test_phone_filter_keeps_full_devices_with_bundled_accessories(self):
         listings = [
             _listing("Apple iPhone 13 128GB for sale with bundled cover", "good"),
@@ -443,6 +466,28 @@ class ListingFilterTests(unittest.TestCase):
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Dell U2419H 24 inch monitor"])
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 2})
 
+    def test_monitor_filter_excludes_multi_unit_and_no_stand_listings(self):
+        listings = [
+            _listing('Dell U2419H 24" monitor', "good"),
+            _listing('LOT OF 2 Dell U2419H 24" monitor', "good"),
+            _listing('Dell U2419H 24" monitor no stand', "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="monitor",
+            target_specs={
+                "device_type": "monitor",
+                "brand": "Dell",
+                "model": "U2419H",
+                "size": '24"',
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ['Dell U2419H 24" monitor'])
+        self.assertEqual(result["excluded_reasons"], {"quantity_or_bundle": 1, "incomplete_listing": 1})
+
     def test_monitor_filter_keeps_full_monitor_lcd_panel_phrasing(self):
         listings = [
             _listing('Dell U2419H 24" IPS LCD Panel Monitor', "good"),
@@ -483,6 +528,62 @@ class ListingFilterTests(unittest.TestCase):
             ["Samsung 970 EVO Plus 1TB SSD NVMe"],
         )
         self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 2})
+
+    def test_storage_filter_excludes_wrong_brand_and_model_fallbacks(self):
+        listings = [
+            _listing("Samsung 970 EVO Plus 1TB SSD NVMe", "good"),
+            _listing("Western Digital SN570 1TB M.2 NVMe SSD", "good"),
+            _listing("Samsung SM961 1TB NVMe M.2 SSD", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="storage",
+            target_specs={
+                "device_type": "storage",
+                "brand": "Samsung",
+                "model": "970 EVO Plus",
+                "capacity": "1TB",
+                "drive_type": "SSD",
+                "interface": "NVMe",
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung 970 EVO Plus 1TB SSD NVMe"])
+        self.assertEqual(result["excluded_reasons"], {"brand_mismatch": 1, "model_mismatch": 1})
+
+    def test_computer_filter_excludes_wrong_generation_model_and_specs(self):
+        listings = [
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 3 i5-1245U 16GB 256GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1145G7 8GB 256GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1145G7 16GB 256GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 512GB SSD", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "brand": "Lenovo",
+                "model": "ThinkPad X13 Yoga Gen 2",
+                "cpu_short": "i5-1135G7",
+                "ram_gb": 16,
+                "storage": [{"size_gb": 256, "type": "SSD"}],
+            },
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            ["Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD"],
+        )
+        self.assertEqual(
+            result["excluded_reasons"],
+            {"model_mismatch": 1, "ram_mismatch": 1, "cpu_mismatch": 1, "storage_mismatch": 1},
+        )
 
     def test_storage_filter_keeps_bundled_cables_but_excludes_cable_only(self):
         listings = [

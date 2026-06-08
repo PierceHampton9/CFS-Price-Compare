@@ -117,6 +117,42 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["conservative_high_cad"], 510.0)
         self.assertEqual(len(result["supporting_listings"]), 1)
 
+    def test_ignores_broad_fallback_when_specific_tier_has_enough_comparables(self):
+        source = FakeSource(
+            {
+                "Dell OptiPlex 7060 i5-8500 16GB 256GB SSD": [
+                    _listing(f"Dell OptiPlex 7060 i5-8500 16GB 256GB SSD #{index}", price, f"https://www.ebay.ca/itm/{index}")
+                    for index, price in enumerate([300, 310, 320, 330, 340], start=1)
+                ],
+                "i5-8500 16GB 256GB SSD desktop": [
+                    _listing("Dell OptiPlex 7060 i5-8500 16GB 256GB SSD", 150, "https://www.ebay.ca/itm/broad")
+                ],
+                "i5-8500 16GB desktop": [],
+            },
+            name="ebay",
+        )
+
+        result = price_specs(
+            {
+                "device_type": "computer",
+                "brand": "Dell",
+                "model": "OptiPlex 7060",
+                "search_model": "OptiPlex 7060",
+                "form_factor": "desktop",
+                "cpu_short": "i5-8500",
+                "ram_gb": 16,
+                "storage": [{"size_gb": 256, "type": "SSD"}],
+            },
+            source,
+            limit_per_query=5,
+            target_condition="any",
+        )
+
+        self.assertEqual(result["count"], 5)
+        self.assertEqual(result["median_price_cad"], 320.00)
+        self.assertEqual(result["excluded_reasons"], {"lower_tier_fallback": 1})
+        self.assertEqual({listing["query_tier"] for listing in result["all_comparable_listings"]}, {1})
+
     def test_passes_device_type_to_listing_filter(self):
         source = FakeSource(
             {

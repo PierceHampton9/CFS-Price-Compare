@@ -119,6 +119,48 @@ DEVICE_VARIANT_PATTERNS = {
     },
 }
 
+KNOWN_BRANDS = {
+    "acer",
+    "apple",
+    "asus",
+    "brother",
+    "canon",
+    "dell",
+    "epson",
+    "hp",
+    "lenovo",
+    "lexmark",
+    "lg",
+    "microsoft",
+    "msi",
+    "samsung",
+    "seagate",
+    "toshiba",
+    "western digital",
+    "wd",
+}
+
+GENERIC_MODEL_TOKENS = {
+    "apple",
+    "core",
+    "desktop",
+    "dell",
+    "gen",
+    "hp",
+    "intel",
+    "laptop",
+    "lenovo",
+    "monitor",
+    "nvme",
+    "pc",
+    "pro",
+    "ram",
+    "samsung",
+    "ssd",
+    "ultrasharp",
+    "windows",
+}
+
 def filter_listings(
     listings: list[dict[str, Any]],
     target_condition: str | None = "good",
@@ -164,6 +206,9 @@ def exclusion_reason(
         return "parts_or_accessory"
     if _looks_like_variant_mismatch(listing, device_type=device_type, target_specs=target_specs):
         return "variant_mismatch"
+    spec_reason = _listing_spec_mismatch_reason(listing, device_type=device_type, target_specs=target_specs)
+    if spec_reason:
+        return spec_reason
 
     condition = _clean_condition(target_condition)
     listing_condition = _clean_condition(listing.get("condition_norm"))
@@ -186,6 +231,307 @@ def _looks_like_parts_listing(listing: dict[str, Any], device_type: str | None =
         *DEVICE_PARTS_TITLE_PATTERNS.get(clean_device_type, []),
     ]
     return any(re.search(pattern, title) for pattern in patterns)
+
+
+def _listing_spec_mismatch_reason(
+    listing: dict[str, Any],
+    device_type: str | None = None,
+    target_specs: dict[str, Any] | None = None,
+) -> str | None:
+    if not isinstance(target_specs, dict):
+        return None
+
+    title = str(listing.get("title") or "")
+    if not title.strip():
+        return None
+
+    clean_device_type = _clean_device_type(device_type or target_specs.get("device_type"))
+    if _looks_like_multi_unit_listing(title):
+        return "quantity_or_bundle"
+    if _looks_like_incomplete_listing(title, clean_device_type):
+        return "incomplete_listing"
+    if _has_conflicting_brand(title, target_specs):
+        return "brand_mismatch"
+    if _has_conflicting_model(title, clean_device_type, target_specs):
+        return "model_mismatch"
+    if clean_device_type in {"computer", "phone", "tablet"} and _has_conflicting_storage_capacity(title, target_specs):
+        return "storage_mismatch"
+    if clean_device_type == "storage" and _has_conflicting_storage_device(title, target_specs):
+        return "model_mismatch"
+    if clean_device_type == "computer" and _has_conflicting_ram(title, target_specs):
+        return "ram_mismatch"
+    if clean_device_type == "computer" and _has_conflicting_cpu(title, target_specs):
+        return "cpu_mismatch"
+    if clean_device_type == "phone" and _has_conflicting_carrier(title, target_specs):
+        return "carrier_mismatch"
+    return None
+
+
+def _looks_like_multi_unit_listing(title: str) -> bool:
+    lowered = title.lower()
+    patterns = [
+        r"\blot\s+of\s+\d+\b",
+        r"\bpack\s+of\s+\d+\b",
+        r"\bbundle\s+of\s+\d+\b",
+        r"^\s*\d+\s*x\b",
+        r"\b\d+\s*x\s+(?:apple|dell|hp|lenovo|samsung|monitor|laptop|desktop|iphone|ipad|ssd)\b",
+        r"\bqty[:\s]*\d+\b",
+        r"\bquantity[:\s]*\d+\b",
+    ]
+    return any(re.search(pattern, lowered) for pattern in patterns)
+
+
+def _looks_like_incomplete_listing(title: str, device_type: str) -> bool:
+    lowered = title.lower()
+    if device_type == "monitor" and re.search(r"\b(no|without)\s+(?:monitor\s+)?stand\b|\bstand\s+not\s+included\b|\bno\s+base\b", lowered):
+        return True
+    if device_type == "computer" and re.search(r"\b(no|without)\s+(?:hdd|ssd|hard\s+drive|storage|ram|memory)\b", lowered):
+        return True
+    if device_type == "storage" and re.search(r"\b(no|without)\s+(?:drive|ssd|hdd)\b", lowered):
+        return True
+    return False
+
+
+def _has_conflicting_brand(title: str, target_specs: dict[str, Any]) -> bool:
+    target_brand = _brand_key(target_specs.get("brand"))
+    if not target_brand:
+        return False
+    title_text = _normalized_text(title)
+    if _brand_present(title_text, target_brand):
+        return False
+    return any(_brand_present(title_text, brand) for brand in KNOWN_BRANDS if brand != target_brand)
+
+
+def _has_conflicting_model(title: str, device_type: str, target_specs: dict[str, Any]) -> bool:
+    target_model = str(target_specs.get("search_model") or target_specs.get("model") or "").strip()
+    if not target_model:
+        return False
+
+    title_text = _normalized_text(title)
+    target_text = _normalized_text(target_model)
+    target_tokens = _model_tokens(target_model)
+    if not target_tokens:
+        return False
+
+    target_gen = _generation_number(target_text)
+    listing_gen = _generation_number(title_text)
+    if target_gen and listing_gen and target_gen != listing_gen:
+        return True
+
+    target_iphone = _iphone_model_number(target_text)
+    listing_iphone = _iphone_model_number(title_text)
+    if target_iphone and listing_iphone and target_iphone != listing_iphone:
+        return True
+
+    target_numeric = _numeric_model_tokens(target_tokens)
+    listing_numeric = _numeric_model_tokens(re.findall(r"[a-z0-9]+", title_text))
+    shared_family = any(token in title_text for token in target_tokens if not token.isdigit())
+    if target_numeric and listing_numeric and shared_family and not target_numeric.intersection(listing_numeric):
+        return True
+
+    if _model_context_present(title_text, target_specs, target_tokens):
+        return not all(token in title_text for token in target_tokens)
+
+    return False
+
+
+def _has_conflicting_storage_device(title: str, target_specs: dict[str, Any]) -> bool:
+    model = str(target_specs.get("search_model") or target_specs.get("model") or "").strip()
+    if not model:
+        return False
+    title_text = _normalized_text(title)
+    tokens = _model_tokens(model)
+    if not tokens:
+        return False
+    if not _model_context_present(title_text, target_specs, tokens):
+        return False
+    return not all(token in title_text for token in tokens)
+
+
+def _has_conflicting_storage_capacity(title: str, target_specs: dict[str, Any]) -> bool:
+    target_capacity = _target_storage_gb(target_specs)
+    if not target_capacity:
+        return False
+    capacities = _capacity_values_gb(title)
+    if not capacities:
+        return False
+    return target_capacity not in capacities
+
+
+def _has_conflicting_ram(title: str, target_specs: dict[str, Any]) -> bool:
+    try:
+        target_ram = int(target_specs.get("ram_gb") or 0)
+    except (TypeError, ValueError):
+        target_ram = 0
+    if not target_ram:
+        return False
+    ram_values = _ram_values_gb(title)
+    if not ram_values:
+        return False
+    return target_ram not in ram_values
+
+
+def _has_conflicting_cpu(title: str, target_specs: dict[str, Any]) -> bool:
+    target_cpu = str(target_specs.get("cpu_short") or target_specs.get("cpu") or "").strip()
+    if not target_cpu:
+        return False
+    listing_cpus = _cpu_tokens(title)
+    if not listing_cpus:
+        return False
+    target_key = re.sub(r"[^a-z0-9]+", "", target_cpu.lower())
+    if not target_key:
+        return False
+    target_without_suffix = target_key[:-1] if target_key[-1:].isalpha() and any(char.isdigit() for char in target_key) else target_key
+    return not any(
+        cpu == target_key
+        or cpu == target_without_suffix
+        or cpu.startswith(target_key)
+        or cpu.startswith(target_without_suffix)
+        for cpu in listing_cpus
+    )
+
+
+def _has_conflicting_carrier(title: str, target_specs: dict[str, Any]) -> bool:
+    target_carrier = str(target_specs.get("carrier") or "").strip().lower()
+    if target_carrier != "unlocked":
+        return False
+    title_text = _normalized_text(title)
+    if " unlocked " in title_text or " fully unlocked " in title_text:
+        return False
+    locked_markers = [
+        " locked ",
+        " at t ",
+        " att ",
+        " verizon ",
+        " t mobile ",
+        " tmobile ",
+        " sprint ",
+        " cricket ",
+        " rogers ",
+        " bell ",
+        " telus ",
+    ]
+    return any(marker in title_text for marker in locked_markers)
+
+
+def _brand_key(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _brand_present(title_text: str, brand: str) -> bool:
+    if brand == "hp":
+        return " hp " in title_text or " hewlett packard " in title_text
+    if brand == "wd":
+        return " wd " in title_text
+    if brand == "western digital":
+        return " western digital " in title_text
+    return f" {brand} " in title_text
+
+
+def _model_tokens(value: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", value.lower())
+    return [token for token in tokens if token not in GENERIC_MODEL_TOKENS and token not in {"gb", "tb", "ssd", "hdd"}]
+
+
+def _numeric_model_tokens(tokens: list[str]) -> set[str]:
+    return {token for token in tokens if re.fullmatch(r"\d{2,5}[a-z]?", token)}
+
+
+def _generation_number(text: str) -> str | None:
+    match = re.search(r"\bgen\s+(\d{1,2})\b", text)
+    return match.group(1) if match else None
+
+
+def _iphone_model_number(text: str) -> str | None:
+    match = re.search(r"\biphone\s+(\d{1,2})(?:\s|$)", text)
+    return match.group(1) if match else None
+
+
+def _model_context_present(title_text: str, target_specs: dict[str, Any], target_tokens: list[str]) -> bool:
+    brand = _brand_key(target_specs.get("brand"))
+    return (
+        (brand and _brand_present(title_text, brand))
+        or any(token in title_text for token in target_tokens if len(token) >= 3)
+    )
+
+
+def _target_storage_gb(target_specs: dict[str, Any]) -> int:
+    storage = target_specs.get("storage")
+    if isinstance(storage, list):
+        sizes = [
+            _safe_int(drive.get("size_gb"))
+            for drive in storage
+            if isinstance(drive, dict) and _safe_int(drive.get("size_gb")) > 0
+        ]
+        if sizes:
+            return max(sizes)
+    for key in ["storage_capacity", "capacity"]:
+        parsed = _capacity_text_gb(target_specs.get(key))
+        if parsed:
+            return parsed
+    return 0
+
+
+def _capacity_values_gb(title: str) -> set[int]:
+    values = set()
+    lowered = title.lower()
+    for left, right in re.findall(r"\b(\d{2,4})\s*/\s*(\d{2,4})\s*(?:gb|g)?\b", lowered):
+        values.add(int(left))
+        values.add(int(right))
+    for amount, unit in re.findall(r"(\d+(?:\.\d+)?)\s*(tb|gb|g)\b", lowered):
+        parsed = float(amount)
+        values.add(int(parsed * 1024) if unit == "tb" else int(parsed))
+    return values
+
+
+def _ram_values_gb(title: str) -> set[int]:
+    values = set()
+    lowered = title.lower()
+    for match in re.finditer(r"(\d+)\s*gb\s*(?:ram|memory|ddr\d?)\b|\b(?:ram|memory)\s*:?\s*(\d+)\s*gb\b", lowered):
+        value = match.group(1) or match.group(2)
+        if value:
+            values.add(int(value))
+    for match in re.finditer(r"\b(\d+)\s*gb\b(?!\s*(?:ssd|hdd|nvme|emmc|solid\s+state|hard\s+drive))", lowered):
+        value = int(match.group(1))
+        if value <= 128:
+            values.add(value)
+    return values
+
+
+def _cpu_tokens(title: str) -> set[str]:
+    tokens = set()
+    lowered = title.lower()
+    patterns = [
+        r"\bi[3579][-\s]?(\d{4,5}[a-z0-9]{0,3})\b",
+        r"\bcore\s+i[3579][-\s]?(\d{4,5}[a-z0-9]{0,3})\b",
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, lowered):
+            prefix_match = re.search(r"\bi([3579])", match.group(0))
+            if prefix_match:
+                tokens.add(f"i{prefix_match.group(1)}{match.group(1)}")
+    return {re.sub(r"[^a-z0-9]+", "", token) for token in tokens}
+
+
+def _capacity_text_gb(value: Any) -> int:
+    text = str(value or "").strip().lower()
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(tb|gb|g)\b", text)
+    if not match:
+        return 0
+    amount = float(match.group(1))
+    return int(amount * 1024) if match.group(2) == "tb" else int(amount)
+
+
+def _normalized_text(value: Any) -> str:
+    return f" {re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()} "
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed
 
 
 def _looks_like_variant_mismatch(
