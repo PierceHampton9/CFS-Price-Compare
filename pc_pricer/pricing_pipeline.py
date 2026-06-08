@@ -83,7 +83,7 @@ def price_specs(
         filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], pricing_excluded_reasons)
     pricing_listings, tier_excluded_reasons = _tier_gated_pricing_listings(
         pricing_listings,
-        min_specific_count=max(1, min(5, warn_below_comparables)),
+        min_specific_count=max(1, warn_below_comparables),
     )
     if tier_excluded_reasons:
         filtered["excluded_count"] += sum(tier_excluded_reasons.values())

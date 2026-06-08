@@ -506,13 +506,15 @@ class ListingFilterTests(unittest.TestCase):
         listings = [
             _listing("Brother HL-L2390DW laser printer", "good"),
             _listing("Brother HL-L2390DW toner cartridge", "good"),
+            _listing("Brother HL-L2390DW toner cartridges 4 pack", "good"),
+            _listing("Compatible ink cartridges for Brother HL-L2390DW printer", "good"),
             _listing("Brother HL-L2390DW printhead replacement", "good"),
         ]
 
         result = filter_listings(listings, target_condition="any", device_type="printer")
 
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Brother HL-L2390DW laser printer"])
-        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 2})
+        self.assertEqual(result["excluded_reasons"], {"parts_or_accessory": 4})
 
     def test_storage_filter_excludes_enclosures_and_adapters(self):
         listings = [

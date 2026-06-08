@@ -1746,11 +1746,25 @@ def _gui_batch_item(item: BatchItem) -> dict[str, Any]:
 
 
 def _batch_success_status(result: dict[str, Any]) -> str:
-    if _safe_int(result.get("count")) <= 0:
+    comparable_count = _safe_int(result.get("count"))
+    if comparable_count <= 0:
         return "Needs Review"
-    if result.get("confidence_flags"):
+    severe_flags = _batch_review_flags(result.get("confidence_flags"), comparable_count)
+    if severe_flags:
         return "Needs Review"
     return "Complete"
+
+
+def _batch_review_flags(flags: Any, comparable_count: int) -> list[str]:
+    review_flags = []
+    for flag in flags or []:
+        flag_text = str(flag)
+        if flag_text == "low_comparable_count" and comparable_count >= 3:
+            continue
+        if flag_text == "wide_price_range" and comparable_count >= 3:
+            continue
+        review_flags.append(flag_text)
+    return review_flags
 
 
 def _batch_order_label(index: int, _item: dict[str, Any]) -> str:
