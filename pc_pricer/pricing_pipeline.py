@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.device_lookup import enrich_specs_from_model_lookup
@@ -50,6 +50,7 @@ def price_specs(
     high_shipping_ratio: float = 0.25,
     asking_discount_low: float = 0.00,
     asking_discount_high: float = 0.05,
+    manufacturer_lookup: Callable[[dict[str, Any], str], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
     sources = _source_list(source)
@@ -57,6 +58,7 @@ def price_specs(
         specs,
         sources,
         max_results=max(1, limit_per_query),
+        manufacturer_lookup=manufacturer_lookup,
     )
     queries = build_queries(pricing_specs)
     raw_listings, source_errors, source_statuses = _search_queries(

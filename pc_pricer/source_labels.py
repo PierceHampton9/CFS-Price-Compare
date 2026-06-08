@@ -26,6 +26,9 @@ SOURCE_BASIS_LABELS = {
 def format_source_name(value: Any) -> str:
     """Return the user-facing name for a source key."""
     key = str(value or "unknown").strip().lower()
+    if key.startswith("manufacturer:"):
+        brand = str(value).split(":", 1)[1].replace("_", " ").replace("-", " ").strip()
+        return f"{brand.title()} manufacturer lookup" if brand else "Manufacturer lookup"
     return SOURCE_LABELS.get(key, str(value or "unknown"))
 
 

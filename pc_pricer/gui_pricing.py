@@ -6,6 +6,7 @@ from typing import Any
 
 from pc_pricer.config import load_config
 from pc_pricer.env_loader import load_env_file
+from pc_pricer.manufacturer_lookup import lookup_manufacturer_specs
 from pc_pricer.pricing_pipeline import ListingSource, price_specs
 from pc_pricer.reporter import format_price_report
 from pc_pricer.source_status import merge_config_source_statuses
@@ -30,6 +31,7 @@ def price_gui_values(
         sources,
         limit_per_query=_limit_per_query(config),
         target_condition=_condition(values.get("condition"), config),
+        manufacturer_lookup=_manufacturer_lookup(config) if source is None else None,
         **_pricing_options(config),
     )
     if source is None:
@@ -81,6 +83,22 @@ def _pricing_options(config: dict[str, Any]) -> dict[str, Any]:
         "high_shipping_ratio": _positive_float(config.get("high_shipping_ratio"), 0.25),
         **_asking_adjustment_options(config),
     }
+
+
+def _manufacturer_lookup(config: dict[str, Any]):
+    lookup_config = config.get("manufacturer_lookup")
+    if not isinstance(lookup_config, dict):
+        lookup_config = {}
+    if not _bool_value(lookup_config.get("enabled"), True):
+        return None
+    max_pages = _positive_int(lookup_config.get("max_pages"), 4)
+    timeout_seconds = _positive_float(lookup_config.get("timeout_seconds"), 8.0)
+    return lambda specs, identifier: lookup_manufacturer_specs(
+        specs,
+        identifier,
+        max_pages=max_pages,
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def _asking_adjustment_options(config: dict[str, Any]) -> dict[str, Any]:

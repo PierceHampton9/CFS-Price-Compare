@@ -110,6 +110,15 @@ Reports show the estimate, comparable range, source quote basis, source counts, 
 
 The GUI defaults to a Standard report view. Advanced view shows search/source diagnostics and all comparable listings; users can exclude bad comparables and reevaluate the estimate from the already fetched listings without running another online search.
 
+For computers with an exact OEM SKU or machine-type model number, the CLI and GUI first try a confidence-gated manufacturer lookup against official/support pages. When the lookup identifies the device, it fills missing model family, form factor, CPU, RAM, and storage details before pricing searches are generated. To disable or tune this best-effort lookup, add:
+
+```yaml
+manufacturer_lookup:
+  enabled: true
+  timeout_seconds: 8
+  max_pages: 4
+```
+
 ## Batch Pricing from CSV
 
 The GUI can import a batch CSV after pricing sources and credentials are selected. Use `Import Batch CSV`, review the batch table, fix invalid rows with `Edit Row`, then run `Start / Continue`. Reports stay inside the GUI in CSV order, with previous/next navigation, per-device comparable review, `Print All`, and optional `Export All`.

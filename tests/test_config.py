@@ -23,6 +23,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["sources"]["amazon_renewed"]["browser"], "chromium")
         self.assertEqual(config["sources"]["amazon_renewed"]["channel"], "msedge")
         self.assertIs(config["sources"]["amazon_renewed"]["headless"], True)
+        self.assertIs(config["manufacturer_lookup"]["enabled"], True)
+        self.assertEqual(config["manufacturer_lookup"]["timeout_seconds"], 8)
 
     def test_loads_simple_values_and_nested_source_config(self):
         CONFIG_PATH.write_text(
