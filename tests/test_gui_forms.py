@@ -69,6 +69,18 @@ class GuiFormsTests(unittest.TestCase):
         self.assertIn("Form factor is required.", errors)
         self.assertIn("Enter at least a model or CPU for computer pricing.", errors)
 
+    def test_computer_model_number_can_defer_form_factor_to_lookup(self):
+        errors = validate_specs(
+            "computer",
+            {
+                "brand": "Lenovo",
+                "model": "20W9S23S00",
+                "condition": "good",
+            },
+        )
+
+        self.assertNotIn("Form factor is required.", errors)
+
 
 if __name__ == "__main__":
     unittest.main()

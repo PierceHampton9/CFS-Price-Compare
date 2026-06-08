@@ -297,8 +297,11 @@ class GuiImportTests(unittest.TestCase):
         self.assertEqual(len(window.state.batch_items), 2)
         self.assertEqual(window.state.batch_items[0]["status"], "Ready")
         self.assertEqual(window.state.batch_items[1]["status"], "Invalid")
-        self.assertEqual(window.batch_page.table.item(0, 1).text(), "001")
-        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 5).text())
+        self.assertEqual(window.batch_page.table.columnCount(), 6)
+        self.assertEqual(window.batch_page.table.item(0, 0).text(), "1")
+        self.assertEqual(window.batch_page.table.item(0, 1).text(), "Computer")
+        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 4).text())
+        self.assertIsNotNone(window.batch_page.table.cellWidget(0, 5))
 
         window.close()
 
@@ -321,10 +324,41 @@ class GuiImportTests(unittest.TestCase):
         self.assertFalse(window.batch_page.import_button.isEnabled())
         self.assertFalse(window.batch_page.start_button.isEnabled())
         self.assertFalse(window.batch_page.edit_button.isEnabled())
-        self.assertFalse(window.batch_page.remove_button.isEnabled())
         self.assertFalse(window.batch_page.back_button.isEnabled())
 
         window.batch_pricing_thread = None
+        window.close()
+
+    def test_batch_page_global_view_waits_for_all_rows_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.batch_items = [
+            {
+                "item_id": "001",
+                "device_type": "computer",
+                "values": {"brand": "Lenovo", "model": "ThinkPad"},
+                "status": "Complete",
+                "errors": [],
+                "result": {"count": 1},
+                "report_text": "report",
+            },
+            {
+                "item_id": "002",
+                "device_type": "computer",
+                "values": {"brand": "Dell", "model": "OptiPlex"},
+                "status": "Ready",
+                "errors": [],
+            },
+        ]
+
+        window.batch_page.refresh()
+        self.assertFalse(window.batch_page.view_button.isEnabled())
+
+        window.state.batch_items[1]["result"] = {"count": 1}
+        window.state.batch_items[1]["status"] = "Complete"
+        window.batch_page.refresh()
+        self.assertTrue(window.batch_page.view_button.isEnabled())
+
         window.close()
 
     def test_source_selection_skips_credentials_when_ebay_is_disabled_when_pyside_is_available(self):

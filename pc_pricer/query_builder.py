@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pc_pricer.model_identifier import looks_like_model_number
+
 
 def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     """Return search queries ordered from most specific to broadest."""
@@ -37,7 +39,7 @@ def _device_type(specs: dict[str, Any]) -> str:
 def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
     model = _model_term(specs)
-    oem_sku = _clean(specs.get("oem_sku"))
+    model_identifier = _model_identifier_term(specs)
     variant = _clean(specs.get("variant"))
     screen_size = _screen_size_term(specs.get("screen_size"))
     cpu = _cpu_term(specs)
@@ -45,8 +47,9 @@ def _laptop_queries(specs: dict[str, Any], form_factor: str) -> list[dict[str, A
     storage = _storage_term(specs)
 
     queries = []
-    if oem_sku:
-        queries.append(_query(oem_sku, 1, f"exact {form_factor} OEM SKU"))
+    if model_identifier:
+        queries.append(_query(_join_terms(brand, model_identifier), 1, f"exact {form_factor} model number"))
+        queries.append(_query(model_identifier, 1, f"exact {form_factor} model number"))
 
     if model:
         spec_query = _join_terms(brand, model, variant, screen_size, cpu, ram)
@@ -212,6 +215,7 @@ def _storage_device_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
 def _desktop_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     brand = _clean(specs.get("brand"))
     model = _model_term(specs)
+    model_identifier = _model_identifier_term(specs)
     cpu = _cpu_term(specs)
     ram = _ram_term(specs)
     storage = _storage_term(specs)
@@ -219,6 +223,10 @@ def _desktop_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
     form_factor = _clean(specs.get("form_factor")) or "desktop"
 
     queries = []
+
+    if model_identifier:
+        queries.append(_query(_join_terms(brand, model_identifier), 1, "desktop exact model number"))
+        queries.append(_query(model_identifier, 1, "desktop exact model number"))
 
     if (brand or model) and cpu and ram:
         queries.append(
@@ -283,6 +291,23 @@ def _model_term(specs: dict[str, Any]) -> str | None:
     if specs.get("model_is_machine_type") and not _clean(specs.get("search_model")):
         return None
     return _clean(specs.get("search_model")) or _clean(specs.get("model"))
+
+
+def _model_identifier_term(specs: dict[str, Any]) -> str | None:
+    oem_sku = _clean(specs.get("oem_sku"))
+    if oem_sku:
+        return oem_sku
+    search_model = _clean(specs.get("search_model"))
+    if search_model and not looks_like_model_number(search_model):
+        return None
+    model = _clean(specs.get("model"))
+    if specs.get("model_is_machine_type") and model:
+        return model
+    if model and looks_like_model_number(model):
+        return model
+    if search_model and looks_like_model_number(search_model):
+        return search_model
+    return None
 
 
 def _ram_term(specs: dict[str, Any]) -> str | None:

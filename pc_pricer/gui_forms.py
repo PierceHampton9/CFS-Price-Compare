@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from pc_pricer.model_identifier import looks_like_model_number
+
 
 DEVICE_TYPES = ["computer", "phone", "tablet", "monitor", "printer", "storage"]
 CONDITIONS = ["mint", "excellent", "good", "any"]
@@ -133,7 +135,7 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
     errors = [
         f"{field.label} is required."
         for field in fields
-        if field.required and not _present(values.get(field.name))
+        if field.required and not _field_can_be_lookup_deferred(device_type, field.name, values) and not _present(values.get(field.name))
     ]
 
     if device_type == "computer" and not (
@@ -142,6 +144,12 @@ def validate_specs(device_type: str, values: dict[str, Any]) -> list[str]:
         errors.append("Enter at least a model or CPU for computer pricing.")
 
     return errors
+
+
+def _field_can_be_lookup_deferred(device_type: str, field_name: str, values: dict[str, Any]) -> bool:
+    if device_type != "computer" or field_name != "form_factor":
+        return False
+    return _present(values.get("oem_sku")) or looks_like_model_number(values.get("model"))
 
 
 def _present(value: Any) -> bool:

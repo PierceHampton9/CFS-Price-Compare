@@ -7,7 +7,9 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.device_lookup import enrich_specs_from_model_lookup
 from pc_pricer.listing_filter import exclusion_reason, filter_listings
+from pc_pricer.model_identifier import looks_like_model_number, model_identifier
 from pc_pricer.normalizer import normalize_listings
 from pc_pricer.price_adjustment import apply_pricing_basis
 from pc_pricer.quality import add_listing_quality_flags
@@ -50,17 +52,28 @@ def price_specs(
     asking_discount_high: float = 0.05,
 ) -> dict[str, Any]:
     """Price detected specs using tiered queries from a listing source."""
-    queries = build_queries(specs)
     sources = _source_list(source)
-    raw_listings, source_errors, source_statuses = _search_queries(sources, queries, limit_per_query, specs)
+    pricing_specs, device_identification, lookup_results = enrich_specs_from_model_lookup(
+        specs,
+        sources,
+        max_results=max(1, limit_per_query),
+    )
+    queries = build_queries(pricing_specs)
+    raw_listings, source_errors, source_statuses = _search_queries(
+        sources,
+        queries,
+        limit_per_query,
+        pricing_specs,
+        seeded_results=lookup_results,
+    )
     deduped_listings = _dedupe_listings(raw_listings)
     normalized_listings = normalize_listings(deduped_listings)
-    normalized_listings = _add_source_match_flags(normalized_listings, specs)
+    normalized_listings = _add_source_match_flags(normalized_listings, pricing_specs)
     filtered = filter_listings(
         normalized_listings,
         target_condition=target_condition,
-        device_type=specs.get("device_type"),
-        target_specs=specs,
+        device_type=pricing_specs.get("device_type"),
+        target_specs=pricing_specs,
     )
     pricing_listings, pricing_excluded_reasons = _pricing_listings(filtered["listings"])
     if pricing_excluded_reasons:
@@ -69,7 +82,7 @@ def price_specs(
     _mark_included_in_pricing(normalized_listings, pricing_listings)
     source_diagnostics = _source_diagnostics(
         normalized_listings,
-        specs,
+        pricing_specs,
         target_condition=target_condition,
     )
 
@@ -87,7 +100,7 @@ def price_specs(
     )
     result.update(
         {
-            "specs": _public_specs(specs),
+            "specs": _public_specs(pricing_specs),
             "queries": queries,
             "raw_listing_count": len(raw_listings),
             "deduped_listing_count": len(deduped_listings),
@@ -110,6 +123,8 @@ def price_specs(
             ),
         }
     )
+    if device_identification:
+        result["device_identification"] = device_identification
     result = _apply_source_quote_basis(
         result,
         pricing_listings,
@@ -197,6 +212,7 @@ def _search_queries(
     queries: list[dict[str, Any]],
     limit_per_query: int,
     specs: dict[str, Any],
+    seeded_results: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[dict[str, Any]]]:
     listings = []
     errors = []
@@ -214,6 +230,7 @@ def _search_queries(
         for source in sources
     }
     searched = set()
+    seeded_by_key = _seeded_results_by_key(seeded_results)
     for query in queries:
         generated_query_text = str(query.get("text") or "").strip()
         if not generated_query_text:
@@ -244,21 +261,26 @@ def _search_queries(
             status["searched"] = True
             status["query_count"] += 1
             status["queries"].append(query_text)
-            try:
-                source_listings = source.search(query_text, limit_per_query)
-            except RuntimeError as exc:
-                status["error_count"] += 1
-                status["errors"].append(str(exc))
-                errors.append(
-                    {
-                        "source": source_name,
-                        "query": query_text,
-                        "message": str(exc),
-                    }
-                )
-                continue
+            seeded = seeded_by_key.get(searched_key)
+            if seeded is not None:
+                source_listings = seeded["listings"]
+            else:
+                try:
+                    source_listings = source.search(query_text, limit_per_query)
+                except RuntimeError as exc:
+                    status["error_count"] += 1
+                    status["errors"].append(str(exc))
+                    errors.append(
+                        {
+                            "source": source_name,
+                            "query": query_text,
+                            "message": str(exc),
+                        }
+                    )
+                    continue
 
-            _add_source_runtime_stats(status, getattr(source, "last_search_stats", None))
+            if seeded is None:
+                _add_source_runtime_stats(status, getattr(source, "last_search_stats", None))
             status["raw_listing_count"] += len(source_listings)
             for listing in source_listings:
                 tagged = dict(listing)
@@ -267,9 +289,25 @@ def _search_queries(
                 tagged["query_text"] = query_text
                 if query_text != generated_query_text:
                     tagged["generated_query_text"] = generated_query_text
+                if seeded is not None:
+                    tagged["lookup_reused"] = True
                 listings.append(tagged)
 
     return listings, errors, list(statuses.values())
+
+
+def _seeded_results_by_key(seeded_results: list[dict[str, Any]] | None) -> dict[tuple[str, str], dict[str, Any]]:
+    seeded = {}
+    for result in seeded_results or []:
+        if not isinstance(result, dict):
+            continue
+        source = str(result.get("source") or "").strip().lower()
+        query = str(result.get("query") or "").strip()
+        listings = result.get("listings")
+        if not source or not query or not isinstance(listings, list):
+            continue
+        seeded[(source, query.lower())] = {"listings": listings}
+    return seeded
 
 
 def _add_source_runtime_stats(status: dict[str, Any], stats: Any) -> None:
@@ -295,6 +333,10 @@ def _source_query_text(source_name: str, query: dict[str, Any], specs: dict[str,
     query_text = str(query.get("text") or "").strip()
     if source_name not in {"refurb_io", "amazon_renewed"}:
         return query_text
+    if _is_exact_identifier_query(query, specs):
+        if source_name == "amazon_renewed":
+            return _amazon_query_text(query_text)
+        return query_text
     if (
         source_name == "refurb_io"
         and _safe_int(query.get("tier")) == 1
@@ -308,6 +350,21 @@ def _source_query_text(source_name: str, query: dict[str, Any], specs: dict[str,
             return _amazon_query_text(retailer_query or query_text)
         return _amazon_query_text(query_text)
     return retailer_query or query_text
+
+
+def _is_exact_identifier_query(query: dict[str, Any], specs: dict[str, Any]) -> bool:
+    if _safe_int(query.get("tier")) != 1:
+        return False
+    query_text = _clean_text(query.get("text"))
+    identifier = _model_identifier_text(specs)
+    if not query_text or not identifier:
+        return False
+    brand = _clean_text(specs.get("brand"))
+    return query_text == identifier or query_text == " ".join(part for part in [brand, identifier] if part)
+
+
+def _model_identifier_text(specs: dict[str, Any]) -> str | None:
+    return model_identifier(specs)
 
 
 def _retailer_query_from_specs(specs: dict[str, Any]) -> str | None:
@@ -795,7 +852,7 @@ def _verified_refurb_match(
         reasons.append("brand_mismatch")
 
     model = specs.get("search_model") or specs.get("model")
-    if model and not _all_tokens_present(text, str(model)):
+    if model and not _model_matches_listing(text, str(model), listing, specs):
         reasons.append("model_mismatch")
 
     device_type = specs.get("device_type")
@@ -829,6 +886,33 @@ def _text_matches_value(text: str, value: Any) -> bool:
     if not value:
         return True
     return _all_tokens_present(text, str(value))
+
+
+def _model_matches_listing(
+    text: str,
+    model: str,
+    listing: dict[str, Any],
+    specs: dict[str, Any],
+) -> bool:
+    if _all_tokens_present(text, model):
+        return True
+    if not looks_like_model_number(model):
+        return False
+    identifier = _model_identifier_text(specs)
+    query_text = _clean_text(listing.get("query_text"))
+    generated_query_text = _clean_text(listing.get("generated_query_text"))
+    searched_exact_identifier = any(
+        identifier and identifier.lower() in str(value or "").lower()
+        for value in [query_text, generated_query_text]
+    )
+    has_target_hardware = any(
+        [
+            _safe_int(specs.get("ram_gb")),
+            _target_storage_gb(specs),
+            specs.get("cpu_short"),
+        ]
+    )
+    return bool(searched_exact_identifier or has_target_hardware)
 
 
 def _all_tokens_present(text: str, value: str) -> bool:

@@ -24,6 +24,20 @@ class SpecBuilderTests(unittest.TestCase):
         self.assertEqual(specs["storage"], [{"size_gb": 512, "type": "SSD"}])
         self.assertEqual(specs["input_method"], "detected")
 
+    def test_builds_computer_specs_from_model_number_without_form_factor(self):
+        specs = build_manual_specs(
+            "computer",
+            {
+                "brand": "Lenovo",
+                "model": "20W9S23S00",
+            },
+        )
+
+        self.assertEqual(specs["model"], "20W9S23S00")
+        self.assertTrue(specs["model_is_machine_type"])
+        self.assertNotIn("search_model", specs)
+        self.assertNotIn("form_factor", specs)
+
     def test_builds_phone_specs_with_canonical_variant_and_screen_size(self):
         specs = build_manual_specs(
             "phone",

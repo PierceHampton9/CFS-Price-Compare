@@ -53,6 +53,7 @@ def format_price_report(
 
     if not result.get("count"):
         lines.extend(_spec_lines(result.get("specs")))
+        lines.extend(_device_identification_lines(result))
         if advanced:
             lines.extend(_query_lines(result.get("queries")))
             lines.extend(_search_count_lines(result))
@@ -73,6 +74,7 @@ def format_price_report(
         lines.extend(_source_status_lines(result))
         lines.extend(_source_quote_lines(result))
         lines.extend(_source_diagnostic_lines(result))
+    lines.extend(_device_identification_lines(result))
     lines.extend(_spec_lines(result.get("specs")))
     if advanced:
         lines.extend(_query_lines(result.get("queries")))
@@ -196,6 +198,25 @@ def _query_lines(queries: Any) -> list[str]:
             lines.append(f"  {text}")
         else:
             lines.append(f"  T{_format_query_tier(query.get('tier'))}: {text}")
+    return lines
+
+
+def _device_identification_lines(result: dict[str, Any]) -> list[str]:
+    identification = result.get("device_identification")
+    if not isinstance(identification, dict) or not identification.get("attempted"):
+        return []
+
+    status = str(identification.get("status") or "unknown").replace("_", " ")
+    lines = [f"Device lookup:     {status}"]
+    if identification.get("source"):
+        lines.append(f"Lookup source:     {format_source_name(identification.get('source'))}")
+    if identification.get("title"):
+        lines.append(f"Lookup match:      {identification.get('title')}")
+    if identification.get("confidence"):
+        lines.append(f"Lookup confidence: {identification.get('confidence')}")
+    added_fields = identification.get("added_fields") or []
+    if added_fields:
+        lines.append(f"Lookup added:      {', '.join(str(field) for field in added_fields)}")
     return lines
 
 

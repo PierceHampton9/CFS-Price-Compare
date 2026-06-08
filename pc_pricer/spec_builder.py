@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pc_pricer.model_identifier import looks_like_model_number
+
 
 VALID_CONDITIONS = {"good", "excellent", "mint", "any"}
 VALID_DEVICE_TYPES = {"computer", "phone", "tablet", "monitor", "printer", "storage"}
@@ -66,14 +68,17 @@ def manual_device_type(value: Any) -> str:
 
 def _manual_computer_specs(values: dict[str, Any]) -> dict[str, Any]:
     form_factor = _clean_text(values.get("form_factor"))
-    if not form_factor:
+    model = _clean_text(values.get("model"))
+    model_is_identifier = looks_like_model_number(model)
+    if not form_factor and not (model_is_identifier or _clean_text(values.get("oem_sku"))):
         raise RuntimeError("Computer pricing requires a form factor: laptop, desktop, or all-in-one.")
 
     specs = {
         "device_type": "computer",
         "brand": _clean_text(values.get("brand")),
-        "model": _clean_text(values.get("model")),
-        "search_model": _clean_text(values.get("model")),
+        "model": model,
+        "search_model": None if model_is_identifier else model,
+        "model_is_machine_type": model_is_identifier,
         "oem_sku": _clean_text(values.get("oem_sku")),
         "form_factor": form_factor,
         "variant": _variant(values.get("variant")),
