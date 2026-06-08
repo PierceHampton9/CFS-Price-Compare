@@ -35,6 +35,51 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertEqual(candidate.asin, "B0AMAZON01")
         self.assertIs(candidate.available, True)
 
+    def test_parse_product_page_ignores_recommendation_prices(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB</span>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+    <div id="sp_detail_thematicCard">
+      <span>Suggested item</span>
+      <span class="a-price"><span class="a-offscreen">$1,799.99</span></span>
+    </div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertIsNone(candidate.item_price_cad)
+
+    def test_parse_product_page_prefers_product_price_over_recommendations(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price"><span class="a-offscreen">$579.99</span></span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+    <div id="sp_detail_thematicCard">
+      <span>Suggested item</span>
+      <span class="a-price"><span class="a-offscreen">$1,799.99</span></span>
+    </div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 579.99)
+
     def test_candidates_from_rendered_rows_do_not_require_legacy_card_shape(self):
         candidates = candidates_from_search_rows(
             [
@@ -358,7 +403,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
   <body>
     <input type="hidden" name="ASIN" value="B0AMAZON01">
     <span id="productTitle">Lenovo ThinkPad X13 Yoga Amazon Renewed</span>
-    <span class="a-price">$579.99</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">$579.99</span>
+    </div>
     <div id="availability">In Stock</div>
     <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
     <ul>
@@ -396,9 +443,11 @@ class AmazonRenewedSourceTests(unittest.TestCase):
                 return _search_html(title="Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB Renewed")
             return """
 <html>
-  <body>
+    <body>
     <style>.grid-container { display: block; }</style>
-    <span class="a-price">$495.00</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">$495.00</span>
+    </div>
     <div id="availability">In Stock</div>
     <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
   </body>
@@ -488,7 +537,9 @@ def _product_html(
   <body>
     <input type="hidden" name="ASIN" value="{asin}">
     <span id="productTitle">{title}</span>
-    <span class="a-price">${price}</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">${price}</span>
+    </div>
     <div id="availability">In Stock</div>
     <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
     <div>Prime FREE Delivery</div>

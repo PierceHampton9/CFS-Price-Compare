@@ -411,7 +411,7 @@ def parse_product_page(html: str, url: str = "") -> AmazonCandidate:
     condition = parser.condition or _condition_signal(text, title or "")
     return AmazonCandidate(
         title=title or "",
-        item_price_cad=_money(parser.price_text) or _fallback_price(text),
+        item_price_cad=_money(parser.price_text),
         url=url,
         available=_availability(text),
         condition_raw=condition,
@@ -503,18 +503,22 @@ class _AmazonProductParser(HTMLParser):
         self._capture_id: str | None = None
         self._capture_class: str | None = None
         self._capture_parts: list[str] = []
+        self._price_scope_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = _attrs(attrs)
         element_id = attrs_dict.get("id") or ""
         classes = attrs_dict.get("class") or ""
+        if self._price_scope_depth:
+            self._price_scope_depth += 1
         if element_id in {"productTitle", "availability", "renewedProgramDescriptionBtf_feature_div"}:
             self._capture_id = element_id
             self._capture_parts = []
-        elif element_id in {"priceblock_ourprice", "priceblock_dealprice", "corePriceDisplay_desktop_feature_div"}:
+        elif _is_product_price_container_id(element_id):
+            self._price_scope_depth = 1
             self._capture_id = "price"
             self._capture_parts = []
-        elif "a-price" in classes:
+        elif self._price_scope_depth and "a-price" in classes:
             self._capture_class = "price"
             self._capture_parts = []
         if attrs_dict.get("name") == "ASIN" and attrs_dict.get("value"):
@@ -537,6 +541,8 @@ class _AmazonProductParser(HTMLParser):
                 self.price_text = text
             self._capture_class = None
             self._capture_parts = []
+        if self._price_scope_depth:
+            self._price_scope_depth -= 1
 
     def handle_data(self, data: str) -> None:
         text = _normalize_space(data)
@@ -600,6 +606,22 @@ def _usable_product_title(title: str | None) -> bool:
     if "{" in text or "}" in text or "display:" in lowered or "@media" in lowered:
         return False
     return True
+
+
+def _is_product_price_container_id(value: str) -> bool:
+    if value in {
+        "priceblock_ourprice",
+        "priceblock_dealprice",
+        "priceblock_saleprice",
+        "corePriceDisplay_desktop_feature_div",
+        "corePrice_feature_div",
+        "apex_desktop",
+        "price_inside_buybox",
+        "newBuyBoxPrice",
+    }:
+        return True
+    lowered = value.lower()
+    return lowered.startswith("corepricedisplay") or lowered.startswith("coreprice_feature")
 
 
 def _rank_search_candidates(candidates: list[AmazonCandidate], query: str) -> list[AmazonCandidate]:
