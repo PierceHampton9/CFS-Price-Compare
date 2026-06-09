@@ -119,7 +119,7 @@ def main() -> None:
     price_manual_parser.add_argument("--cpu", help="CPU model, preferably the short form such as i5-1135G7.")
     price_manual_parser.add_argument("--ram", type=int, help="RAM in GB.")
     price_manual_parser.add_argument("--storage", type=int, help="Computer/phone/tablet storage size in GB.")
-    price_manual_parser.add_argument("--storage-type", default="SSD", help="Computer primary storage type, such as SSD or HDD.")
+    price_manual_parser.add_argument("--storage-type", default="SSD", help=argparse.SUPPRESS)
     price_manual_parser.add_argument("--gpu", help="Dedicated GPU model when present.")
     price_manual_parser.add_argument("--carrier", help="Phone carrier or unlocked status.")
     price_manual_parser.add_argument("--connectivity", help="Tablet connectivity, such as Wi-Fi or cellular.")

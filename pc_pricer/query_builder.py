@@ -331,10 +331,7 @@ def _storage_term(specs: dict[str, Any]) -> str | None:
         return None
 
     drive = max(drives, key=lambda item: _safe_int(item.get("size_gb")))
-    size = _marketed_storage_size(drive.get("size_gb"))
-    drive_type = _clean(drive.get("type"))
-
-    return _join_terms(size, drive_type)
+    return _marketed_storage_size(drive.get("size_gb"))
 
 
 def _marketed_storage_size(size_gb: Any) -> str | None:

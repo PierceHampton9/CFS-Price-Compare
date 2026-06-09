@@ -1,7 +1,7 @@
-item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,storage_type,oem_sku,variant,screen_size,gpu,carrier,connectivity,size,resolution,refresh_rate,printer_type,color,capacity,drive_type,drive_form_factor,interface,notes
-001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,SSD,,,,,,,,,,,,,,,Example laptop row
-002,phone,Apple,iPhone 13,good,,,,128,,,Pro Max,6.7,,unlocked,,,,,,,,,,,Example phone row
-003,tablet,Samsung,Galaxy Tab S7,good,,,,256,,,FE,12.4,,,Wi-Fi,,,,,,,,,Example tablet row
-004,monitor,Dell,U2419H,good,,,,,,,,,,,,24,1080p,60Hz,,,,,,Example monitor row
-005,printer,Brother,HL-L2390DW,good,,,,,,,,,,,,,,laser,mono,,,,,Example printer row
-006,storage,Samsung,970 EVO Plus,good,,,,,,,,,,,,,,,,1TB,ssd,m.2,nvme,Example storage row
+item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,oem_sku,variant,screen_size,gpu,carrier,connectivity,size,resolution,refresh_rate,printer_type,color,capacity,drive_type,drive_form_factor,interface,notes
+001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,,,,,,,,,,,,,,,,Example laptop row
+002,phone,Apple,iPhone 13,good,,,,128,,Pro Max,6.7,,unlocked,,,,,,,,,,,Example phone row
+003,tablet,Samsung,Galaxy Tab S7,good,,,,256,,FE,12.4,,,Wi-Fi,,,,,,,,,Example tablet row
+004,monitor,Dell,U2419H,good,,,,,,,,,,,24,1080p,60Hz,,,,,,Example monitor row
+005,printer,Brother,HL-L2390DW,good,,,,,,,,,,,,,laser,mono,,,,,Example printer row
+006,storage,Samsung,970 EVO Plus,good,,,,,,,,,,,,,,,1TB,ssd,m.2,nvme,Example storage row

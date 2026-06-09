@@ -22,7 +22,6 @@ BATCH_FIELDS = [
     "cpu",
     "ram",
     "storage",
-    "storage_type",
     "oem_sku",
     "variant",
     "screen_size",
@@ -107,7 +106,6 @@ def batch_template_csv() -> str:
             "cpu": "i5-1135G7",
             "ram": "16",
             "storage": "512",
-            "storage_type": "SSD",
         }
     )
     writer.writerow(

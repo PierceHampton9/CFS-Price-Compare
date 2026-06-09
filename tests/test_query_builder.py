@@ -88,7 +88,7 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(queries[0]["text"], "Lenovo 20W9S23S00")
         self.assertEqual(queries[0]["tier"], 1)
         self.assertEqual(queries[1]["text"], "20W9S23S00")
-        self.assertEqual(queries[2]["text"], "Lenovo i7-1185G7 16GB 256GB SSD laptop")
+        self.assertEqual(queries[2]["text"], "Lenovo i7-1185G7 16GB 256GB laptop")
 
     def test_laptop_model_number_without_family_still_drives_exact_search(self):
         specs = {
@@ -151,9 +151,9 @@ class QueryBuilderTests(unittest.TestCase):
 
         self.assertEqual(
             queries[0]["text"],
-            "Dell OptiPlex 7050 i5-7500 16GB 256GB SSD",
+            "Dell OptiPlex 7050 i5-7500 16GB 256GB",
         )
-        self.assertEqual(queries[1]["text"], "i5-7500 16GB 256GB SSD desktop")
+        self.assertEqual(queries[1]["text"], "i5-7500 16GB 256GB desktop")
         self.assertEqual(queries[2]["text"], "i5-7500 16GB desktop")
 
     def test_desktop_storage_sizes_can_be_strings(self):
@@ -173,7 +173,7 @@ class QueryBuilderTests(unittest.TestCase):
 
         self.assertEqual(
             queries[0]["text"],
-            "Dell OptiPlex 7050 i5-7500 16GB 1TB HDD",
+            "Dell OptiPlex 7050 i5-7500 16GB 1TB",
         )
 
     def test_desktop_includes_dedicated_gpu(self):

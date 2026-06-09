@@ -119,11 +119,11 @@ class PricingPipelineTests(unittest.TestCase):
     def test_ignores_broad_fallback_when_specific_tier_has_enough_comparables(self):
         source = FakeSource(
             {
-                "Dell OptiPlex 7060 i5-8500 16GB 256GB SSD": [
+                "Dell OptiPlex 7060 i5-8500 16GB 256GB": [
                     _listing(f"Dell OptiPlex 7060 i5-8500 16GB 256GB SSD #{index}", price, f"https://www.ebay.ca/itm/{index}")
                     for index, price in enumerate([300, 310, 320, 330, 340], start=1)
                 ],
-                "i5-8500 16GB 256GB SSD desktop": [
+                "i5-8500 16GB 256GB desktop": [
                     _listing("Dell OptiPlex 7060 i5-8500 16GB 256GB SSD", 150, "https://www.ebay.ca/itm/broad")
                 ],
                 "i5-8500 16GB desktop": [],
@@ -156,11 +156,11 @@ class PricingPipelineTests(unittest.TestCase):
     def test_keeps_broad_fallback_until_specific_tier_meets_comparable_target(self):
         source = FakeSource(
             {
-                "Dell OptiPlex 7060 i5-8500 16GB 256GB SSD": [
+                "Dell OptiPlex 7060 i5-8500 16GB 256GB": [
                     _listing(f"Dell OptiPlex 7060 i5-8500 16GB 256GB SSD #{index}", price, f"https://www.ebay.ca/itm/{index}")
                     for index, price in enumerate([300, 310, 320, 330, 340], start=1)
                 ],
-                "i5-8500 16GB 256GB SSD desktop": [
+                "i5-8500 16GB 256GB desktop": [
                     _listing("Dell OptiPlex 7060 i5-8500 16GB 256GB SSD fallback", 350, "https://www.ebay.ca/itm/fallback")
                 ],
                 "i5-8500 16GB desktop": [],
