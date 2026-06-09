@@ -339,6 +339,11 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(source.search("ThinkPad Renewed", 5), [])
 
+    def test_zero_price_returns_no_listing(self):
+        source = AmazonRenewedSource(page_fetcher=lambda _url: _search_html(price="$0.00"), max_product_pages=0)
+
+        self.assertEqual(source.search("ThinkPad Renewed", 5), [])
+
     def test_non_renewed_result_returns_no_listing(self):
         source = AmazonRenewedSource(
             page_fetcher=lambda _url: _search_html(

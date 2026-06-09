@@ -21,6 +21,17 @@ class GuiImportTests(unittest.TestCase):
             "Complete",
         )
 
+    def test_batch_issue_text_hides_non_review_flags_for_complete_rows(self):
+        item = {
+            "status": "Complete",
+            "result": {
+                "count": 5,
+                "confidence_flags": ["low_comparable_count", "wide_price_range"],
+            },
+        }
+
+        self.assertEqual(gui._batch_issue_text(item), "")
+
     def test_batch_status_still_reviews_zero_count_and_source_disagreement(self):
         self.assertEqual(
             gui._batch_success_status({"count": 0, "confidence_flags": ["no_comparables"]}),

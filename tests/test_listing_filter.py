@@ -13,16 +13,27 @@ class ListingFilterTests(unittest.TestCase):
 
         result = filter_listings(listings, target_condition="good")
 
-        self.assertEqual([listing["title"] for listing in result["listings"]], ["Used laptop"])
-        self.assertEqual(result["excluded_count"], 2)
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Used laptop", "New laptop"])
+        self.assertEqual(result["excluded_count"], 1)
         self.assertEqual(
             result["excluded_reasons"],
             {
-                "condition_mismatch": 1,
                 "unknown_condition": 1,
             },
         )
         self.assertEqual(result["target_condition"], "good")
+
+    def test_excludes_lower_condition_than_target(self):
+        listings = [
+            _listing("Good laptop", "good"),
+            _listing("Excellent laptop", "excellent"),
+            _listing("Mint laptop", "mint"),
+        ]
+
+        result = filter_listings(listings, target_condition="excellent")
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Excellent laptop", "Mint laptop"])
+        self.assertEqual(result["excluded_reasons"], {"condition_mismatch": 1})
 
     def test_any_condition_keeps_non_parts_listings(self):
         listings = [
@@ -578,6 +589,30 @@ class ListingFilterTests(unittest.TestCase):
         self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung 970 EVO Plus 1TB SSD NVMe"])
         self.assertEqual(result["excluded_reasons"], {"brand_mismatch": 3, "model_mismatch": 1})
 
+    def test_storage_filter_excludes_multi_capacity_variation_listings(self):
+        listings = [
+            _listing("Samsung 970 EVO Plus 1TB SSD NVMe", "good"),
+            _listing("Samsung 970 EVO Plus 2TB 1TB 500GB 250GB NVMe SSD", "good"),
+            _listing("Samsung 970 EVO Plus SSD 1TB LOT", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="storage",
+            target_specs={
+                "device_type": "storage",
+                "brand": "Samsung",
+                "model": "970 EVO Plus",
+                "capacity": "1TB",
+                "drive_type": "SSD",
+                "interface": "NVMe",
+            },
+        )
+
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Samsung 970 EVO Plus 1TB SSD NVMe"])
+        self.assertEqual(result["excluded_reasons"], {"quantity_or_bundle": 2})
+
     def test_computer_filter_excludes_wrong_generation_model_and_specs(self):
         listings = [
             _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD", "good"),
@@ -609,6 +644,38 @@ class ListingFilterTests(unittest.TestCase):
             result["excluded_reasons"],
             {"model_mismatch": 1, "ram_mismatch": 1, "cpu_mismatch": 1, "storage_mismatch": 1},
         )
+
+    def test_computer_filter_allows_adjacent_storage_for_larger_drives(self):
+        listings = [
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 512GB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 1TB SSD", "good"),
+            _listing("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 128GB SSD", "good"),
+        ]
+
+        result = filter_listings(
+            listings,
+            target_condition="any",
+            device_type="computer",
+            target_specs={
+                "device_type": "computer",
+                "brand": "Lenovo",
+                "model": "ThinkPad X13 Yoga Gen 2",
+                "cpu_short": "i5-1135G7",
+                "ram_gb": 16,
+                "storage": [{"size_gb": 512, "type": "SSD"}],
+            },
+        )
+
+        self.assertEqual(
+            [listing["title"] for listing in result["listings"]],
+            [
+                "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD",
+                "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 512GB SSD",
+                "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 1TB SSD",
+            ],
+        )
+        self.assertEqual(result["excluded_reasons"], {"storage_mismatch": 1})
 
     def test_computer_filter_excludes_bios_only_and_wrong_apple_silicon_generation(self):
         listings = [

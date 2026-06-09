@@ -584,7 +584,7 @@ def _condition(cli_value: str | None, config: dict[str, Any]) -> str:
 
 def _aggregation_options(config: dict[str, Any]) -> dict[str, Any]:
     return {
-        "warn_below_comparables": _positive_int(config.get("warn_below_comparables"), 10),
+        "warn_below_comparables": _positive_int(config.get("warn_below_comparables"), 5),
         "wide_iqr_ratio": _positive_float(config.get("wide_iqr_ratio"), 0.40),
         "support_limit": _positive_int(config.get("support_limit"), 5),
     }

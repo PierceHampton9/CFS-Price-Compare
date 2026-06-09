@@ -554,7 +554,7 @@ class _AmazonProductParser(HTMLParser):
 
 
 def _listing_from_candidate(candidate: AmazonCandidate) -> dict[str, Any] | None:
-    if candidate.item_price_cad is None:
+    if candidate.item_price_cad is None or candidate.item_price_cad <= 0:
         return None
     if not candidate.condition_raw:
         return None
@@ -847,11 +847,13 @@ def _money(value: Any) -> float | None:
     text = str(value).replace(",", "")
     split_price = re.search(r"\$\s*([0-9]+)\s+([0-9]{2})\b", text)
     if split_price:
-        return round(float(f"{split_price.group(1)}.{split_price.group(2)}"), 2)
+        amount = round(float(f"{split_price.group(1)}.{split_price.group(2)}"), 2)
+        return amount if amount > 0 else None
     match = re.search(r"\$?\s*([0-9]+(?:\.[0-9]{2})?)", text)
     if not match:
         return None
-    return round(float(match.group(1)), 2)
+    amount = round(float(match.group(1)), 2)
+    return amount if amount > 0 else None
 
 
 def _fallback_price(text: str) -> float | None:

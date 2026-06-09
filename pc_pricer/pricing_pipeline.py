@@ -43,7 +43,7 @@ def price_specs(
     source: ListingSource | Sequence[ListingSource],
     limit_per_query: int = 10,
     target_condition: str | None = "good",
-    warn_below_comparables: int = 10,
+    warn_below_comparables: int = 5,
     wide_iqr_ratio: float = 0.40,
     support_limit: int = 5,
     high_shipping_cad: float = 75.0,
@@ -750,7 +750,7 @@ def _result_reprice_options(result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(options, dict):
         options = {}
     return {
-        "warn_below_comparables": _positive_int(options.get("warn_below_comparables"), 10),
+        "warn_below_comparables": _positive_int(options.get("warn_below_comparables"), 5),
         "wide_iqr_ratio": _positive_float(options.get("wide_iqr_ratio"), 0.40),
         "support_limit": _positive_int(options.get("support_limit"), 5),
         "high_shipping_cad": _positive_float(options.get("high_shipping_cad"), 75.0),

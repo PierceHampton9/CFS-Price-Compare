@@ -176,6 +176,12 @@ GENERIC_MODEL_TOKENS = {
     "windows",
 }
 
+CONDITION_RANK = {
+    "good": 1,
+    "excellent": 2,
+    "mint": 3,
+}
+
 def filter_listings(
     listings: list[dict[str, Any]],
     target_condition: str | None = "good",
@@ -229,10 +235,24 @@ def exclusion_reason(
     listing_condition = _clean_condition(listing.get("condition_norm"))
     if condition and not listing_condition:
         return "unknown_condition"
-    if condition and listing_condition != condition:
+    if condition and not _condition_matches_target(listing_condition, condition):
         return "condition_mismatch"
 
     return None
+
+
+def _condition_matches_target(listing_condition: str | None, target_condition: str | None) -> bool:
+    if not target_condition:
+        return True
+    if not listing_condition:
+        return False
+    target_rank = CONDITION_RANK.get(target_condition)
+    listing_rank = CONDITION_RANK.get(listing_condition)
+    if target_rank is None:
+        return listing_condition == target_condition
+    if listing_rank is None:
+        return False
+    return listing_rank >= target_rank
 
 
 def _looks_like_parts_listing(listing: dict[str, Any], device_type: str | None = None) -> bool:
@@ -264,11 +284,17 @@ def _listing_spec_mismatch_reason(
         return "incomplete_listing"
     if not isinstance(target_specs, dict):
         return None
+    if clean_device_type == "storage" and _looks_like_storage_capacity_variation(title, target_specs):
+        return "quantity_or_bundle"
     if _has_conflicting_brand(title, target_specs):
         return "brand_mismatch"
     if _has_conflicting_model(title, clean_device_type, target_specs):
         return "model_mismatch"
-    if clean_device_type in {"computer", "phone", "tablet"} and _has_conflicting_storage_capacity(title, target_specs):
+    if clean_device_type in {"computer", "phone", "tablet"} and _has_conflicting_storage_capacity(
+        title,
+        target_specs,
+        clean_device_type,
+    ):
         return "storage_mismatch"
     if clean_device_type == "storage" and _has_conflicting_storage_device(title, target_specs, listing):
         return "model_mismatch"
@@ -286,6 +312,7 @@ def _looks_like_multi_unit_listing(title: str) -> bool:
     patterns = [
         r"\blot\s+of\s+\d+\b",
         r"\blot[-\s]*\d+\b",
+        r"\blot\b",
         r"\bpack\s+of\s+\d+\b",
         r"\bbundle\s+of\s+\d+\b",
         r"^\s*\d+\s*x\b",
@@ -294,6 +321,12 @@ def _looks_like_multi_unit_listing(title: str) -> bool:
         r"\bquantity[:\s]*\d+\b",
     ]
     return any(re.search(pattern, lowered) for pattern in patterns)
+
+
+def _looks_like_storage_capacity_variation(title: str, target_specs: dict[str, Any]) -> bool:
+    if not _target_storage_gb(target_specs):
+        return False
+    return len(_capacity_values_gb(title)) > 1
 
 
 def _looks_like_incomplete_listing(title: str, device_type: str) -> bool:
@@ -371,13 +404,17 @@ def _has_conflicting_storage_device(title: str, target_specs: dict[str, Any], li
     return not all(token in title_text for token in tokens)
 
 
-def _has_conflicting_storage_capacity(title: str, target_specs: dict[str, Any]) -> bool:
+def _has_conflicting_storage_capacity(title: str, target_specs: dict[str, Any], device_type: str | None = None) -> bool:
     target_capacity = _target_storage_gb(target_specs)
     if not target_capacity:
         return False
     capacities = _capacity_values_gb(title)
     if not capacities:
         return False
+    if device_type == "computer" and target_capacity >= 512:
+        lower_bound = target_capacity / 2
+        upper_bound = target_capacity * 2
+        return not any(lower_bound <= capacity <= upper_bound for capacity in capacities)
     return target_capacity not in capacities
 
 

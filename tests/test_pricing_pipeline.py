@@ -32,14 +32,13 @@ class PricingPipelineTests(unittest.TestCase):
         ])
         self.assertEqual(result["raw_listing_count"], 6)
         self.assertEqual(result["deduped_listing_count"], 5)
-        self.assertEqual(result["count"], 3)
-        self.assertEqual(result["median_price_cad"], 500.00)
+        self.assertEqual(result["count"], 4)
+        self.assertEqual(result["median_price_cad"], 520.00)
         self.assertEqual(result["query_tier"], 1)
         self.assertEqual(result["excluded_reasons"], {
-            "condition_mismatch": 1,
             "parts_or_accessory": 1,
         })
-        self.assertEqual([listing["query_tier"] for listing in result["supporting_listings"]], [1, 1, 3])
+        self.assertEqual([listing["query_tier"] for listing in result["supporting_listings"]], [1, 1, 2, 3])
         self.assertEqual(result["queries"][0]["text"], "Lenovo 20XW004AUS")
         self.assertNotIn("raw", result["specs"])
         self.assertNotIn("serial_number", result["specs"])

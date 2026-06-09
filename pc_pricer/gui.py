@@ -1790,7 +1790,12 @@ def _batch_issue_text(item: dict[str, Any]) -> str:
     result = item.get("result") if isinstance(item.get("result"), dict) else {}
     flags = result.get("confidence_flags") if result else []
     if flags:
-        return ", ".join(_sentence_case(str(flag).replace("_", " ")) for flag in flags)
+        comparable_count = _safe_int(result.get("count"))
+        review_flags = _batch_review_flags(flags, comparable_count)
+        if item.get("status") == "Complete":
+            flags = review_flags
+        if flags:
+            return ", ".join(_sentence_case(str(flag).replace("_", " ")) for flag in flags)
     return ""
 
 
