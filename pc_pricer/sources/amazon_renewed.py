@@ -529,7 +529,7 @@ class _AmazonProductParser(HTMLParser):
             text = _normalize_space(" ".join(self._capture_parts))
             if self._capture_id == "productTitle" and text:
                 self.title = text
-            elif self._capture_id == "price" and text and not self.price_text:
+            elif self._capture_id == "price" and text and not self.price_text and _money(text) is not None:
                 self.price_text = text
             elif self._capture_id == "renewedProgramDescriptionBtf_feature_div" and text:
                 self.condition = _condition_signal(text, self.title or "")
@@ -537,7 +537,7 @@ class _AmazonProductParser(HTMLParser):
             self._capture_parts = []
         if self._capture_class == "price":
             text = _normalize_space(" ".join(self._capture_parts))
-            if text and not self.price_text:
+            if text and not self.price_text and _money(text) is not None:
                 self.price_text = text
             self._capture_class = None
             self._capture_parts = []
@@ -849,7 +849,11 @@ def _money(value: Any) -> float | None:
     if split_price:
         amount = round(float(f"{split_price.group(1)}.{split_price.group(2)}"), 2)
         return amount if amount > 0 else None
-    match = re.search(r"\$?\s*([0-9]+(?:\.[0-9]{2})?)", text)
+    dollar_match = re.search(r"\$\s*([0-9]+(?:\.[0-9]{2})?)", text)
+    if dollar_match:
+        amount = round(float(dollar_match.group(1)), 2)
+        return amount if amount > 0 else None
+    match = re.search(r"\b([0-9]+(?:\.[0-9]{2})?)\b", text)
     if not match:
         return None
     amount = round(float(match.group(1)), 2)

@@ -80,6 +80,29 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(candidate.item_price_cad, 579.99)
 
+    def test_parse_product_page_ignores_stray_zero_before_product_price(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Dell U2419H Monitor Amazon Renewed</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span id="basisPrice">0</span>
+      <span class="a-price">
+        <span class="a-offscreen">$219.99</span>
+      </span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 219.99)
+
     def test_candidates_from_rendered_rows_do_not_require_legacy_card_shape(self):
         candidates = candidates_from_search_rows(
             [
