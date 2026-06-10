@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import Any, Callable, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.capacity import capacity_values_gb
 from pc_pricer.device_lookup import enrich_specs_from_model_lookup
 from pc_pricer.listing_filter import exclusion_reason, filter_listings
 from pc_pricer.model_identifier import looks_like_model_number, model_identifier
@@ -41,7 +42,7 @@ class ListingSource(Protocol):
 def price_specs(
     specs: dict[str, Any],
     source: ListingSource | Sequence[ListingSource],
-    limit_per_query: int = 10,
+    limit_per_query: int = 20,
     target_condition: str | None = "good",
     warn_below_comparables: int = 5,
     wide_iqr_ratio: float = 0.40,
@@ -900,7 +901,7 @@ def _verified_refurb_match(
         reasons.append("ram_mismatch")
 
     storage_gb = _target_storage_gb(specs)
-    if storage_gb and not _capacity_matches(text, storage_gb):
+    if storage_gb and not _storage_capacity_matches(text, storage_gb, specs):
         reasons.append("storage_mismatch")
 
     cpu_short = specs.get("cpu_short")
@@ -1009,6 +1010,17 @@ def _capacity_matches(text: str, capacity_gb: int) -> bool:
         tb = capacity_gb // 1024
         terms.update({f"{tb}tb", f"{tb} tb"})
     return any(term in text for term in terms)
+
+
+def _storage_capacity_matches(text: str, capacity_gb: int, specs: dict[str, Any]) -> bool:
+    if _capacity_matches(text, capacity_gb):
+        return True
+    device_type = str(specs.get("device_type") or "").strip().lower()
+    if device_type != "computer" or capacity_gb < 512:
+        return False
+    lower_bound = capacity_gb / 2
+    upper_bound = capacity_gb * 2
+    return any(lower_bound <= value <= upper_bound for value in capacity_values_gb(text))
 
 
 def _cpu_matches(text: str, cpu_short: str) -> bool:

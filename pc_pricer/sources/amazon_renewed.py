@@ -38,7 +38,7 @@ class AmazonRenewedSource:
         channel: str | None = "msedge",
         headless: bool = True,
         timeout_ms: int = 15000,
-        max_product_pages: int = 5,
+        max_product_pages: int = 1,
         page_fetcher: HtmlFetcher | None = None,
     ) -> None:
         self.enabled = enabled
@@ -75,8 +75,8 @@ class AmazonRenewedSource:
         listings = []
         fetched_detail_urls: set[str] = set()
         seen_listing_urls: set[str] = set()
+        detail_fetches = 0
         for current_search_url in self._search_urls(query):
-            search_detail_fetches = 0
             self.last_search_stats["search_urls"].append(current_search_url)
             search_html = fetcher(current_search_url)
             if _looks_like_blocked_page(search_html):
@@ -92,9 +92,13 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                if (
+                    _candidate_needs_detail(candidate)
+                    and detail_fetches < self.max_product_pages
+                    and candidate.url not in fetched_detail_urls
+                ):
                     fetched_detail_urls.add(candidate.url)
-                    search_detail_fetches += 1
+                    detail_fetches += 1
                     self.last_search_stats["detail_page_count"] += 1
                     self.last_search_stats["detail_urls"].append(candidate.url)
                     try:
@@ -145,8 +149,8 @@ class AmazonRenewedSource:
         listings = []
         fetched_detail_urls: set[str] = set()
         seen_listing_urls: set[str] = set()
+        detail_fetches = 0
         for current_search_url in self._search_urls(query):
-            search_detail_fetches = 0
             self.last_search_stats["search_urls"].append(current_search_url)
             _load_page(page, current_search_url, self.timeout_ms)
             _scroll_search_results(page)
@@ -167,9 +171,13 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if search_detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                if (
+                    _candidate_needs_detail(candidate)
+                    and detail_fetches < self.max_product_pages
+                    and candidate.url not in fetched_detail_urls
+                ):
                     fetched_detail_urls.add(candidate.url)
-                    search_detail_fetches += 1
+                    detail_fetches += 1
                     self.last_search_stats["detail_page_count"] += 1
                     self.last_search_stats["detail_urls"].append(candidate.url)
                     try:
@@ -578,6 +586,10 @@ def _listing_from_candidate(candidate: AmazonCandidate) -> dict[str, Any] | None
         "shipping_assumption": "prime_or_free" if candidate.shipping_cad == 0 else "unknown",
         "prime_signal": candidate.prime_signal,
     }
+
+
+def _candidate_needs_detail(candidate: AmazonCandidate) -> bool:
+    return candidate.item_price_cad is None or not candidate.condition_raw
 
 
 def _merge_candidate(base: AmazonCandidate, detail: AmazonCandidate) -> AmazonCandidate:

@@ -21,22 +21,21 @@ class GuiImportTests(unittest.TestCase):
             "Complete",
         )
 
-    def test_batch_status_uses_report_low_count_threshold(self):
+    def test_batch_status_reviews_very_low_count(self):
         self.assertEqual(
             gui._batch_success_status(
                 {
-                    "count": 5,
+                    "count": 2,
                     "confidence_flags": ["low_comparable_count"],
-                    "reprice_options": {"warn_below_comparables": 10},
                 }
             ),
             "Needs Review",
         )
 
-    def test_batch_status_reviews_wide_price_range(self):
+    def test_batch_status_treats_wide_range_as_warning_when_count_is_usable(self):
         self.assertEqual(
             gui._batch_success_status({"count": 20, "confidence_flags": ["wide_price_range"]}),
-            "Needs Review",
+            "Complete",
         )
 
     def test_batch_issue_text_hides_resolved_low_count_for_complete_rows(self):
@@ -358,8 +357,10 @@ class GuiImportTests(unittest.TestCase):
                 "item_id": "001",
                 "device_type": "computer",
                 "values": {"brand": "Lenovo", "model": "ThinkPad"},
-                "status": "Ready",
+                "status": "Complete",
                 "errors": [],
+                "result": {"count": 5},
+                "report_text": "completed report",
             }
         ]
         window.batch_pricing_thread = FakeRunningThread()
@@ -370,6 +371,8 @@ class GuiImportTests(unittest.TestCase):
         self.assertFalse(window.batch_page.start_button.isEnabled())
         self.assertFalse(window.batch_page.edit_button.isEnabled())
         self.assertFalse(window.batch_page.back_button.isEnabled())
+        self.assertFalse(window.batch_page.print_all_button.isEnabled())
+        self.assertFalse(window.batch_page.export_all_button.isEnabled())
 
         window.batch_pricing_thread = None
         window.close()

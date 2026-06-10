@@ -6,6 +6,8 @@ import re
 from collections import Counter
 from typing import Any
 
+from pc_pricer.capacity import capacity_values_gb
+
 
 GLOBAL_PARTS_TITLE_PATTERNS = [
     r"\bfor parts\b",
@@ -328,7 +330,7 @@ def _looks_like_multi_unit_listing(title: str) -> bool:
 def _looks_like_storage_capacity_variation(title: str, target_specs: dict[str, Any]) -> bool:
     if not _target_storage_gb(target_specs):
         return False
-    return len(_capacity_values_gb(title)) > 1
+    return len(capacity_values_gb(title)) > 1
 
 
 def _looks_like_incomplete_listing(title: str, device_type: str) -> bool:
@@ -410,7 +412,7 @@ def _has_conflicting_storage_capacity(title: str, target_specs: dict[str, Any], 
     target_capacity = _target_storage_gb(target_specs)
     if not target_capacity:
         return False
-    capacities = _capacity_values_gb(title)
+    capacities = capacity_values_gb(title)
     if not capacities:
         return False
     if device_type == "computer" and target_capacity >= 512:
@@ -542,18 +544,6 @@ def _target_storage_gb(target_specs: dict[str, Any]) -> int:
         if parsed:
             return parsed
     return 0
-
-
-def _capacity_values_gb(title: str) -> set[int]:
-    values = set()
-    lowered = title.lower()
-    for left, right in re.findall(r"\b(\d{2,4})\s*/\s*(\d{2,4})\s*(?:gb|g)?\b", lowered):
-        values.add(int(left))
-        values.add(int(right))
-    for amount, unit in re.findall(r"(\d+(?:\.\d+)?)\s*(tb|gb|g)\b", lowered):
-        parsed = float(amount)
-        values.add(int(parsed * 1024) if unit == "tb" else int(parsed))
-    return values
 
 
 def _ram_values_gb(title: str) -> set[int]:

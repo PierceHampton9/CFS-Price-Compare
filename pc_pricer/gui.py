@@ -52,6 +52,7 @@ from pc_pricer.setup_credentials import write_credentials_env
 from pc_pricer.spec_builder import gui_values_from_detected_specs
 
 LOADING_DELAY_MS = 700
+BATCH_REVIEW_BELOW_COMPARABLES = 3
 
 
 class _MissingSignal:
@@ -820,6 +821,8 @@ class BatchPage(Page):
         self.refresh()
 
     def print_all_reports(self) -> None:
+        if self._batch_is_running():
+            return
         reports = self._completed_report_texts()
         if not reports:
             QMessageBox.information(self, "No reports to print", "Run at least one batch row before printing.")
@@ -833,6 +836,8 @@ class BatchPage(Page):
         document.print_(printer)
 
     def export_all_reports(self) -> None:
+        if self._batch_is_running():
+            return
         completed = [item for item in self.main_window.state.batch_items if item.get("result") or item.get("error")]
         if not completed:
             QMessageBox.information(self, "No reports to export", "Run at least one batch row before exporting.")
@@ -940,8 +945,8 @@ class BatchPage(Page):
         self.back_button.setEnabled(not running)
         self.edit_button.setText("Done Editing" if self.edit_mode else "Edit Batch")
         self.view_button.setEnabled(self._all_rows_reportable())
-        self.print_all_button.setEnabled(has_finished)
-        self.export_all_button.setEnabled(has_finished)
+        self.print_all_button.setEnabled(not running and has_finished)
+        self.export_all_button.setEnabled(not running and has_finished)
 
     def _batch_is_running(self) -> bool:
         thread = self.main_window.batch_pricing_thread
@@ -1749,33 +1754,22 @@ def _batch_success_status(result: dict[str, Any]) -> str:
     comparable_count = _safe_int(result.get("count"))
     if comparable_count <= 0:
         return "Needs Review"
-    severe_flags = _batch_review_flags(
-        result.get("confidence_flags"),
-        comparable_count,
-        _result_warn_below_comparables(result),
-    )
+    severe_flags = _batch_review_flags(result.get("confidence_flags"), comparable_count)
     if severe_flags:
         return "Needs Review"
     return "Complete"
 
 
-def _batch_review_flags(flags: Any, comparable_count: int, warn_below_comparables: int = 5) -> list[str]:
+def _batch_review_flags(flags: Any, comparable_count: int) -> list[str]:
     review_flags = []
     for flag in flags or []:
         flag_text = str(flag)
-        if flag_text == "low_comparable_count" and comparable_count >= warn_below_comparables:
+        if flag_text == "low_comparable_count" and comparable_count >= BATCH_REVIEW_BELOW_COMPARABLES:
+            continue
+        if flag_text == "wide_price_range" and comparable_count >= BATCH_REVIEW_BELOW_COMPARABLES:
             continue
         review_flags.append(flag_text)
     return review_flags
-
-
-def _result_warn_below_comparables(result: dict[str, Any]) -> int:
-    options = result.get("reprice_options")
-    if isinstance(options, dict):
-        value = _safe_int(options.get("warn_below_comparables"))
-        if value > 0:
-            return value
-    return 5
 
 
 def _batch_order_label(index: int, _item: dict[str, Any]) -> str:
@@ -1802,7 +1796,7 @@ def _batch_issue_text(item: dict[str, Any]) -> str:
     flags = result.get("confidence_flags") if result else []
     if flags:
         comparable_count = _safe_int(result.get("count"))
-        review_flags = _batch_review_flags(flags, comparable_count, _result_warn_below_comparables(result))
+        review_flags = _batch_review_flags(flags, comparable_count)
         if item.get("status") == "Complete":
             flags = review_flags
         if flags:
