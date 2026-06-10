@@ -1,4 +1,4 @@
 item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,oem_sku,variant,screen_size,gpu,notes
-001,computer,Apple,MacBook Air,good,laptop,M1,8,256,,,13,,Mac example
-002,computer,Dell,OptiPlex 7060,good,desktop,i5-8500,16,256,,,,,Desktop example
-003,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,,,,,Laptop example
+001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,,,,,Laptop example
+002,computer,Dell,OptiPlex 7050,good,desktop,i5-7500,16,256,,,,,Desktop example
+003,computer,Apple,MacBook Air,good,laptop,M1,8,256,,Air,13,,Mac example

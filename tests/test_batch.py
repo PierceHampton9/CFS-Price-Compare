@@ -84,8 +84,20 @@ class BatchImportTests(unittest.TestCase):
         template = batch_template_csv()
 
         self.assertIn("item_id,device_type,brand,model,condition", template)
-        self.assertIn("001,computer,Apple,MacBook Air,good", template)
+        self.assertIn("001,computer,Lenovo,ThinkPad X13 Yoga,good", template)
         self.assertIn("002,phone,Apple,iPhone 13,good", template)
+
+    def test_static_all_devices_template_columns_stay_aligned(self):
+        items = load_batch_csv(Path("batch-templates/batch-template-all-devices.csv"))
+        storage = items[-1]
+
+        self.assertTrue(storage.is_valid)
+        self.assertEqual(storage.device_type, "storage")
+        self.assertEqual(storage.values["capacity"], "1TB")
+        self.assertEqual(storage.values["drive_type"], "ssd")
+        self.assertEqual(storage.values["drive_form_factor"], "m.2")
+        self.assertEqual(storage.values["interface"], "nvme")
+        self.assertEqual(storage.values["notes"], "Example storage row")
 
 
 if __name__ == "__main__":

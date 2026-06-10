@@ -44,7 +44,7 @@ def save_source_settings(settings: dict[str, bool], path: str | Path | None = No
         amazon_config.setdefault("channel", "msedge")
         amazon_config.setdefault("headless", True)
         amazon_config.setdefault("timeout_ms", 15000)
-        amazon_config.setdefault("max_product_pages", 5)
+        amazon_config.setdefault("max_product_pages", 1)
 
     save_config(config_path, config)
     return saved

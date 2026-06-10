@@ -900,7 +900,7 @@ def _verified_refurb_match(
         reasons.append("ram_mismatch")
 
     storage_gb = _target_storage_gb(specs)
-    if storage_gb and not _capacity_matches(text, storage_gb):
+    if storage_gb and not _storage_capacity_matches(text, storage_gb, specs):
         reasons.append("storage_mismatch")
 
     cpu_short = specs.get("cpu_short")
@@ -1009,6 +1009,29 @@ def _capacity_matches(text: str, capacity_gb: int) -> bool:
         tb = capacity_gb // 1024
         terms.update({f"{tb}tb", f"{tb} tb"})
     return any(term in text for term in terms)
+
+
+def _storage_capacity_matches(text: str, capacity_gb: int, specs: dict[str, Any]) -> bool:
+    if _capacity_matches(text, capacity_gb):
+        return True
+    device_type = str(specs.get("device_type") or "").strip().lower()
+    if device_type != "computer" or capacity_gb < 512:
+        return False
+    lower_bound = capacity_gb / 2
+    upper_bound = capacity_gb * 2
+    return any(lower_bound <= value <= upper_bound for value in _capacity_values_gb(text))
+
+
+def _capacity_values_gb(text: str) -> set[int]:
+    values = set()
+    for match in re.finditer(r"\b(\d+(?:\.\d+)?)\s*(tb|gb)\b", text, flags=re.IGNORECASE):
+        try:
+            number = float(match.group(1))
+        except ValueError:
+            continue
+        multiplier = 1024 if match.group(2).lower() == "tb" else 1
+        values.add(int(number * multiplier))
+    return values
 
 
 def _cpu_matches(text: str, cpu_short: str) -> bool:

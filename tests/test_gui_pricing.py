@@ -35,7 +35,7 @@ class GuiPricingTests(unittest.TestCase):
 
         self.assertEqual(result["count"], 1)
         self.assertIn("Manual phone:    Apple iPhone 13 128GB unlocked", report)
-        self.assertEqual(source.calls[0], ("Apple iPhone 13 128GB unlocked", 10))
+        self.assertEqual(source.calls[0], ("Apple iPhone 13 128GB unlocked", 20))
 
     def test_invalid_gui_condition_uses_neutral_error_message(self):
         with self.assertRaises(RuntimeError) as exc:

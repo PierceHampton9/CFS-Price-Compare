@@ -251,6 +251,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
                     title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
                     price="$399.99",
                     url="/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02",
+                    asin="B09PHONE02",
                 )
             if "B09LNW3CY2" in url:
                 return _product_html(
@@ -269,9 +270,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
         self.assertEqual(len(source.last_search_stats["search_urls"]), 2)
-        self.assertEqual(source.last_search_stats["detail_page_count"], 2)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 1)
 
-    def test_each_search_url_gets_its_own_detail_page_budget(self):
+    def test_detail_page_budget_applies_across_search_urls(self):
         fetched = []
 
         def fetcher(url):
@@ -285,8 +286,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             if "/s?" in url:
                 return _search_html(
                     title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
-                    price=None,
+                    price="$399.99",
                     url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                    asin="B09LNW3CY2",
                 )
             if "B0CASE0001" in url:
                 return "<html><body>Case accessory</body></html>"
@@ -301,9 +303,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(len(listings), 1)
         self.assertEqual(listings[0]["item_id"], "B09LNW3CY2")
-        self.assertEqual(source.last_search_stats["detail_page_count"], 2)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 1)
         self.assertIn("/Decorative-Case/dp/B0CASE0001", source.last_search_stats["detail_urls"][0])
-        self.assertIn("/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2", source.last_search_stats["detail_urls"][1])
+        self.assertNotIn("/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2", source.last_search_stats["detail_urls"])
 
     def test_rendered_search_continues_scanning_after_detail_page_limit(self):
         page = _RenderedSearchPage(
@@ -493,6 +495,7 @@ def _search_html(
     price="$599.99",
     url="/Lenovo-ThinkPad/dp/B0AMAZON01",
     include_renewed=True,
+    asin="B0AMAZON01",
 ):
     price_html = (
         f"""
@@ -507,7 +510,7 @@ def _search_html(
     return f"""
 <html>
   <body>
-    <div data-component-type="s-search-result" data-asin="B0AMAZON01">
+    <div data-component-type="s-search-result" data-asin="{asin}">
       <h2><a href="{url}"><span>{title}</span></a></h2>
       {price_html}
       {renewed_html}

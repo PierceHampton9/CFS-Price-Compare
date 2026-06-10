@@ -11,7 +11,7 @@ from typing import Any
 DEFAULT_CONFIG: dict[str, Any] = {
     "default_condition": "good",
     "default_limit": 10,
-    "default_limit_per_query": 10,
+    "default_limit_per_query": 20,
     "min_comparables": 5,
     "warn_below_comparables": 5,
     "wide_iqr_ratio": 0.40,
@@ -43,7 +43,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "channel": "msedge",
             "headless": True,
             "timeout_ms": 15000,
-            "max_product_pages": 5,
+            "max_product_pages": 1,
         },
         "canada_computers": {
             "enabled": False,

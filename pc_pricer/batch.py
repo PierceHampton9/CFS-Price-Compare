@@ -99,14 +99,13 @@ def batch_template_csv() -> str:
         {
             "item_id": "001",
             "device_type": "computer",
-            "brand": "Apple",
-            "model": "MacBook Air",
+            "brand": "Lenovo",
+            "model": "ThinkPad X13 Yoga",
             "condition": "good",
             "form_factor": "laptop",
-            "cpu": "M1",
-            "ram": "8",
-            "storage": "256",
-            "screen_size": "13",
+            "cpu": "i5-1135G7",
+            "ram": "16",
+            "storage": "512",
         }
     )
     writer.writerow(
