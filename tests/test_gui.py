@@ -341,11 +341,38 @@ class GuiImportTests(unittest.TestCase):
         self.assertEqual(len(window.state.batch_items), 2)
         self.assertEqual(window.state.batch_items[0]["status"], "Ready")
         self.assertEqual(window.state.batch_items[1]["status"], "Invalid")
-        self.assertEqual(window.batch_page.table.columnCount(), 6)
+        self.assertEqual(window.batch_page.table.columnCount(), 7)
         self.assertEqual(window.batch_page.table.item(0, 0).text(), "1")
         self.assertEqual(window.batch_page.table.item(0, 1).text(), "Computer")
-        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 4).text())
-        self.assertIsNotNone(window.batch_page.table.cellWidget(0, 5))
+        self.assertEqual(window.batch_page.table.item(0, 3).text(), "")
+        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 5).text())
+        self.assertIsNotNone(window.batch_page.table.cellWidget(0, 6))
+
+        window.close()
+
+    def test_batch_page_shows_completed_estimate_range_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.batch_items = [
+            {
+                "item_id": "001",
+                "device_type": "computer",
+                "values": {"brand": "Lenovo", "model": "ThinkPad"},
+                "status": "Complete",
+                "errors": [],
+                "result": {
+                    "count": 5,
+                    "conservative_low_cad": 280,
+                    "conservative_high_cad": 300,
+                    "median_price_cad": 300,
+                },
+                "report_text": "report",
+            }
+        ]
+
+        window.batch_page.refresh()
+
+        self.assertEqual(window.batch_page.table.item(0, 3).text(), "$280.00 CAD - $300.00 CAD")
 
         window.close()
 
