@@ -302,7 +302,7 @@ sources:
         self.assertEqual(instances[0].marketplace, "EBAY_CA")
         self.assertEqual(instances[0].max_results, 1)
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
+        self.assertIn("Conservative est.: $190.00 CAD - $200.00 CAD", output)
         self.assertIn("Target condition:  good", output)
 
     def test_price_query_sorts_misordered_asking_discount_config(self):
@@ -356,12 +356,13 @@ sources:
             cli.main()
 
         output = stdout.getvalue()
-        self.assertIn("Conservative est.: $475.00 CAD - $500.00 CAD", output)
-        self.assertIn("Comparables:       2", output)
-        self.assertIn("Filtered out:      1", output)
+        self.assertIn("Conservative est.: $190.00 CAD - $200.00 CAD", output)
+        self.assertIn("Comparables:       1", output)
+        self.assertIn("Filtered out:      2", output)
+        self.assertIn("condition mismatch: 1", output)
         self.assertIn("parts/accessory listing: 1", output)
         self.assertIn("Used laptop", output)
-        self.assertIn("New laptop", output)
+        self.assertNotIn("New laptop", output)
         self.assertNotIn("ThinkPad motherboard", output)
 
     def test_price_query_command_uses_device_type_for_accessory_filtering(self):

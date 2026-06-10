@@ -7,17 +7,19 @@ class ListingFilterTests(unittest.TestCase):
     def test_filters_to_target_condition(self):
         listings = [
             _listing("Used laptop", "good"),
+            _listing("Open-box laptop", "excellent"),
             _listing("New laptop", "mint"),
             _listing("Unknown laptop", None),
         ]
 
         result = filter_listings(listings, target_condition="good")
 
-        self.assertEqual([listing["title"] for listing in result["listings"]], ["Used laptop", "New laptop"])
-        self.assertEqual(result["excluded_count"], 1)
+        self.assertEqual([listing["title"] for listing in result["listings"]], ["Used laptop", "Open-box laptop"])
+        self.assertEqual(result["excluded_count"], 2)
         self.assertEqual(
             result["excluded_reasons"],
             {
+                "condition_mismatch": 1,
                 "unknown_condition": 1,
             },
         )
@@ -46,6 +48,11 @@ class ListingFilterTests(unittest.TestCase):
         self.assertEqual(len(result["listings"]), 2)
         self.assertEqual(result["excluded_count"], 0)
         self.assertEqual(result["target_condition"], "any")
+
+    def test_lot_word_in_description_is_not_enough_for_bundle_exclusion(self):
+        listing = _listing("Dell Latitude has a lot of life left", "good")
+
+        self.assertIsNone(exclusion_reason(listing, target_condition="any", device_type="computer"))
 
     def test_excludes_parts_and_accessory_titles(self):
         listings = [

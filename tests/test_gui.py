@@ -21,12 +21,30 @@ class GuiImportTests(unittest.TestCase):
             "Complete",
         )
 
-    def test_batch_issue_text_hides_non_review_flags_for_complete_rows(self):
+    def test_batch_status_uses_report_low_count_threshold(self):
+        self.assertEqual(
+            gui._batch_success_status(
+                {
+                    "count": 5,
+                    "confidence_flags": ["low_comparable_count"],
+                    "reprice_options": {"warn_below_comparables": 10},
+                }
+            ),
+            "Needs Review",
+        )
+
+    def test_batch_status_reviews_wide_price_range(self):
+        self.assertEqual(
+            gui._batch_success_status({"count": 20, "confidence_flags": ["wide_price_range"]}),
+            "Needs Review",
+        )
+
+    def test_batch_issue_text_hides_resolved_low_count_for_complete_rows(self):
         item = {
             "status": "Complete",
             "result": {
                 "count": 5,
-                "confidence_flags": ["low_comparable_count", "wide_price_range"],
+                "confidence_flags": ["low_comparable_count"],
             },
         }
 

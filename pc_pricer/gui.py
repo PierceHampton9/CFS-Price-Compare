@@ -1749,22 +1749,33 @@ def _batch_success_status(result: dict[str, Any]) -> str:
     comparable_count = _safe_int(result.get("count"))
     if comparable_count <= 0:
         return "Needs Review"
-    severe_flags = _batch_review_flags(result.get("confidence_flags"), comparable_count)
+    severe_flags = _batch_review_flags(
+        result.get("confidence_flags"),
+        comparable_count,
+        _result_warn_below_comparables(result),
+    )
     if severe_flags:
         return "Needs Review"
     return "Complete"
 
 
-def _batch_review_flags(flags: Any, comparable_count: int) -> list[str]:
+def _batch_review_flags(flags: Any, comparable_count: int, warn_below_comparables: int = 5) -> list[str]:
     review_flags = []
     for flag in flags or []:
         flag_text = str(flag)
-        if flag_text == "low_comparable_count" and comparable_count >= 3:
-            continue
-        if flag_text == "wide_price_range" and comparable_count >= 3:
+        if flag_text == "low_comparable_count" and comparable_count >= warn_below_comparables:
             continue
         review_flags.append(flag_text)
     return review_flags
+
+
+def _result_warn_below_comparables(result: dict[str, Any]) -> int:
+    options = result.get("reprice_options")
+    if isinstance(options, dict):
+        value = _safe_int(options.get("warn_below_comparables"))
+        if value > 0:
+            return value
+    return 5
 
 
 def _batch_order_label(index: int, _item: dict[str, Any]) -> str:
@@ -1791,7 +1802,7 @@ def _batch_issue_text(item: dict[str, Any]) -> str:
     flags = result.get("confidence_flags") if result else []
     if flags:
         comparable_count = _safe_int(result.get("count"))
-        review_flags = _batch_review_flags(flags, comparable_count)
+        review_flags = _batch_review_flags(flags, comparable_count, _result_warn_below_comparables(result))
         if item.get("status") == "Complete":
             flags = review_flags
         if flags:

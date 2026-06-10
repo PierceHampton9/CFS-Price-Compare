@@ -182,6 +182,7 @@ CONDITION_RANK = {
     "mint": 3,
 }
 
+
 def filter_listings(
     listings: list[dict[str, Any]],
     target_condition: str | None = "good",
@@ -252,7 +253,7 @@ def _condition_matches_target(listing_condition: str | None, target_condition: s
         return listing_condition == target_condition
     if listing_rank is None:
         return False
-    return listing_rank >= target_rank
+    return target_rank <= listing_rank <= target_rank + 1
 
 
 def _looks_like_parts_listing(listing: dict[str, Any], device_type: str | None = None) -> bool:
@@ -312,7 +313,8 @@ def _looks_like_multi_unit_listing(title: str) -> bool:
     patterns = [
         r"\blot\s+of\s+\d+\b",
         r"\blot[-\s]*\d+\b",
-        r"\blot\b",
+        r"\blot\s*$",
+        r"\bwholesale\s+lot\b",
         r"\bpack\s+of\s+\d+\b",
         r"\bbundle\s+of\s+\d+\b",
         r"^\s*\d+\s*x\b",
