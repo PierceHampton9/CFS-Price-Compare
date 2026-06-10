@@ -874,7 +874,7 @@ sources:
 
         self.assertIn("Saved batch CSV template", stdout.getvalue())
         self.assertIn("item_id,device_type,brand,model,condition", contents)
-        self.assertIn("ThinkPad X13 Yoga", contents)
+        self.assertIn("MacBook Air", contents)
 
     def test_price_batch_command_writes_reports_and_summary(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -84,7 +84,7 @@ class BatchImportTests(unittest.TestCase):
         template = batch_template_csv()
 
         self.assertIn("item_id,device_type,brand,model,condition", template)
-        self.assertIn("001,computer,Lenovo,ThinkPad X13 Yoga,good", template)
+        self.assertIn("001,computer,Apple,MacBook Air,good", template)
         self.assertIn("002,phone,Apple,iPhone 13,good", template)
 
 
