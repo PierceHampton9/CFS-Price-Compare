@@ -72,7 +72,7 @@ def _source_config(config: dict[str, Any], source_name: str) -> dict[str, Any]:
 
 
 def _limit_per_query(config: dict[str, Any]) -> int:
-    return _positive_int(config.get("default_limit_per_query"), 10)
+    return _positive_int(config.get("default_limit_per_query"), 20)
 
 
 def _condition(gui_value: Any, config: dict[str, Any]) -> str:

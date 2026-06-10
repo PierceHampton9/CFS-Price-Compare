@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import Any, Callable, Protocol
 
 from pc_pricer.aggregator import aggregate_listings
+from pc_pricer.capacity import capacity_values_gb
 from pc_pricer.device_lookup import enrich_specs_from_model_lookup
 from pc_pricer.listing_filter import exclusion_reason, filter_listings
 from pc_pricer.model_identifier import looks_like_model_number, model_identifier
@@ -41,7 +42,7 @@ class ListingSource(Protocol):
 def price_specs(
     specs: dict[str, Any],
     source: ListingSource | Sequence[ListingSource],
-    limit_per_query: int = 10,
+    limit_per_query: int = 20,
     target_condition: str | None = "good",
     warn_below_comparables: int = 5,
     wide_iqr_ratio: float = 0.40,
@@ -1019,19 +1020,7 @@ def _storage_capacity_matches(text: str, capacity_gb: int, specs: dict[str, Any]
         return False
     lower_bound = capacity_gb / 2
     upper_bound = capacity_gb * 2
-    return any(lower_bound <= value <= upper_bound for value in _capacity_values_gb(text))
-
-
-def _capacity_values_gb(text: str) -> set[int]:
-    values = set()
-    for match in re.finditer(r"\b(\d+(?:\.\d+)?)\s*(tb|gb)\b", text, flags=re.IGNORECASE):
-        try:
-            number = float(match.group(1))
-        except ValueError:
-            continue
-        multiplier = 1024 if match.group(2).lower() == "tb" else 1
-        values.add(int(number * multiplier))
-    return values
+    return any(lower_bound <= value <= upper_bound for value in capacity_values_gb(text))
 
 
 def _cpu_matches(text: str, cpu_short: str) -> bool:

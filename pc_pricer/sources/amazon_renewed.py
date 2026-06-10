@@ -92,7 +92,11 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                if (
+                    _candidate_needs_detail(candidate)
+                    and detail_fetches < self.max_product_pages
+                    and candidate.url not in fetched_detail_urls
+                ):
                     fetched_detail_urls.add(candidate.url)
                     detail_fetches += 1
                     self.last_search_stats["detail_page_count"] += 1
@@ -167,7 +171,11 @@ class AmazonRenewedSource:
                     continue
 
                 enriched = candidate
-                if detail_fetches < self.max_product_pages and candidate.url not in fetched_detail_urls:
+                if (
+                    _candidate_needs_detail(candidate)
+                    and detail_fetches < self.max_product_pages
+                    and candidate.url not in fetched_detail_urls
+                ):
                     fetched_detail_urls.add(candidate.url)
                     detail_fetches += 1
                     self.last_search_stats["detail_page_count"] += 1
@@ -578,6 +586,10 @@ def _listing_from_candidate(candidate: AmazonCandidate) -> dict[str, Any] | None
         "shipping_assumption": "prime_or_free" if candidate.shipping_cad == 0 else "unknown",
         "prime_signal": candidate.prime_signal,
     }
+
+
+def _candidate_needs_detail(candidate: AmazonCandidate) -> bool:
+    return candidate.item_price_cad is None or not candidate.condition_raw
 
 
 def _merge_candidate(base: AmazonCandidate, detail: AmazonCandidate) -> AmazonCandidate:

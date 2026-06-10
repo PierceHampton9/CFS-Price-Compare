@@ -91,6 +91,7 @@ class BatchImportTests(unittest.TestCase):
         items = load_batch_csv(Path("batch-templates/batch-template-all-devices.csv"))
         storage = items[-1]
 
+        self.assertTrue(all(item.is_valid for item in items))
         self.assertTrue(storage.is_valid)
         self.assertEqual(storage.device_type, "storage")
         self.assertEqual(storage.values["capacity"], "1TB")

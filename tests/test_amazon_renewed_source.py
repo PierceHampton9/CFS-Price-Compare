@@ -189,7 +189,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertEqual(source.last_search_stats["candidate_count"], 1)
         self.assertEqual(source.last_search_stats["detail_page_count"], 1)
 
-    def test_search_opens_detail_page_even_when_search_card_looks_complete(self):
+    def test_search_uses_complete_search_card_without_detail_page(self):
         fetched = []
 
         def fetcher(url):
@@ -202,10 +202,10 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 1)
 
         self.assertEqual(len(listings), 1)
-        self.assertEqual(len(fetched), 2)
+        self.assertEqual(len(fetched), 1)
         self.assertIn("/s?", fetched[0])
-        self.assertIn("/dp/B0AMAZON01", fetched[1])
-        self.assertEqual(listings[0]["total_price_cad"], 579.99)
+        self.assertEqual(listings[0]["total_price_cad"], 599.99)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 0)
 
     def test_search_falls_back_to_broad_amazon_search_when_renewed_department_is_empty(self):
         fetched = []
@@ -219,6 +219,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
                     title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
                     price="$399.99",
                     url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                    asin="B09LNW3CY2",
                 )
             return _product_html(
                 title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
@@ -245,6 +246,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
                     title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
                     price="$419.99",
                     url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                    asin="B09LNW3CY2",
                 )
             if "/s?" in url:
                 return _search_html(
@@ -270,7 +272,39 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
         self.assertEqual(len(source.last_search_stats["search_urls"]), 2)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 0)
+
+    def test_complete_search_card_saves_detail_budget_for_later_missing_price(self):
+        fetched = []
+
+        def fetcher(url):
+            fetched.append(url)
+            if "i=amazon-renewed" in url:
+                return _search_html(
+                    title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                    price="$419.99",
+                    url="/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2",
+                    asin="B09LNW3CY2",
+                )
+            if "/s?" in url:
+                return _search_html(
+                    title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
+                    price=None,
+                    url="/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02",
+                    asin="B09PHONE02",
+                )
+            return _product_html(
+                title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
+                price="399.99",
+                asin="B09PHONE02",
+            )
+
+        source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=1)
+        listings = source.search("Apple iPhone 13 128GB Renewed", 2)
+
+        self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
         self.assertEqual(source.last_search_stats["detail_page_count"], 1)
+        self.assertIn("/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02", source.last_search_stats["detail_urls"][0])
 
     def test_detail_page_budget_applies_across_search_urls(self):
         fetched = []
@@ -549,7 +583,6 @@ def _ranked_search_html():
     </div>
     <div data-component-type="s-search-result" data-asin="B0EXACT000">
       <h2><a href="/Lenovo-ThinkPad-X13-Yoga-Gen/dp/B0EXACT000"><span>Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB W11H Renewed</span></a></h2>
-      <span class="a-price"><span class="a-offscreen">$495.00</span></span>
       <span>Amazon Renewed</span>
       <span>In stock</span>
     </div>

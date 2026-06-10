@@ -569,7 +569,7 @@ def _limit(cli_value: int | None, config: dict[str, Any]) -> int:
 
 
 def _limit_per_query(cli_value: int | None, config: dict[str, Any]) -> int:
-    return _positive_int(cli_value, _positive_int(config.get("default_limit_per_query"), 10))
+    return _positive_int(cli_value, _positive_int(config.get("default_limit_per_query"), 20))
 
 
 def _condition(cli_value: str | None, config: dict[str, Any]) -> str:
