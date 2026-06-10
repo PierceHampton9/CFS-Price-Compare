@@ -21,7 +21,7 @@ class SpecBuilderTests(unittest.TestCase):
 
         self.assertEqual(specs["device_type"], "computer")
         self.assertEqual(specs["ram_gb"], 16)
-        self.assertEqual(specs["storage"], [{"size_gb": 512, "type": "SSD"}])
+        self.assertEqual(specs["storage"], [{"size_gb": 512}])
         self.assertEqual(specs["input_method"], "detected")
 
     def test_builds_computer_specs_from_model_number_without_form_factor(self):

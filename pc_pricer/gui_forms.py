@@ -55,7 +55,6 @@ FIELD_SETS: dict[str, list[FieldSpec]] = {
         FieldSpec("cpu", "CPU", placeholder="i5-1135G7, M1 Pro"),
         FieldSpec("ram", "RAM (GB)", placeholder="16"),
         FieldSpec("storage", "Storage (GB)", placeholder="512"),
-        FieldSpec("storage_type", "Storage type", options=("SSD", "HDD", "NVMe", "eMMC"), default="SSD"),
         FieldSpec("gpu", "GPU", placeholder="Optional dedicated GPU"),
     ],
     "phone": [

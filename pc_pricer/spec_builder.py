@@ -51,7 +51,6 @@ def gui_values_from_detected_specs(specs: dict[str, Any]) -> dict[str, str]:
         "cpu": specs.get("cpu_short") or specs.get("cpu"),
         "ram": specs.get("ram_gb"),
         "storage": primary_drive.get("size_gb"),
-        "storage_type": primary_drive.get("type"),
         "gpu": specs.get("gpu"),
     }
     return {key: str(value) for key, value in values.items() if value not in (None, "", [], {})}
@@ -86,7 +85,7 @@ def _manual_computer_specs(values: dict[str, Any]) -> dict[str, Any]:
         "cpu": _clean_text(values.get("cpu")),
         "cpu_short": _clean_text(values.get("cpu")),
         "ram_gb": _positive_int_or_none(values.get("ram")),
-        "storage": _manual_storage(values.get("storage"), values.get("storage_type")),
+        "storage": _manual_storage(values.get("storage")),
         "gpu": _clean_text(values.get("gpu")),
         "input_method": values.get("input_method") or "manual",
     }
@@ -169,21 +168,11 @@ def _without_empty_values(specs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in specs.items() if value not in (None, [], "")}
 
 
-def _manual_storage(size_gb: Any, drive_type: Any) -> list[dict[str, Any]]:
+def _manual_storage(size_gb: Any) -> list[dict[str, Any]]:
     size = _positive_int_or_none(size_gb)
     if not size:
         return []
-    return [
-        {
-            "size_gb": size,
-            "type": _storage_type(drive_type),
-        }
-    ]
-
-
-def _storage_type(value: Any) -> str:
-    text = _clean_text(value) or "SSD"
-    return text.upper() if text.lower() in {"ssd", "hdd", "nvme", "emmc"} else text
+    return [{"size_gb": size}]
 
 
 def _capacity_from_gb(value: Any) -> str | None:

@@ -30,6 +30,12 @@ class BatchImportTests(unittest.TestCase):
         self.assertFalse(items[1].is_valid)
         self.assertIn("Form factor is required.", items[1].errors)
 
+    def test_batch_template_omits_computer_storage_type(self):
+        template = batch_template_csv()
+
+        self.assertIn("item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,oem_sku", template)
+        self.assertNotIn("storage_type", template.splitlines()[0])
+
     def test_load_batch_csv_allows_model_number_without_computer_form_factor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "devices.csv"

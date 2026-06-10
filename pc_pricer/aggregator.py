@@ -8,7 +8,7 @@ from typing import Any
 
 def aggregate_listings(
     listings: list[dict[str, Any]],
-    warn_below_comparables: int = 10,
+    warn_below_comparables: int = 5,
     wide_iqr_ratio: float = 0.40,
     support_limit: int = 5,
 ) -> dict[str, Any]:

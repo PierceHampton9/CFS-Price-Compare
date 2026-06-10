@@ -119,7 +119,7 @@ def main() -> None:
     price_manual_parser.add_argument("--cpu", help="CPU model, preferably the short form such as i5-1135G7.")
     price_manual_parser.add_argument("--ram", type=int, help="RAM in GB.")
     price_manual_parser.add_argument("--storage", type=int, help="Computer/phone/tablet storage size in GB.")
-    price_manual_parser.add_argument("--storage-type", default="SSD", help="Computer primary storage type, such as SSD or HDD.")
+    price_manual_parser.add_argument("--storage-type", default="SSD", help=argparse.SUPPRESS)
     price_manual_parser.add_argument("--gpu", help="Dedicated GPU model when present.")
     price_manual_parser.add_argument("--carrier", help="Phone carrier or unlocked status.")
     price_manual_parser.add_argument("--connectivity", help="Tablet connectivity, such as Wi-Fi or cellular.")
@@ -584,7 +584,7 @@ def _condition(cli_value: str | None, config: dict[str, Any]) -> str:
 
 def _aggregation_options(config: dict[str, Any]) -> dict[str, Any]:
     return {
-        "warn_below_comparables": _positive_int(config.get("warn_below_comparables"), 10),
+        "warn_below_comparables": _positive_int(config.get("warn_below_comparables"), 5),
         "wide_iqr_ratio": _positive_float(config.get("wide_iqr_ratio"), 0.40),
         "support_limit": _positive_int(config.get("support_limit"), 5),
     }

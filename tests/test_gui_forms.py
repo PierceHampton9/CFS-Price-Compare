@@ -19,6 +19,12 @@ class GuiFormsTests(unittest.TestCase):
         self.assertIn("condition", required)
         self.assertIn("storage", required)
 
+    def test_computer_fields_do_not_ask_for_storage_type(self):
+        field_names = {field.name for field in fields_for_device("computer")}
+
+        self.assertIn("storage", field_names)
+        self.assertNotIn("storage_type", field_names)
+
     def test_condition_options_are_best_to_worst_with_good_recommended(self):
         condition = next(field for field in fields_for_device("phone") if field.name == "condition")
 

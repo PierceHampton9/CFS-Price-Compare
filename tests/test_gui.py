@@ -15,6 +15,51 @@ class GuiImportTests(unittest.TestCase):
         self.assertEqual(gui._display_value("I5-1135G7", "cpu_short"), "i5-1135G7")
         self.assertEqual(gui._display_value("ryzen 5 5600u", "cpu"), "Ryzen 5 5600u")
 
+    def test_batch_status_treats_low_count_as_complete_when_count_is_usable(self):
+        self.assertEqual(
+            gui._batch_success_status({"count": 5, "confidence_flags": ["low_comparable_count"]}),
+            "Complete",
+        )
+
+    def test_batch_status_uses_report_low_count_threshold(self):
+        self.assertEqual(
+            gui._batch_success_status(
+                {
+                    "count": 5,
+                    "confidence_flags": ["low_comparable_count"],
+                    "reprice_options": {"warn_below_comparables": 10},
+                }
+            ),
+            "Needs Review",
+        )
+
+    def test_batch_status_reviews_wide_price_range(self):
+        self.assertEqual(
+            gui._batch_success_status({"count": 20, "confidence_flags": ["wide_price_range"]}),
+            "Needs Review",
+        )
+
+    def test_batch_issue_text_hides_resolved_low_count_for_complete_rows(self):
+        item = {
+            "status": "Complete",
+            "result": {
+                "count": 5,
+                "confidence_flags": ["low_comparable_count"],
+            },
+        }
+
+        self.assertEqual(gui._batch_issue_text(item), "")
+
+    def test_batch_status_still_reviews_zero_count_and_source_disagreement(self):
+        self.assertEqual(
+            gui._batch_success_status({"count": 0, "confidence_flags": ["no_comparables"]}),
+            "Needs Review",
+        )
+        self.assertEqual(
+            gui._batch_success_status({"count": 5, "confidence_flags": ["source_disagreement"]}),
+            "Needs Review",
+        )
+
     def test_main_window_constructs_when_pyside_is_available(self):
         app = self._qt_app()
         window = gui.MainWindow()

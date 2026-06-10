@@ -13,7 +13,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "default_limit": 10,
     "default_limit_per_query": 10,
     "min_comparables": 5,
-    "warn_below_comparables": 10,
+    "warn_below_comparables": 5,
     "wide_iqr_ratio": 0.40,
     "support_limit": 5,
     "high_shipping_cad": 75,

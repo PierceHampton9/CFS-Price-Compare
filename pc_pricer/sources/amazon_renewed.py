@@ -529,7 +529,7 @@ class _AmazonProductParser(HTMLParser):
             text = _normalize_space(" ".join(self._capture_parts))
             if self._capture_id == "productTitle" and text:
                 self.title = text
-            elif self._capture_id == "price" and text and not self.price_text:
+            elif self._capture_id == "price" and text and not self.price_text and _money(text) is not None:
                 self.price_text = text
             elif self._capture_id == "renewedProgramDescriptionBtf_feature_div" and text:
                 self.condition = _condition_signal(text, self.title or "")
@@ -537,7 +537,7 @@ class _AmazonProductParser(HTMLParser):
             self._capture_parts = []
         if self._capture_class == "price":
             text = _normalize_space(" ".join(self._capture_parts))
-            if text and not self.price_text:
+            if text and not self.price_text and _money(text) is not None:
                 self.price_text = text
             self._capture_class = None
             self._capture_parts = []
@@ -554,7 +554,7 @@ class _AmazonProductParser(HTMLParser):
 
 
 def _listing_from_candidate(candidate: AmazonCandidate) -> dict[str, Any] | None:
-    if candidate.item_price_cad is None:
+    if candidate.item_price_cad is None or candidate.item_price_cad <= 0:
         return None
     if not candidate.condition_raw:
         return None
@@ -847,11 +847,17 @@ def _money(value: Any) -> float | None:
     text = str(value).replace(",", "")
     split_price = re.search(r"\$\s*([0-9]+)\s+([0-9]{2})\b", text)
     if split_price:
-        return round(float(f"{split_price.group(1)}.{split_price.group(2)}"), 2)
-    match = re.search(r"\$?\s*([0-9]+(?:\.[0-9]{2})?)", text)
+        amount = round(float(f"{split_price.group(1)}.{split_price.group(2)}"), 2)
+        return amount if amount > 0 else None
+    dollar_match = re.search(r"\$\s*([0-9]+(?:\.[0-9]{2})?)", text)
+    if dollar_match:
+        amount = round(float(dollar_match.group(1)), 2)
+        return amount if amount > 0 else None
+    match = re.search(r"\b([0-9]+(?:\.[0-9]{2})?)\b", text)
     if not match:
         return None
-    return round(float(match.group(1)), 2)
+    amount = round(float(match.group(1)), 2)
+    return amount if amount > 0 else None
 
 
 def _fallback_price(text: str) -> float | None:
