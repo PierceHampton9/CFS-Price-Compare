@@ -820,6 +820,8 @@ class BatchPage(Page):
         self.refresh()
 
     def print_all_reports(self) -> None:
+        if self._batch_is_running():
+            return
         reports = self._completed_report_texts()
         if not reports:
             QMessageBox.information(self, "No reports to print", "Run at least one batch row before printing.")
@@ -833,6 +835,8 @@ class BatchPage(Page):
         document.print_(printer)
 
     def export_all_reports(self) -> None:
+        if self._batch_is_running():
+            return
         completed = [item for item in self.main_window.state.batch_items if item.get("result") or item.get("error")]
         if not completed:
             QMessageBox.information(self, "No reports to export", "Run at least one batch row before exporting.")
@@ -940,8 +944,8 @@ class BatchPage(Page):
         self.back_button.setEnabled(not running)
         self.edit_button.setText("Done Editing" if self.edit_mode else "Edit Batch")
         self.view_button.setEnabled(self._all_rows_reportable())
-        self.print_all_button.setEnabled(has_finished)
-        self.export_all_button.setEnabled(has_finished)
+        self.print_all_button.setEnabled(not running and has_finished)
+        self.export_all_button.setEnabled(not running and has_finished)
 
     def _batch_is_running(self) -> bool:
         thread = self.main_window.batch_pricing_thread

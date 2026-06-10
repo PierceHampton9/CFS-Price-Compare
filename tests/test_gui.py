@@ -358,8 +358,10 @@ class GuiImportTests(unittest.TestCase):
                 "item_id": "001",
                 "device_type": "computer",
                 "values": {"brand": "Lenovo", "model": "ThinkPad"},
-                "status": "Ready",
+                "status": "Complete",
                 "errors": [],
+                "result": {"count": 5},
+                "report_text": "completed report",
             }
         ]
         window.batch_pricing_thread = FakeRunningThread()
@@ -370,6 +372,8 @@ class GuiImportTests(unittest.TestCase):
         self.assertFalse(window.batch_page.start_button.isEnabled())
         self.assertFalse(window.batch_page.edit_button.isEnabled())
         self.assertFalse(window.batch_page.back_button.isEnabled())
+        self.assertFalse(window.batch_page.print_all_button.isEnabled())
+        self.assertFalse(window.batch_page.export_all_button.isEnabled())
 
         window.batch_pricing_thread = None
         window.close()
