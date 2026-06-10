@@ -105,6 +105,8 @@ The extracted release folder includes a batch-templates folder with CSV files yo
    batch-template-printers.csv
    batch-template-storage.csv
 
+Each template has a "# required?" guide row under the header. It labels which columns are required or optional, and the importer ignores guide rows whose item_id starts with "#".
+
 For command-line batch testing, create a CSV template:
 
    .\pc_pricer.exe export-template --output devices-template.csv

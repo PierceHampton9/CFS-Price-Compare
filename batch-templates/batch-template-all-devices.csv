@@ -1,4 +1,5 @@
 item_id,device_type,brand,model,condition,form_factor,cpu,ram,storage,oem_sku,variant,screen_size,gpu,carrier,connectivity,size,resolution,refresh_rate,printer_type,color,capacity,drive_type,drive_form_factor,interface,notes
+# required?,required,required except storage,required except storage,required,computer required unless exact model/OEM SKU,computer optional but recommended,computer optional but recommended,phone/tablet required; computer optional but recommended,computer optional exact identifier,optional,optional,optional,phone optional,tablet optional,monitor required,monitor optional,monitor optional,printer optional,printer optional,storage required,storage required,storage optional,storage optional,optional; guide rows starting # are ignored
 001,computer,Lenovo,ThinkPad X13 Yoga,good,laptop,i5-1135G7,16,512,,,,,,,,,,,,,,,,Example laptop row
 002,phone,Apple,iPhone 13,good,,,,128,,Pro Max,6.7,,unlocked,,,,,,,,,,,Example phone row
 003,tablet,Samsung,Galaxy Tab S7,good,,,,256,,FE,12.4,,,Wi-Fi,,,,,,,,,,Example tablet row

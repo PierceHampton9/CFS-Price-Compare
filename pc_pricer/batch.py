@@ -41,6 +41,35 @@ BATCH_FIELDS = [
 ]
 
 
+BATCH_GUIDE_ROW = {
+    "item_id": "# required?",
+    "device_type": "required",
+    "brand": "required except storage",
+    "model": "required except storage",
+    "condition": "required",
+    "form_factor": "computer required unless exact model/OEM SKU",
+    "cpu": "computer optional but recommended",
+    "ram": "computer optional but recommended",
+    "storage": "phone/tablet required; computer optional but recommended",
+    "oem_sku": "computer optional exact identifier",
+    "variant": "optional",
+    "screen_size": "optional",
+    "gpu": "optional",
+    "carrier": "phone optional",
+    "connectivity": "tablet optional",
+    "size": "monitor required",
+    "resolution": "monitor optional",
+    "refresh_rate": "monitor optional",
+    "printer_type": "printer optional",
+    "color": "printer optional",
+    "capacity": "storage required",
+    "drive_type": "storage required",
+    "drive_form_factor": "storage optional",
+    "interface": "storage optional",
+    "notes": "optional; guide rows starting # are ignored",
+}
+
+
 @dataclass
 class BatchItem:
     row_number: int
@@ -75,7 +104,7 @@ def load_batch_csv(path: str | Path) -> list[BatchItem]:
                 for key, value in raw_row.items()
                 if key is not None
             }
-            if _row_is_empty(row):
+            if _row_is_empty(row) or _row_is_guide(row):
                 continue
             items.append(_batch_item_from_row(row_number, row))
 
@@ -95,6 +124,7 @@ def batch_template_csv() -> str:
     output = _StringWriter(lines)
     writer = csv.DictWriter(output, fieldnames=BATCH_FIELDS, lineterminator="\n")
     writer.writeheader()
+    writer.writerow(BATCH_GUIDE_ROW)
     writer.writerow(
         {
             "item_id": "001",
@@ -256,6 +286,10 @@ def _clean_cell(value: Any) -> str:
 
 def _row_is_empty(row: dict[str, str]) -> bool:
     return not any(value.strip() for value in row.values())
+
+
+def _row_is_guide(row: dict[str, str]) -> bool:
+    return row.get("item_id", "").lstrip().startswith("#")
 
 
 def _dedupe_errors(errors: list[str]) -> list[str]:

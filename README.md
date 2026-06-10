@@ -123,7 +123,7 @@ manufacturer_lookup:
 
 The GUI can import a batch CSV after pricing sources and credentials are selected. Use `Import Batch CSV`, review the batch table, fix invalid rows with `Edit Row`, then run `Start / Continue`. Reports stay inside the GUI in CSV order, with previous/next navigation, per-device comparable review, `Print All`, and optional `Export All`.
 
-Windows release zips include a `batch-templates` folder with Excel-friendly starter CSV files for all devices, computers, phones/tablets, monitors, printers, and storage devices.
+Windows release zips include a `batch-templates` folder with Excel-friendly starter CSV files for all devices, computers, phones/tablets, monitors, printers, and storage devices. Each template includes a `# required?` guide row under the header that labels required and optional columns; import ignores guide rows whose `item_id` starts with `#`.
 
 For CLI use, create a template:
 
