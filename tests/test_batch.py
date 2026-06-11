@@ -84,8 +84,28 @@ class BatchImportTests(unittest.TestCase):
         template = batch_template_csv()
 
         self.assertIn("item_id,device_type,brand,model,condition", template)
+        self.assertIn("# required?,required,required except storage", template)
         self.assertIn("001,computer,Lenovo,ThinkPad X13 Yoga,good", template)
         self.assertIn("002,phone,Apple,iPhone 13,good", template)
+
+    def test_load_batch_csv_skips_template_guide_rows(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "devices.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        "item_id,device_type,brand,model,condition,storage",
+                        "# required?,required,required,required,required,required",
+                        "001,phone,Apple,iPhone 13,good,128",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            items = load_batch_csv(path)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].item_id, "001")
 
     def test_static_all_devices_template_columns_stay_aligned(self):
         items = load_batch_csv(Path("batch-templates/batch-template-all-devices.csv"))

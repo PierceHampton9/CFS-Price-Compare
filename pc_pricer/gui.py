@@ -710,8 +710,8 @@ class BatchPage(Page):
         top_actions.addWidget(self.start_button)
         self.root.addLayout(top_actions)
 
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Order", "Device", "Summary", "Status", "Issue", "Action"])
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Order", "Device", "Summary", "Estimate", "Status", "Issue", "Action"])
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -723,8 +723,9 @@ class BatchPage(Page):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.table.cellDoubleClicked.connect(lambda row, _column: self.view_selected(row))
         self.root.addWidget(self.table, 1)
 
@@ -767,6 +768,7 @@ class BatchPage(Page):
                 _batch_order_label(row, item),
                 _display_value(item.get("device_type"), "device_type"),
                 batch_item_summary(values),
+                _batch_estimate_text(item),
                 str(item.get("status") or "Ready"),
                 _batch_issue_text(item),
                 "",
@@ -774,7 +776,7 @@ class BatchPage(Page):
             for column, value in enumerate(cells):
                 cell = QTableWidgetItem(value)
                 self.table.setItem(row, column, cell)
-            self.table.setCellWidget(row, 5, self._row_action_widget(row, item))
+            self.table.setCellWidget(row, 6, self._row_action_widget(row, item))
         self.table.resizeRowsToContents()
         self._refresh_status_panel(items)
         self._sync_controls()
@@ -1802,6 +1804,28 @@ def _batch_issue_text(item: dict[str, Any]) -> str:
         if flags:
             return ", ".join(_sentence_case(str(flag).replace("_", " ")) for flag in flags)
     return ""
+
+
+def _batch_estimate_text(item: dict[str, Any]) -> str:
+    result = item.get("result") if isinstance(item.get("result"), dict) else {}
+    if not result:
+        return ""
+    low = _first_present(result, "conservative_low_cad", "price_low_cad", "iqr_low_cad")
+    high = _first_present(result, "conservative_high_cad", "price_high_cad", "iqr_high_cad")
+    if low is not None and high is not None:
+        low_text = _format_money(low)
+        high_text = _format_money(high)
+        return low_text if low_text == high_text else f"{low_text} - {high_text}"
+    median = _first_present(result, "median_price_cad", "asking_median_price_cad")
+    return _format_money(median) if median is not None else ""
+
+
+def _first_present(mapping: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return value
+    return None
 
 
 def _serializable_batch_item(item: dict[str, Any]) -> dict[str, Any]:

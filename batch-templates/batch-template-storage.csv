@@ -1,3 +1,4 @@
 item_id,device_type,brand,model,condition,capacity,drive_type,drive_form_factor,interface,notes
+# required?,required,optional,optional,required,required,required,optional,optional,optional; guide rows starting # are ignored
 001,storage,Samsung,970 EVO Plus,good,1TB,ssd,m.2,nvme,NVMe SSD example
 002,storage,WD,Blue,good,2TB,hdd,3.5,SATA,Hard drive example

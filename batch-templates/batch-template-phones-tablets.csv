@@ -1,4 +1,5 @@
 item_id,device_type,brand,model,condition,storage,variant,screen_size,carrier,connectivity,notes
+# required?,required,required,required,required,required,optional,optional,phone optional,tablet optional,optional; guide rows starting # are ignored
 001,phone,Apple,iPhone 13,good,128,Pro Max,6.7,unlocked,,Phone example
 002,phone,Samsung,Galaxy S21,good,128,,,unlocked,,Android phone example
 003,tablet,Samsung,Galaxy Tab S7,good,256,FE,12.4,,Wi-Fi,Tablet example

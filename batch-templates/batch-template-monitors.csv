@@ -1,3 +1,4 @@
 item_id,device_type,brand,model,condition,size,resolution,refresh_rate,notes
+# required?,required,required,required,required,required,optional,optional,optional; guide rows starting # are ignored
 001,monitor,Dell,U2419H,good,24,1080p,60Hz,Monitor example
 002,monitor,LG,27GL850,good,27,1440p,144Hz,High refresh example
