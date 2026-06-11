@@ -1810,14 +1810,23 @@ def _batch_estimate_text(item: dict[str, Any]) -> str:
     result = item.get("result") if isinstance(item.get("result"), dict) else {}
     if not result:
         return ""
+    if result.get("pricing_basis") == "weighted_sources":
+        return _format_money(result.get("median_price_cad"))
     low = _first_present(result, "conservative_low_cad", "price_low_cad", "iqr_low_cad")
     high = _first_present(result, "conservative_high_cad", "price_high_cad", "iqr_high_cad")
     if low is not None and high is not None:
-        low_text = _format_money(low)
-        high_text = _format_money(high)
-        return low_text if low_text == high_text else f"{low_text} - {high_text}"
+        midpoint = _money_midpoint(low, high)
+        if midpoint is not None:
+            return _format_money(midpoint)
     median = _first_present(result, "median_price_cad", "asking_median_price_cad")
     return _format_money(median) if median is not None else ""
+
+
+def _money_midpoint(low: Any, high: Any) -> float | None:
+    try:
+        return round((float(low) + float(high)) / 2, 2)
+    except (TypeError, ValueError):
+        return None
 
 
 def _first_present(mapping: dict[str, Any], *keys: str) -> Any:
