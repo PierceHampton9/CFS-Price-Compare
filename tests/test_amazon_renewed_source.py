@@ -80,6 +80,49 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(candidate.item_price_cad, 579.99)
 
+    def test_parse_product_page_prefers_current_price_over_list_price(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span>List Price:</span>
+      <span class="a-price a-text-price"><span class="a-offscreen">$1,199.99</span></span>
+      <span class="a-price"><span class="a-offscreen">$579.99</span></span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 579.99)
+
+    def test_parse_product_page_ignores_coupon_amount_before_current_price(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Dell U2419H Monitor Amazon Renewed</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span>Apply $30 coupon</span>
+      <span class="a-price"><span class="a-offscreen">$219.99</span></span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 219.99)
+
     def test_parse_product_page_ignores_stray_zero_before_product_price(self):
         candidate = parse_product_page(
             """
@@ -120,6 +163,25 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertEqual(candidates[0].url, "https://www.amazon.ca/Lenovo-ThinkPad/dp/B0AMAZON01/ref=sr_1_1")
         self.assertEqual(candidates[0].item_price_cad, 599.99)
         self.assertEqual(candidates[0].condition_raw, "Amazon Renewed")
+
+    def test_candidates_from_rendered_rows_prefer_current_price_over_list_price(self):
+        candidates = candidates_from_search_rows(
+            [
+                {
+                    "asin": "B0AMAZON01",
+                    "title": "Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB",
+                    "url": "https://www.amazon.ca/Lenovo-ThinkPad/dp/B0AMAZON01/ref=sr_1_1",
+                    "price_text": [
+                        "a-price a-text-price $1,199.99",
+                        "a-price $579.99",
+                    ],
+                    "text": "Amazon Renewed In stock Prime FREE Delivery",
+                }
+            ]
+        )
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].item_price_cad, 579.99)
 
     def test_candidates_from_rendered_rows_extract_redirect_links(self):
         candidates = candidates_from_search_rows(
