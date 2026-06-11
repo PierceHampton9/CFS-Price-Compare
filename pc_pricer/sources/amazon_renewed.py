@@ -290,7 +290,7 @@ def candidates_from_search_rows(
         candidates.append(
             AmazonCandidate(
                 title=title,
-                item_price_cad=_money(row.get("price_text")) or _fallback_price(text),
+                item_price_cad=_best_price(row.get("price_text")) or _fallback_price(text),
                 url=url,
                 available=_availability(text),
                 condition_raw=_condition_signal(text, title),
@@ -342,10 +342,16 @@ _SEARCH_RESULT_EXTRACTOR = r"""
       container.querySelector("h2") ||
       container.querySelector("[data-cy='title-recipe']") ||
       link;
-    const priceNode =
-      container.querySelector(".a-price .a-offscreen") ||
-      container.querySelector(".a-price") ||
-      container.querySelector("[data-a-color='price']");
+    const priceNodes = [];
+    const seenPriceNodes = new Set();
+    for (const node of container.querySelectorAll(".a-price .a-offscreen, .a-price, [data-a-color='price']")) {
+      const priceContainer = node.closest(".a-price") || node;
+      if (seenPriceNodes.has(priceContainer)) {
+        continue;
+      }
+      seenPriceNodes.add(priceContainer);
+      priceNodes.push({ node, priceContainer });
+    }
     const title = normalize(
       link.getAttribute("aria-label") ||
       titleNode.innerText ||
@@ -359,7 +365,13 @@ _SEARCH_RESULT_EXTRACTOR = r"""
       asin,
       title,
       url: href,
-      price_text: normalize(priceNode && (priceNode.innerText || priceNode.textContent)),
+      price_text: priceNodes.map(({ node, priceContainer }) => {
+        return normalize([
+          priceContainer.getAttribute("class") || "",
+          priceContainer.getAttribute("id") || "",
+          node.innerText || node.textContent || ""
+        ].join(" "));
+      }).filter(Boolean),
       text
     });
   };
@@ -396,7 +408,7 @@ def parse_search_results(html: str, base_url: str = DEFAULT_BASE_URL, base_host:
         candidates.append(
             AmazonCandidate(
                 title=title,
-                item_price_cad=_money(card.price_text) or _fallback_price(text),
+                item_price_cad=_best_price(card.price_candidates) or _fallback_price(text),
                 url=url,
                 available=_availability(text),
                 condition_raw=condition,
@@ -419,7 +431,7 @@ def parse_product_page(html: str, url: str = "") -> AmazonCandidate:
     condition = parser.condition or _condition_signal(text, title or "")
     return AmazonCandidate(
         title=title or "",
-        item_price_cad=_money(parser.price_text),
+        item_price_cad=_best_price(parser.price_candidates),
         url=url,
         available=_availability(text),
         condition_raw=condition,
@@ -437,6 +449,7 @@ class _SearchCard:
         self.title: str | None = None
         self.url: str | None = None
         self.price_text = ""
+        self.price_candidates: list[str] = []
         self.text_parts: list[str] = []
 
 
@@ -467,7 +480,7 @@ class _AmazonSearchParser(HTMLParser):
             classes = attrs_dict.get("class") or ""
             if "a-price" in classes:
                 self._capture_price = True
-                self._price_parts = []
+                self._price_parts = [classes]
 
     def handle_endtag(self, tag: str) -> None:
         if self._current is None:
@@ -479,6 +492,8 @@ class _AmazonSearchParser(HTMLParser):
             self._capture_title = False
         if self._capture_price and tag in {"span", "div"}:
             price_text = _normalize_space(" ".join(self._price_parts))
+            if price_text:
+                self._current.price_candidates.append(price_text)
             if price_text and not self._current.price_text:
                 self._current.price_text = price_text
             self._capture_price = False
@@ -505,6 +520,7 @@ class _AmazonProductParser(HTMLParser):
         super().__init__()
         self.title: str | None = None
         self.price_text = ""
+        self.price_candidates: list[str] = []
         self.condition: str | None = None
         self.asin: str | None = None
         self.text_parts: list[str] = []
@@ -525,10 +541,10 @@ class _AmazonProductParser(HTMLParser):
         elif _is_product_price_container_id(element_id):
             self._price_scope_depth = 1
             self._capture_id = "price"
-            self._capture_parts = []
+            self._capture_parts = [element_id]
         elif self._price_scope_depth and "a-price" in classes:
             self._capture_class = "price"
-            self._capture_parts = []
+            self._capture_parts = [classes]
         if attrs_dict.get("name") == "ASIN" and attrs_dict.get("value"):
             self.asin = attrs_dict.get("value")
 
@@ -537,16 +553,20 @@ class _AmazonProductParser(HTMLParser):
             text = _normalize_space(" ".join(self._capture_parts))
             if self._capture_id == "productTitle" and text:
                 self.title = text
-            elif self._capture_id == "price" and text and not self.price_text and _money(text) is not None:
-                self.price_text = text
+            elif self._capture_id == "price" and text and _money(text) is not None:
+                self.price_candidates.append(text)
+                if not self.price_text:
+                    self.price_text = text
             elif self._capture_id == "renewedProgramDescriptionBtf_feature_div" and text:
                 self.condition = _condition_signal(text, self.title or "")
             self._capture_id = None
             self._capture_parts = []
         if self._capture_class == "price":
             text = _normalize_space(" ".join(self._capture_parts))
-            if text and not self.price_text and _money(text) is not None:
-                self.price_text = text
+            if text and _money(text) is not None:
+                self.price_candidates.append(text)
+                if not self.price_text:
+                    self.price_text = text
             self._capture_class = None
             self._capture_parts = []
         if self._price_scope_depth:
@@ -872,14 +892,87 @@ def _money(value: Any) -> float | None:
     return amount if amount > 0 else None
 
 
-def _fallback_price(text: str) -> float | None:
-    prices = [
-        _money(match.group(0))
-        for match in re.finditer(r"\$\s*[0-9][0-9,]*(?:(?:\.|\s+)[0-9]{2})?", text)
-    ]
-    prices = [price for price in prices if price is not None and price >= 20]
-    return min(prices) if prices else None
+def _best_price(value: Any) -> float | None:
+    candidates = _money_candidates(value)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda candidate: (candidate[0], candidate[2]))
+    return candidates[0][1]
 
+
+def _money_candidates(value: Any) -> list[tuple[int, float, int]]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        candidates: list[tuple[int, float, int]] = []
+        offset = 0
+        for item in value:
+            item_candidates = _money_candidates(item)
+            candidates.extend((score, amount, order + offset) for score, amount, order in item_candidates)
+            offset += len(item_candidates)
+        return candidates
+
+    text = str(value).replace(",", "")
+    candidates = []
+    matches = list(re.finditer(r"\$\s*([0-9]+)(?:\s+([0-9]{2})(?!\w)|(\.[0-9]{2})(?!\w))?(?!\w)", text))
+    for order, match in enumerate(matches):
+        dollars = match.group(1)
+        cents = match.group(2) or (match.group(3) or ".00").lstrip(".")
+        try:
+            amount = round(float(f"{dollars}.{cents}"), 2)
+        except ValueError:
+            continue
+        if amount <= 0:
+            continue
+        previous_end = matches[order - 1].end() if order else 0
+        next_start = matches[order + 1].start() if order + 1 < len(matches) else len(text)
+        candidates.append((_price_context_score(text, match.start(), match.end(), amount, previous_end, next_start), amount, order))
+    return candidates
+
+
+_BAD_PRICE_CONTEXT_RE = re.compile(
+    r"\b(?:list price|typical price|was|save|savings|coupon|discount|promo|monthly|per month)\b|/mo"
+)
+
+
+def _price_context_score(
+    text: str,
+    start: int,
+    end: int,
+    amount: float,
+    previous_price_end: int = 0,
+    next_price_start: int | None = None,
+) -> int:
+    lowered = text.lower()
+    next_price_start = len(lowered) if next_price_start is None else next_price_start
+    prefix = lowered[max(previous_price_end, start - 80) : start]
+    suffix = lowered[end : min(next_price_start, end + 40)]
+    structural_context = lowered[max(previous_price_end, start - 80) : min(next_price_start, end + 40)]
+    score = 0
+    if amount < 20:
+        score += 4
+    if any(marker in structural_context for marker in ["a-text-price", "basisprice", "basis price"]):
+        score += 10
+    if _BAD_PRICE_CONTEXT_RE.search(prefix):
+        score += 10
+    if re.search(r"\b\d+\s*%\s*(?:off|coupon|discount|savings?)\b", prefix):
+        score += 10
+    if re.search(r"\b(?:coupon|off|discount|savings?)\b", suffix):
+        score += 10
+    if re.search(r"\b(?:each|per item|per unit)\b", suffix):
+        score += 4
+    if any(marker in structural_context for marker in ["a-price-whole", "a-offscreen", "corepricedisplay", "buybox", "deal price"]):
+        score -= 1
+    return score
+
+
+def _fallback_price(text: str) -> float | None:
+    prices = [(score, price, order) for score, price, order in _money_candidates(text) if price >= 20]
+    prices = [candidate for candidate in prices if candidate[0] < 10]
+    if not prices:
+        return None
+    prices.sort(key=lambda candidate: (candidate[0], candidate[2]))
+    return prices[0][1]
 
 def _title_from_text(text: str) -> str | None:
     parts = [part.strip() for part in re.split(r"\s{2,}|\n", text) if part.strip()]

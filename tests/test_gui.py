@@ -350,7 +350,7 @@ class GuiImportTests(unittest.TestCase):
 
         window.close()
 
-    def test_batch_page_shows_completed_estimate_range_when_pyside_is_available(self):
+    def test_batch_page_shows_completed_single_estimate_when_pyside_is_available(self):
         self._qt_app()
         window = gui.MainWindow()
         window.state.batch_items = [
@@ -367,12 +367,28 @@ class GuiImportTests(unittest.TestCase):
                     "median_price_cad": 300,
                 },
                 "report_text": "report",
+            },
+            {
+                "item_id": "002",
+                "device_type": "phone",
+                "values": {"brand": "Apple", "model": "iPhone"},
+                "status": "Complete",
+                "errors": [],
+                "result": {
+                    "count": 8,
+                    "pricing_basis": "weighted_sources",
+                    "median_price_cad": 497.5,
+                    "price_low_cad": 300,
+                    "price_high_cad": 600,
+                },
+                "report_text": "report",
             }
         ]
 
         window.batch_page.refresh()
 
-        self.assertEqual(window.batch_page.table.item(0, 3).text(), "$280.00 CAD - $300.00 CAD")
+        self.assertEqual(window.batch_page.table.item(0, 3).text(), "$290.00 CAD")
+        self.assertEqual(window.batch_page.table.item(1, 3).text(), "$497.50 CAD")
 
         window.close()
 
