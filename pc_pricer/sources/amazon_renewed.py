@@ -342,9 +342,16 @@ _SEARCH_RESULT_EXTRACTOR = r"""
       container.querySelector("h2") ||
       container.querySelector("[data-cy='title-recipe']") ||
       link;
-    const priceNodes = [
-      ...container.querySelectorAll(".a-price .a-offscreen, .a-price, [data-a-color='price']")
-    ];
+    const priceNodes = [];
+    const seenPriceNodes = new Set();
+    for (const node of container.querySelectorAll(".a-price .a-offscreen, .a-price, [data-a-color='price']")) {
+      const priceContainer = node.closest(".a-price") || node;
+      if (seenPriceNodes.has(priceContainer)) {
+        continue;
+      }
+      seenPriceNodes.add(priceContainer);
+      priceNodes.push({ node, priceContainer });
+    }
     const title = normalize(
       link.getAttribute("aria-label") ||
       titleNode.innerText ||
@@ -358,8 +365,7 @@ _SEARCH_RESULT_EXTRACTOR = r"""
       asin,
       title,
       url: href,
-      price_text: priceNodes.map((node) => {
-        const priceContainer = node.closest(".a-price") || node;
+      price_text: priceNodes.map(({ node, priceContainer }) => {
         return normalize([
           priceContainer.getAttribute("class") || "",
           priceContainer.getAttribute("id") || "",
@@ -908,47 +914,54 @@ def _money_candidates(value: Any) -> list[tuple[int, float, int]]:
 
     text = str(value).replace(",", "")
     candidates = []
-    for order, match in enumerate(re.finditer(r"\$\s*([0-9]+)(?:([ ]+)([0-9]{2})|(\.[0-9]{2})?)", text)):
+    matches = list(re.finditer(r"\$\s*([0-9]+)(?:\s+([0-9]{2})(?!\w)|(\.[0-9]{2})(?!\w))?(?!\w)", text))
+    for order, match in enumerate(matches):
         dollars = match.group(1)
-        cents = match.group(3) or (match.group(4) or ".00").lstrip(".")
+        cents = match.group(2) or (match.group(3) or ".00").lstrip(".")
         try:
             amount = round(float(f"{dollars}.{cents}"), 2)
         except ValueError:
             continue
         if amount <= 0:
             continue
-        candidates.append((_price_context_score(text, match.start(), match.end(), amount), amount, order))
+        previous_end = matches[order - 1].end() if order else 0
+        next_start = matches[order + 1].start() if order + 1 < len(matches) else len(text)
+        candidates.append((_price_context_score(text, match.start(), match.end(), amount, previous_end, next_start), amount, order))
     return candidates
 
 
-def _price_context_score(text: str, start: int, end: int, amount: float) -> int:
+_BAD_PRICE_CONTEXT_RE = re.compile(
+    r"\b(?:list price|typical price|was|save|savings|coupon|discount|promo|monthly|per month)\b|/mo"
+)
+
+
+def _price_context_score(
+    text: str,
+    start: int,
+    end: int,
+    amount: float,
+    previous_price_end: int = 0,
+    next_price_start: int | None = None,
+) -> int:
     lowered = text.lower()
-    context = lowered[max(0, start - 80) : min(len(lowered), end + 80)]
+    next_price_start = len(lowered) if next_price_start is None else next_price_start
+    prefix = lowered[max(previous_price_end, start - 80) : start]
+    suffix = lowered[end : min(next_price_start, end + 40)]
+    structural_context = lowered[max(previous_price_end, start - 80) : min(next_price_start, end + 40)]
     score = 0
     if amount < 20:
         score += 4
-    if any(
-        marker in context
-        for marker in [
-            "a-text-price",
-            "basisprice",
-            "basis price",
-            "list price",
-            "typical price",
-            "was",
-            "save",
-            "savings",
-            "coupon",
-            "discount",
-            "promo",
-            "monthly",
-            "per month",
-            "/mo",
-            "%",
-        ]
-    ):
+    if any(marker in structural_context for marker in ["a-text-price", "basisprice", "basis price"]):
         score += 10
-    if any(marker in context for marker in ["a-price-whole", "a-offscreen", "corepricedisplay", "buybox", "deal price"]):
+    if _BAD_PRICE_CONTEXT_RE.search(prefix):
+        score += 10
+    if re.search(r"\b\d+\s*%\s*(?:off|coupon|discount|savings?)\b", prefix):
+        score += 10
+    if re.search(r"\b(?:coupon|off|discount|savings?)\b", suffix):
+        score += 10
+    if re.search(r"\b(?:each|per item|per unit)\b", suffix):
+        score += 4
+    if any(marker in structural_context for marker in ["a-price-whole", "a-offscreen", "corepricedisplay", "buybox", "deal price"]):
         score -= 1
     return score
 
@@ -960,9 +973,6 @@ def _fallback_price(text: str) -> float | None:
         return None
     prices.sort(key=lambda candidate: (candidate[0], candidate[2]))
     return prices[0][1]
-
-
-
 
 def _title_from_text(text: str) -> str | None:
     parts = [part.strip() for part in re.split(r"\s{2,}|\n", text) if part.strip()]
