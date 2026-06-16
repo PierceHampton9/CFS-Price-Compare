@@ -148,6 +148,86 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual(candidate.item_price_cad, 219.99)
 
+    def test_parse_product_page_uses_product_price_metadata(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <meta property="product:price:amount" content="529.99">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB</span>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 529.99)
+
+    def test_parse_product_page_ignores_ambiguous_price_metadata(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <meta name="listPrice" content="1299.99">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">$529.99</span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.item_price_cad, 529.99)
+
+    def test_product_detail_specs_ignore_implausible_storage_noise(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB RAM 256GB SSD</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">$579.99</span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+    <div>Warranty document size 77824GB CDN cache label</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertEqual(candidate.source_specs["storage_gb"], 256)
+
+    def test_product_detail_specs_do_not_treat_lone_ram_as_storage(self):
+        candidate = parse_product_page(
+            """
+<html>
+  <body>
+    <input type="hidden" name="ASIN" value="B0AMAZON01">
+    <span id="productTitle">Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB RAM</span>
+    <div id="corePriceDisplay_desktop_feature_div">
+      <span class="a-price">$579.99</span>
+    </div>
+    <div id="availability">In Stock</div>
+    <div id="renewedProgramDescriptionBtf_feature_div">Amazon Renewed product</div>
+  </body>
+</html>
+""",
+            "https://www.amazon.ca/dp/B0AMAZON01",
+        )
+
+        self.assertNotIn("storage_gb", candidate.source_specs)
+
     def test_candidates_from_rendered_rows_do_not_require_legacy_card_shape(self):
         candidates = candidates_from_search_rows(
             [
@@ -269,7 +349,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertEqual(source.last_search_stats["candidate_count"], 1)
         self.assertEqual(source.last_search_stats["detail_page_count"], 1)
 
-    def test_search_uses_complete_search_card_without_detail_page(self):
+    def test_search_confirms_complete_search_card_with_detail_page(self):
         fetched = []
 
         def fetcher(url):
@@ -282,10 +362,22 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 1)
 
         self.assertEqual(len(listings), 1)
-        self.assertEqual(len(fetched), 1)
+        self.assertEqual(len(fetched), 2)
         self.assertIn("/s?", fetched[0])
-        self.assertEqual(listings[0]["total_price_cad"], 599.99)
-        self.assertEqual(source.last_search_stats["detail_page_count"], 0)
+        self.assertEqual(listings[0]["total_price_cad"], 579.99)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 1)
+
+    def test_search_detail_page_overrides_wrong_search_card_price(self):
+        def fetcher(url):
+            if "/s?" in url:
+                return _search_html(price="$1,799.99")
+            return _product_html(price="579.99")
+
+        source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=1)
+        listings = source.search("Lenovo ThinkPad X13 Yoga Renewed", 1)
+
+        self.assertEqual(len(listings), 1)
+        self.assertEqual(listings[0]["total_price_cad"], 579.99)
 
     def test_search_falls_back_to_broad_amazon_search_when_renewed_department_is_empty(self):
         fetched = []
@@ -352,9 +444,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
         self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
         self.assertEqual(len(source.last_search_stats["search_urls"]), 2)
-        self.assertEqual(source.last_search_stats["detail_page_count"], 0)
+        self.assertEqual(source.last_search_stats["detail_page_count"], 1)
 
-    def test_complete_search_card_saves_detail_budget_for_later_missing_price(self):
+    def test_complete_search_card_uses_detail_budget_before_later_missing_price(self):
         fetched = []
 
         def fetcher(url):
@@ -373,6 +465,12 @@ class AmazonRenewedSourceTests(unittest.TestCase):
                     url="/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02",
                     asin="B09PHONE02",
                 )
+            if "B09LNW3CY2" in url:
+                return _product_html(
+                    title="iPhone 13, 128GB, Midnight - Unlocked (Renewed)",
+                    price="419.99",
+                    asin="B09LNW3CY2",
+                )
             return _product_html(
                 title="iPhone 13, 128GB, Blue - Unlocked (Renewed)",
                 price="399.99",
@@ -382,9 +480,9 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         source = AmazonRenewedSource(page_fetcher=fetcher, max_product_pages=1)
         listings = source.search("Apple iPhone 13 128GB Renewed", 2)
 
-        self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2", "B09PHONE02"])
+        self.assertEqual([listing["item_id"] for listing in listings], ["B09LNW3CY2"])
         self.assertEqual(source.last_search_stats["detail_page_count"], 1)
-        self.assertIn("/Apple-iPhone-13-128GB-Blue/dp/B09PHONE02", source.last_search_stats["detail_urls"][0])
+        self.assertIn("/Apple-iPhone-13-128GB-Midnight/dp/B09LNW3CY2", source.last_search_stats["detail_urls"][0])
 
     def test_detail_page_budget_applies_across_search_urls(self):
         fetched = []
@@ -477,11 +575,14 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         source = AmazonRenewedSource(page_fetcher=lambda _url: _search_html(price=None), max_product_pages=0)
 
         self.assertEqual(source.search("ThinkPad Renewed", 5), [])
+        self.assertEqual(source.last_search_stats["dropped_candidate_count"], 2)
+        self.assertEqual(source.last_search_stats["dropped_candidate_reasons"], {"missing_price": 2})
 
     def test_zero_price_returns_no_listing(self):
         source = AmazonRenewedSource(page_fetcher=lambda _url: _search_html(price="$0.00"), max_product_pages=0)
 
         self.assertEqual(source.search("ThinkPad Renewed", 5), [])
+        self.assertEqual(source.last_search_stats["dropped_candidate_reasons"], {"missing_price": 2})
 
     def test_non_renewed_result_returns_no_listing(self):
         source = AmazonRenewedSource(
@@ -493,6 +594,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         )
 
         self.assertEqual(source.search("ThinkPad Renewed", 5), [])
+        self.assertEqual(source.last_search_stats["dropped_candidate_reasons"], {"missing_renewed_condition": 2})
 
     def test_disabled_source_does_not_fetch(self):
         source = AmazonRenewedSource(enabled=False, page_fetcher=lambda _url: self.fail("should not fetch"))

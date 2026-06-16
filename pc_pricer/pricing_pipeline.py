@@ -324,6 +324,13 @@ def _add_source_runtime_stats(status: dict[str, Any], stats: Any) -> None:
     if not isinstance(stats, dict):
         return
     status["candidate_count"] = _safe_int(status.get("candidate_count")) + _safe_int(stats.get("candidate_count"))
+    status["dropped_candidate_count"] = _safe_int(status.get("dropped_candidate_count")) + _safe_int(
+        stats.get("dropped_candidate_count")
+    )
+    status["dropped_candidate_reasons"] = _merge_reason_counts(
+        status.get("dropped_candidate_reasons") if isinstance(status.get("dropped_candidate_reasons"), dict) else {},
+        stats.get("dropped_candidate_reasons") if isinstance(stats.get("dropped_candidate_reasons"), dict) else {},
+    )
     status["detail_page_count"] = _safe_int(status.get("detail_page_count")) + _safe_int(stats.get("detail_page_count"))
     status["detail_error_count"] = _safe_int(status.get("detail_error_count")) + _safe_int(stats.get("detail_error_count"))
     detail_urls = status.setdefault("detail_urls", [])

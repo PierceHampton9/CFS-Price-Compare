@@ -40,7 +40,7 @@ class GuiSourceSettingsTests(unittest.TestCase):
         self.assertIn("enabled: true", text)
         self.assertIn("channel: msedge", text)
         self.assertIn("headless: true", text)
-        self.assertIn("max_product_pages: 1", text)
+        self.assertIn("max_product_pages: 3", text)
 
         self.assertEqual(load_source_settings(CONFIG_PATH)["amazon_renewed"], True)
 

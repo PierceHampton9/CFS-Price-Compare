@@ -24,7 +24,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["sources"]["amazon_renewed"]["browser"], "chromium")
         self.assertEqual(config["sources"]["amazon_renewed"]["channel"], "msedge")
         self.assertIs(config["sources"]["amazon_renewed"]["headless"], True)
-        self.assertEqual(config["sources"]["amazon_renewed"]["max_product_pages"], 1)
+        self.assertEqual(config["sources"]["amazon_renewed"]["max_product_pages"], 3)
         self.assertIs(config["manufacturer_lookup"]["enabled"], False)
         self.assertEqual(config["manufacturer_lookup"]["timeout_seconds"], 5)
         self.assertEqual(config["manufacturer_lookup"]["max_pages"], 2)

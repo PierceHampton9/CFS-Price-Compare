@@ -80,6 +80,7 @@ class SourceFactoryTests(unittest.TestCase):
 
         self.assertEqual([source.name for source in sources], ["amazon_renewed"])
         self.assertIs(sources[0].headless, True)
+        self.assertEqual(sources[0].max_product_pages, 3)
 
 
 class FakeEbaySource:

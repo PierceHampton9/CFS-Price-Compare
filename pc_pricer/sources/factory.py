@@ -45,7 +45,7 @@ def build_listing_sources(
                 channel=str(amazon_config.get("channel") or "msedge"),
                 headless=_bool_value(amazon_config.get("headless"), True),
                 timeout_ms=_positive_int(amazon_config.get("timeout_ms"), 15000),
-                max_product_pages=_positive_int(amazon_config.get("max_product_pages"), 1),
+                max_product_pages=_positive_int(amazon_config.get("max_product_pages"), 3),
             )
         )
 
