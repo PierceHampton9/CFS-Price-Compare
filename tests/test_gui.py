@@ -414,6 +414,7 @@ class GuiImportTests(unittest.TestCase):
         self.assertFalse(window.batch_page.start_button.isEnabled())
         self.assertFalse(window.batch_page.edit_button.isEnabled())
         self.assertFalse(window.batch_page.back_button.isEnabled())
+        self.assertFalse(window.batch_page.print_summary_button.isEnabled())
         self.assertFalse(window.batch_page.print_all_button.isEnabled())
         self.assertFalse(window.batch_page.export_all_button.isEnabled())
 
@@ -449,6 +450,49 @@ class GuiImportTests(unittest.TestCase):
         window.state.batch_items[1]["status"] = "Complete"
         window.batch_page.refresh()
         self.assertTrue(window.batch_page.view_button.isEnabled())
+
+        window.close()
+
+    def test_batch_page_prints_summary_view_when_pyside_is_available(self):
+        self._qt_app()
+        window = gui.MainWindow()
+        window.state.batch_source_path = "devices.csv"
+        window.state.batch_items = [
+            {
+                "item_id": "001",
+                "device_type": "computer",
+                "values": {"brand": "Lenovo", "model": "ThinkPad"},
+                "status": "Complete",
+                "errors": [],
+                "result": {"count": 5, "median_price_cad": 300},
+                "report_text": "full report text that should not be printed in summary",
+            },
+            {
+                "item_id": "002",
+                "device_type": "phone",
+                "values": {"brand": "Apple", "model": "iPhone"},
+                "status": "Failed",
+                "errors": [],
+                "error": "credentials failed",
+            },
+        ]
+        window.batch_page.refresh()
+        FakePrintDialog.next_result = gui.QDialog.Accepted
+        FakeTextDocument.created.clear()
+
+        with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
+            "pc_pricer.gui.QPrintDialog", FakePrintDialog
+        ), patch("pc_pricer.gui.QTextDocument", FakeTextDocument):
+            window.batch_page.print_summary()
+
+        document = FakeTextDocument.created[-1]
+        self.assertIsInstance(document.printed_to, FakePrinter)
+        self.assertIn("CFS Batch Summary", document.html)
+        self.assertIn("devices.csv", document.html)
+        self.assertIn("Lenovo ThinkPad", document.html)
+        self.assertIn("$300.00 CAD", document.html)
+        self.assertIn("credentials failed", document.html)
+        self.assertNotIn("full report text", document.html)
 
         window.close()
 

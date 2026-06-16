@@ -28,6 +28,6 @@ sources:
     channel: msedge
     headless: true
     timeout_ms: 15000
-    max_product_pages: 1
+    max_product_pages: 3
   canada_computers:
     enabled: false

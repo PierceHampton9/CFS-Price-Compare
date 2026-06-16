@@ -38,7 +38,7 @@ class AmazonRenewedSource:
         channel: str | None = "msedge",
         headless: bool = True,
         timeout_ms: int = 15000,
-        max_product_pages: int = 1,
+        max_product_pages: int = 3,
         page_fetcher: HtmlFetcher | None = None,
     ) -> None:
         self.enabled = enabled
@@ -67,6 +67,8 @@ class AmazonRenewedSource:
             "search_url": search_url,
             "search_urls": [],
             "candidate_count": 0,
+            "dropped_candidate_count": 0,
+            "dropped_candidate_reasons": {},
             "detail_page_count": 0,
             "detail_urls": [],
             "detail_error_count": 0,
@@ -112,6 +114,8 @@ class AmazonRenewedSource:
                 if listing:
                     seen_listing_urls.add(candidate.url)
                     listings.append(listing)
+                else:
+                    _record_candidate_drop(self.last_search_stats, enriched)
                 if len(listings) >= max_results:
                     return listings
         return listings
@@ -141,6 +145,8 @@ class AmazonRenewedSource:
             "search_url": search_url,
             "search_urls": [],
             "candidate_count": 0,
+            "dropped_candidate_count": 0,
+            "dropped_candidate_reasons": {},
             "detail_page_count": 0,
             "detail_urls": [],
             "detail_error_count": 0,
@@ -192,6 +198,8 @@ class AmazonRenewedSource:
                 if listing:
                     seen_listing_urls.add(candidate.url)
                     listings.append(listing)
+                else:
+                    _record_candidate_drop(self.last_search_stats, enriched)
                 if len(listings) >= max_results:
                     return listings
         return listings
@@ -528,11 +536,17 @@ class _AmazonProductParser(HTMLParser):
         self._capture_class: str | None = None
         self._capture_parts: list[str] = []
         self._price_scope_depth = 0
+        self._metadata_price_seen = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = _attrs(attrs)
         element_id = attrs_dict.get("id") or ""
         classes = attrs_dict.get("class") or ""
+        if _is_product_price_metadata(tag, attrs_dict) and not self._metadata_price_seen:
+            content = attrs_dict.get("content")
+            if content and _money(content) is not None:
+                self.price_candidates.append(f"metadata price ${content}")
+                self._metadata_price_seen = True
         if self._price_scope_depth:
             self._price_scope_depth += 1
         if element_id in {"productTitle", "availability", "renewedProgramDescriptionBtf_feature_div"}:
@@ -608,8 +622,28 @@ def _listing_from_candidate(candidate: AmazonCandidate) -> dict[str, Any] | None
     }
 
 
+def _record_candidate_drop(stats: dict[str, Any], candidate: AmazonCandidate) -> None:
+    reason = _candidate_drop_reason(candidate)
+    stats["dropped_candidate_count"] = int(stats.get("dropped_candidate_count") or 0) + 1
+    reasons = stats.setdefault("dropped_candidate_reasons", {})
+    if not isinstance(reasons, dict):
+        reasons = {}
+        stats["dropped_candidate_reasons"] = reasons
+    reasons[reason] = int(reasons.get(reason) or 0) + 1
+
+
+def _candidate_drop_reason(candidate: AmazonCandidate) -> str:
+    if candidate.item_price_cad is None:
+        return "missing_price"
+    if candidate.item_price_cad <= 0:
+        return "invalid_price"
+    if not candidate.condition_raw:
+        return "missing_renewed_condition"
+    return "unknown"
+
+
 def _candidate_needs_detail(candidate: AmazonCandidate) -> bool:
-    return candidate.item_price_cad is None or not candidate.condition_raw
+    return True
 
 
 def _merge_candidate(base: AmazonCandidate, detail: AmazonCandidate) -> AmazonCandidate:
@@ -654,6 +688,29 @@ def _is_product_price_container_id(value: str) -> bool:
         return True
     lowered = value.lower()
     return lowered.startswith("corepricedisplay") or lowered.startswith("coreprice_feature")
+
+
+def _is_product_price_metadata(tag: str, attrs: dict[str, str]) -> bool:
+    if tag not in {"meta", "input"}:
+        return False
+    key_parts = [
+        attrs.get("property"),
+        attrs.get("itemprop"),
+        attrs.get("name"),
+        attrs.get("id"),
+    ]
+    key = " ".join(str(part or "") for part in key_parts).lower()
+    if "pricecurrency" in key or "currency" in key:
+        return False
+    return any(
+        marker in key
+        for marker in [
+            "product:price:amount",
+            "og:price:amount",
+            "priceamount",
+            "price amount",
+        ]
+    )
 
 
 def _rank_search_candidates(candidates: list[AmazonCandidate], query: str) -> list[AmazonCandidate]:
@@ -796,7 +853,7 @@ def _specs_from_text(text: str) -> dict[str, Any]:
     specs: dict[str, Any] = {}
     brand = _brand_from_title(text)
     ram_gb = _first_gb_after_marker(text, ["ram", "memory"]) or _first_gb_value(text)
-    storage_gb = _storage_gb(text)
+    storage_gb = _storage_gb(text, ram_gb=ram_gb)
     cpu_short = _cpu_short(text)
     if brand:
         specs["brand"] = brand
@@ -845,7 +902,11 @@ def _first_gb_value(text: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _storage_gb(text: str) -> int | None:
+def _storage_gb(text: str, ram_gb: int | None = None) -> int | None:
+    explicit_values = _explicit_storage_values_gb(text)
+    if explicit_values:
+        return max(explicit_values)
+
     matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*(TB|GB)", text, flags=re.IGNORECASE))
     if not matches:
         return None
@@ -854,8 +915,39 @@ def _storage_gb(text: str) -> int | None:
         amount = float(match.group(1))
         unit = match.group(2).lower()
         gb = int(amount * 1024) if unit == "tb" else int(amount)
-        values.append(gb)
+        if _plausible_storage_gb(gb):
+            values.append(gb)
+    values = [value for value in values if not (ram_gb and value == ram_gb and len(values) > 1)]
+    if not values:
+        return None
+    if len(values) == 1 and ram_gb and values[0] == ram_gb:
+        return None
     return max(values)
+
+
+def _explicit_storage_values_gb(text: str) -> list[int]:
+    values = []
+    unit_pattern = r"(\d+(?:\.\d+)?)\s*(TB|GB)"
+    storage_after_value = re.compile(
+        rf"{unit_pattern}\s*(?:ssd|hdd|nvme|emmc|storage|solid\s+state|hard\s+drive|flash)",
+        flags=re.IGNORECASE,
+    )
+    storage_before_value = re.compile(
+        rf"(?:ssd|hdd|nvme|emmc|storage|solid\s+state|hard\s+drive|flash)\D{{0,30}}{unit_pattern}",
+        flags=re.IGNORECASE,
+    )
+    for pattern in [storage_after_value, storage_before_value]:
+        for match in pattern.finditer(text):
+            amount_text, unit = match.group(1), match.group(2)
+            amount = float(amount_text)
+            gb = int(amount * 1024) if unit.lower() == "tb" else int(amount)
+            if _plausible_storage_gb(gb):
+                values.append(gb)
+    return values
+
+
+def _plausible_storage_gb(value: int) -> bool:
+    return 16 <= value <= 4096
 
 
 def _cpu_short(text: str) -> str | None:

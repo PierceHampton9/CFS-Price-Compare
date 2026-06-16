@@ -164,7 +164,7 @@ sources:
     browser: chromium
     headless: true
     timeout_ms: 15000
-    max_product_pages: 1
+    max_product_pages: 3
 ```
 
 If Playwright is not installed or Amazon is disabled, the normal eBay and Refurb.io flow still works.

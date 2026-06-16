@@ -63,6 +63,8 @@ def _summarize_status(status: dict[str, Any]) -> dict[str, Any]:
     updated["query_count"] = _safe_int(updated.get("query_count"))
     updated["raw_listing_count"] = _safe_int(updated.get("raw_listing_count"))
     updated["candidate_count"] = _safe_int(updated.get("candidate_count"))
+    updated["dropped_candidate_count"] = _safe_int(updated.get("dropped_candidate_count"))
+    updated["dropped_candidate_reasons"] = _reason_counts(updated.get("dropped_candidate_reasons"))
     updated["detail_page_count"] = _safe_int(updated.get("detail_page_count"))
     updated["detail_error_count"] = _safe_int(updated.get("detail_error_count"))
     updated["queries"] = list(updated.get("queries") or [])
@@ -91,8 +93,15 @@ def _searched_message(status: dict[str, Any], base_message: str) -> str:
     candidate_count = _safe_int(status.get("candidate_count"))
     detail_page_count = _safe_int(status.get("detail_page_count"))
     detail_error_count = _safe_int(status.get("detail_error_count"))
+    dropped_candidate_count = _safe_int(status.get("dropped_candidate_count"))
     if candidate_count:
         details.append(f"{candidate_count} search candidate(s)")
+    if dropped_candidate_count:
+        reasons = _format_reasons(status.get("dropped_candidate_reasons"))
+        detail = f"{dropped_candidate_count} candidate(s) dropped"
+        if reasons:
+            detail = f"{detail}: {reasons}"
+        details.append(detail)
     if detail_page_count:
         details.append(f"{detail_page_count} product page(s) opened")
     if detail_error_count:
@@ -124,3 +133,22 @@ def _safe_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _reason_counts(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    counts = {}
+    for key, count in value.items():
+        text = str(key or "").strip()
+        parsed_count = _safe_int(count)
+        if text and parsed_count:
+            counts[text] = parsed_count
+    return counts
+
+
+def _format_reasons(value: Any) -> str:
+    reasons = _reason_counts(value)
+    if not reasons:
+        return ""
+    return ", ".join(f"{reason}={count}" for reason, count in sorted(reasons.items()))

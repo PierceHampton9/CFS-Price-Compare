@@ -43,7 +43,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "channel": "msedge",
             "headless": True,
             "timeout_ms": 15000,
-            "max_product_pages": 1,
+            "max_product_pages": 3,
         },
         "canada_computers": {
             "enabled": False,

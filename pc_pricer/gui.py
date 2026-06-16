@@ -743,6 +743,8 @@ class BatchPage(Page):
         self.edit_button.clicked.connect(self.toggle_edit_mode)
         self.view_button = QPushButton("View All Reports")
         self.view_button.clicked.connect(self.view_all_reports)
+        self.print_summary_button = QPushButton("Print Summary")
+        self.print_summary_button.clicked.connect(self.print_summary)
         self.print_all_button = QPushButton("Print All")
         self.print_all_button.clicked.connect(self.print_all_reports)
         self.export_all_button = QPushButton("Export All")
@@ -754,6 +756,7 @@ class BatchPage(Page):
         row.addStretch()
         row.addWidget(self.edit_button)
         row.addWidget(self.view_button)
+        row.addWidget(self.print_summary_button)
         row.addWidget(self.print_all_button)
         row.addWidget(self.export_all_button)
         self.root.addLayout(row)
@@ -835,6 +838,21 @@ class BatchPage(Page):
             return
         document = QTextDocument()
         document.setHtml(_printable_report_html("\n\n".join(reports), title="CFS Batch Price Reports"))
+        document.print_(printer)
+
+    def print_summary(self) -> None:
+        if self._batch_is_running():
+            return
+        items = self.main_window.state.batch_items
+        if not items:
+            QMessageBox.information(self, "No batch to print", "Import a batch CSV before printing the summary.")
+            return
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        document = QTextDocument()
+        document.setHtml(_printable_batch_summary_html(items, self.main_window.state.batch_source_path))
         document.print_(printer)
 
     def export_all_reports(self) -> None:
@@ -947,6 +965,7 @@ class BatchPage(Page):
         self.back_button.setEnabled(not running)
         self.edit_button.setText("Done Editing" if self.edit_mode else "Edit Batch")
         self.view_button.setEnabled(self._all_rows_reportable())
+        self.print_summary_button.setEnabled(not running and has_items)
         self.print_all_button.setEnabled(not running and has_finished)
         self.export_all_button.setEnabled(not running and has_finished)
 
@@ -2053,6 +2072,95 @@ def _printable_report_html(text: str, title: str = "CFS Price Report") -> str:
 </body>
 </html>
 """
+
+
+def _printable_batch_summary_html(items: list[dict[str, Any]], source_path: str = "") -> str:
+    rows = [_batch_summary_print_row(index, item) for index, item in enumerate(items, start=1)]
+    body_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(row['order'])}</td>"
+        f"<td>{html.escape(row['device'])}</td>"
+        f"<td>{html.escape(row['summary'])}</td>"
+        f"<td>{html.escape(row['estimate'])}</td>"
+        f"<td>{html.escape(row['status'])}</td>"
+        f"<td>{html.escape(row['issue'])}</td>"
+        "</tr>"
+        for row in rows
+    )
+    source = html.escape(source_path or "Imported batch")
+    row_count = len(items)
+    return f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{
+      color: #111827;
+      font-family: Arial, sans-serif;
+      font-size: 9pt;
+      line-height: 1.3;
+    }}
+    h1 {{
+      font-size: 16pt;
+      margin: 0 0 6pt;
+    }}
+    .meta {{
+      color: #374151;
+      margin: 0 0 10pt;
+    }}
+    table {{
+      border-collapse: collapse;
+      width: 100%;
+    }}
+    th, td {{
+      border: 1px solid #9ca3af;
+      padding: 4pt 5pt;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{
+      background: #f3f4f6;
+      font-weight: 700;
+    }}
+    td:nth-child(1), td:nth-child(4), td:nth-child(5) {{
+      white-space: nowrap;
+    }}
+  </style>
+</head>
+<body>
+  <h1>CFS Batch Summary</h1>
+  <p class="meta">Source: {source}<br>Rows: {row_count}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Order</th>
+        <th>Device</th>
+        <th>Summary</th>
+        <th>Estimate</th>
+        <th>Status</th>
+        <th>Issue</th>
+      </tr>
+    </thead>
+    <tbody>
+      {body_rows}
+    </tbody>
+  </table>
+</body>
+</html>
+"""
+
+
+def _batch_summary_print_row(index: int, item: dict[str, Any]) -> dict[str, str]:
+    values = item.get("values") or {}
+    return {
+        "order": _batch_order_label(index - 1, item),
+        "device": _display_value(item.get("device_type"), "device_type"),
+        "summary": batch_item_summary(values),
+        "estimate": _batch_estimate_text(item),
+        "status": str(item.get("status") or "Ready"),
+        "issue": _batch_issue_text(item),
+    }
 
 
 def _format_source_counts(source_counts: Any) -> str:
