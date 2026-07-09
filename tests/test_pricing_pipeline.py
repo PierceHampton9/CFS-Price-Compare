@@ -337,7 +337,7 @@ class PricingPipelineTests(unittest.TestCase):
         specs = {
             "device_type": "computer",
             "brand": "Lenovo",
-            "model": "20W9S23S00",
+            "model": "20ZZS23S00",
             "form_factor": "laptop",
             "cpu_short": "i7-1185G7",
             "ram_gb": 16,
@@ -345,7 +345,7 @@ class PricingPipelineTests(unittest.TestCase):
         }
         refurb = FakeSource(
             {
-                "Lenovo 20W9S23S00": [
+                "Lenovo 20ZZS23S00": [
                     _refurb_listing(
                         "Lenovo ThinkPad X1 Carbon Gen 9 Laptop i7-1185G7 16GB 512GB",
                         650,
@@ -358,7 +358,7 @@ class PricingPipelineTests(unittest.TestCase):
 
         result = price_specs(specs, [refurb], limit_per_query=5)
 
-        self.assertEqual(refurb.calls[0], ("Lenovo 20W9S23S00", 5))
+        self.assertEqual(refurb.calls[0], ("Lenovo 20ZZS23S00", 5))
         self.assertEqual(result["device_identification"]["status"], "identified")
         self.assertEqual(result["specs"]["search_model"], "ThinkPad X1 Carbon Gen 9")
         self.assertEqual(result["median_price_cad"], 650.00)
@@ -369,13 +369,13 @@ class PricingPipelineTests(unittest.TestCase):
         specs = {
             "device_type": "computer",
             "brand": "Lenovo",
-            "model": "20W9S23S00",
+            "model": "20ZZS23S00",
             "model_is_machine_type": True,
         }
         source = FakeSource(
             {
-                "Lenovo 20W9S23S00": [],
-                "20W9S23S00": [],
+                "Lenovo 20ZZS23S00": [],
+                "20ZZS23S00": [],
                 "Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB": [
                     _listing(
                         "Lenovo ThinkPad X1 Carbon Gen 9 i7-1185G7 16GB 512GB",
@@ -395,7 +395,7 @@ class PricingPipelineTests(unittest.TestCase):
             manufacturer_lookup=lambda _specs, _identifier: {
                 "source": "manufacturer:lenovo",
                 "title": "Lenovo ThinkPad X1 Carbon Gen 9 Laptop",
-                "url": "https://psref.lenovo.com/Search?kw=20W9S23S00",
+                "url": "https://psref.lenovo.com/Search?kw=20ZZS23S00",
                 "score": 13,
                 "confidence": "high",
                 "enriched_specs": {
@@ -664,6 +664,29 @@ class PricingPipelineTests(unittest.TestCase):
         self.assertEqual(result["source_counts"], {"ebay": 1})
         self.assertEqual(result["excluded_reasons"], {"storage_mismatch": 1})
 
+    def test_detected_laptop_allows_upgraded_storage_with_warning(self):
+        ebay = FakeSource(
+            {
+                "20XW004AUS": [],
+                "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB": [
+                    _listing(
+                        "Lenovo ThinkPad X13 Yoga i5-1135G7 16GB 512GB SSD",
+                        520,
+                        "https://www.ebay.ca/itm/512",
+                    )
+                ],
+                "Lenovo ThinkPad X13 Yoga": [],
+            },
+            name="ebay",
+        )
+
+        specs = dict(_laptop_specs(), storage=[{"size_gb": 256, "type": "SSD"}])
+        result = price_specs(specs, [ebay], limit_per_query=5)
+
+        self.assertEqual(result["median_price_cad"], 520.00)
+        self.assertEqual(result["excluded_count"], 0)
+        self.assertIn("mixed_storage", result["listing_warnings"])
+
     def test_weak_amazon_renewed_match_falls_back_to_ebay(self):
         ebay = FakeSource(
             {
@@ -808,7 +831,7 @@ class FailingSource:
     def __init__(self, name):
         self.name = name
 
-    def search(self, _query, _max_results):
+    def search(self, query, max_results):
         raise RuntimeError("source unavailable")
 
 

@@ -7,7 +7,7 @@ class DeviceLookupTests(unittest.TestCase):
     def test_enriches_computer_specs_from_exact_model_lookup(self):
         source = FakeLookupSource(
             {
-                "Lenovo 20W9S23S00": [
+                "Lenovo 20ZZS23S00": [
                     {
                         "source": "refurb_io",
                         "title": "Lenovo ThinkPad X1 Carbon Gen 9 Laptop i7-1185G7 16GB 512GB",
@@ -28,25 +28,52 @@ class DeviceLookupTests(unittest.TestCase):
             {
                 "device_type": "computer",
                 "brand": "Lenovo",
-                "model": "20W9S23S00",
+                "model": "20ZZS23S00",
                 "model_is_machine_type": True,
             },
             [source],
         )
 
-        self.assertEqual(source.calls, [("Lenovo 20W9S23S00", 3), ("20W9S23S00", 3)])
+        self.assertEqual(source.calls, [("Lenovo 20ZZS23S00", 3), ("20ZZS23S00", 3)])
+        assert status is not None
         self.assertEqual(status["status"], "identified")
-        self.assertEqual(lookup_results[0]["query"], "Lenovo 20W9S23S00")
+        self.assertEqual(lookup_results[0]["query"], "Lenovo 20ZZS23S00")
         self.assertEqual(enriched["search_model"], "ThinkPad X1 Carbon Gen 9")
         self.assertEqual(enriched["form_factor"], "laptop")
         self.assertEqual(enriched["cpu_short"], "i7-1185G7")
         self.assertEqual(enriched["ram_gb"], 16)
         self.assertEqual(enriched["storage"], [{"size_gb": 512, "type": "SSD"}])
 
+    def test_enriches_known_lenovo_machine_type_from_local_table_before_network_lookup(self):
+        source = FakeLookupSource({})
+
+        enriched, status, lookup_results = enrich_specs_from_model_lookup(
+            {
+                "device_type": "computer",
+                "brand": "LENOVO",
+                "model": "20W9S23S00",
+                "model_is_machine_type": True,
+                "cpu_short": "i7-1185G7",
+                "ram_gb": 16,
+                "storage": [{"size_gb": 238, "type": "SSD"}],
+            },
+            [source],
+        )
+
+        self.assertEqual(source.calls, [])
+        self.assertEqual(lookup_results, [])
+        assert status is not None
+        self.assertEqual(status["status"], "identified")
+        self.assertEqual(status["source"], "local:lenovo_machine_type")
+        self.assertEqual(enriched["brand"], "LENOVO")
+        self.assertEqual(enriched["model"], "20W9S23S00")
+        self.assertEqual(enriched["search_model"], "ThinkPad X13 Yoga Gen 2")
+        self.assertEqual(enriched["form_factor"], "laptop")
+
     def test_low_confidence_lookup_does_not_modify_specs(self):
         source = FakeLookupSource(
             {
-                "Lenovo 20W9S23S00": [
+                "Lenovo 20ZZS23S00": [
                     {
                         "source": "refurb_io",
                         "title": "Dell Latitude laptop i5 16GB",
@@ -55,11 +82,12 @@ class DeviceLookupTests(unittest.TestCase):
                 ]
             }
         )
-        specs = {"device_type": "computer", "brand": "Lenovo", "model": "20W9S23S00"}
+        specs = {"device_type": "computer", "brand": "Lenovo", "model": "20ZZS23S00"}
 
         enriched, status, _lookup_results = enrich_specs_from_model_lookup(specs, [source])
 
         self.assertEqual(enriched, specs)
+        assert status is not None
         self.assertEqual(status["status"], "not_found")
 
     def test_manufacturer_lookup_runs_before_pricing_source_lookup(self):
@@ -69,7 +97,7 @@ class DeviceLookupTests(unittest.TestCase):
             {
                 "device_type": "computer",
                 "brand": "Lenovo",
-                "model": "20W9S23S00",
+                "model": "20ZZS23S00",
                 "model_is_machine_type": True,
             },
             [source],
@@ -92,6 +120,7 @@ class DeviceLookupTests(unittest.TestCase):
 
         self.assertEqual(source.calls, [])
         self.assertEqual(lookup_results, [])
+        assert status is not None
         self.assertEqual(status["status"], "identified")
         self.assertEqual(status["source"], "manufacturer:lenovo")
         self.assertEqual(enriched["search_model"], "ThinkPad X1 Carbon Gen 9")

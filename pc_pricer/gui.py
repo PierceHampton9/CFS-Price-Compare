@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pc_pricer.batch import (
     BatchItem,
@@ -95,14 +95,19 @@ try:  # pragma: no cover - exercised only when PySide6 is installed.
         QWidget,
     )
 except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
-    QApplication = None  # type: ignore[assignment]
-    QThread = object  # type: ignore[assignment]
-    QAbstractItemView = object  # type: ignore[assignment]
-    QButtonGroup = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = object  # type: ignore[assignment]
-    QFileDialog = QGridLayout = QHeaderView = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = object  # type: ignore[assignment]
-    QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = object  # type: ignore[assignment]
-    QTableWidget = QTableWidgetItem = object  # type: ignore[assignment]
-    Qt = type(
+    QApplication = cast(Any, None)
+    _MissingQtClass = cast(Any, object)
+    QThread = _MissingQtClass
+    QAbstractItemView = _MissingQtClass
+    QButtonGroup = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = QHBoxLayout = QLabel = _MissingQtClass
+    QFileDialog = QGridLayout = QHeaderView = QLineEdit = QMainWindow = QMessageBox = QPushButton = QRadioButton = (
+        _MissingQtClass
+    )
+    QPrintDialog = QPrinter = QScrollArea = QStackedWidget = QTextDocument = QToolButton = QVBoxLayout = QWidget = (
+        _MissingQtClass
+    )
+    QTableWidget = QTableWidgetItem = _MissingQtClass
+    Qt = cast(Any, type(
         "Qt",
         (),
         {
@@ -113,11 +118,35 @@ except ModuleNotFoundError:  # pragma: no cover - gives a clear runtime error.
             "NoFocus": 0,
             "TextSelectableByMouse": 0,
         },
-    )  # type: ignore[assignment]
-    QTimer = type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)})  # type: ignore[assignment]
+    ))
+    QTimer = cast(Any, type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)}))
 
-    def Signal(*_args: Any) -> _MissingSignal:  # type: ignore[assignment]
+    def Signal(*_args: Any) -> Any:
         return _MissingSignal()
+
+
+_QAbstractItemView = cast(Any, QAbstractItemView)
+_QDialog = cast(Any, QDialog)
+_QFrame = cast(Any, QFrame)
+_QHeaderView = cast(Any, QHeaderView)
+_QLineEdit = cast(Any, QLineEdit)
+_Qt = cast(Any, Qt)
+FRAME_STYLED_PANEL = cast(Any, getattr(_QFrame, "StyledPanel", 0))
+FRAME_NO_FRAME = cast(Any, getattr(_QFrame, "NoFrame", 0))
+LINE_EDIT_PASSWORD = cast(Any, getattr(_QLineEdit, "Password", 2))
+TABLE_NO_EDIT_TRIGGERS = cast(Any, getattr(_QAbstractItemView, "NoEditTriggers", 0))
+TABLE_SELECT_ROWS = cast(Any, getattr(_QAbstractItemView, "SelectRows", 1))
+TABLE_SINGLE_SELECTION = cast(Any, getattr(_QAbstractItemView, "SingleSelection", 1))
+HEADER_RESIZE_TO_CONTENTS = cast(Any, getattr(_QHeaderView, "ResizeToContents", 3))
+HEADER_STRETCH = cast(Any, getattr(_QHeaderView, "Stretch", 1))
+DIALOG_ACCEPTED = cast(Any, getattr(_QDialog, "Accepted", 1))
+DIALOG_REJECTED = cast(Any, getattr(_QDialog, "Rejected", 0))
+ALIGN_CENTER = cast(Any, getattr(_Qt, "AlignCenter", 0))
+ALIGN_RIGHT = cast(Any, getattr(_Qt, "AlignRight", 0))
+ALIGN_TOP = cast(Any, getattr(_Qt, "AlignTop", 0))
+TEXT_SELECTABLE_BY_MOUSE = cast(Any, getattr(_Qt, "TextSelectableByMouse", 1))
+LINKS_ACCESSIBLE_BY_MOUSE = cast(Any, getattr(_Qt, "LinksAccessibleByMouse", 4))
+NO_FOCUS = cast(Any, getattr(_Qt, "NoFocus", 0))
 
 
 class GuiState:
@@ -445,6 +474,8 @@ class MainWindow(QMainWindow):  # type: ignore[misc]
 
     def save_edited_batch_item(self) -> bool:
         index = self.state.current_batch_index
+        if index is None:
+            return False
         item = self._batch_item(index)
         if item is None:
             return False
@@ -541,7 +572,7 @@ class SourceSelectionPage(Page):
             "Pricing Sources",
             "Choose where the app should search before entering device details.",
         )
-        self.source_checks: dict[str, QCheckBox] = {}
+        self.source_checks: dict[str, Any] = {}
         self.error = QLabel()
         self.error.setObjectName("errorText")
         self.error.setWordWrap(True)
@@ -564,10 +595,10 @@ class SourceSelectionPage(Page):
             return
         self.main_window.continue_after_source_selection()
 
-    def _source_panel(self) -> QFrame:
+    def _source_panel(self) -> Any:
         panel = QFrame()
         panel.setObjectName("sectionPanel")
-        panel.setFrameShape(QFrame.StyledPanel)
+        panel.setFrameShape(FRAME_STYLED_PANEL)
         layout = QVBoxLayout(panel)
         layout.setSpacing(6)
 
@@ -606,7 +637,7 @@ class CredentialsPage(Page):
         )
         self.client_id = QLineEdit()
         self.client_secret = QLineEdit()
-        self.client_secret.setEchoMode(QLineEdit.Password)
+        self.client_secret.setEchoMode(LINE_EDIT_PASSWORD)
         self.status = QLabel()
         self.status.setObjectName("statusText")
 
@@ -712,26 +743,26 @@ class BatchPage(Page):
 
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Order", "Device", "Summary", "Estimate", "Status", "Issue", "Action"])
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(TABLE_NO_EDIT_TRIGGERS)
+        self.table.setSelectionBehavior(TABLE_SELECT_ROWS)
+        self.table.setSelectionMode(TABLE_SINGLE_SELECTION)
         self.table.setWordWrap(True)
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.Stretch)
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, HEADER_RESIZE_TO_CONTENTS)
+        header.setSectionResizeMode(1, HEADER_RESIZE_TO_CONTENTS)
+        header.setSectionResizeMode(2, HEADER_STRETCH)
+        header.setSectionResizeMode(3, HEADER_RESIZE_TO_CONTENTS)
+        header.setSectionResizeMode(4, HEADER_RESIZE_TO_CONTENTS)
+        header.setSectionResizeMode(5, HEADER_STRETCH)
+        header.setSectionResizeMode(6, HEADER_RESIZE_TO_CONTENTS)
         self.table.cellDoubleClicked.connect(lambda row, _column: self.view_selected(row))
         self.root.addWidget(self.table, 1)
 
         self.status_panel = QFrame()
         self.status_panel.setObjectName("sectionPanel")
-        self.status_panel.setFrameShape(QFrame.StyledPanel)
+        self.status_panel.setFrameShape(FRAME_STYLED_PANEL)
         self.status_layout = QGridLayout(self.status_panel)
         self.status_layout.setColumnStretch(1, 1)
         self.status_layout.setHorizontalSpacing(12)
@@ -834,7 +865,7 @@ class BatchPage(Page):
             return
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
-        if dialog.exec() != QDialog.Accepted:
+        if dialog.exec() != DIALOG_ACCEPTED:
             return
         document = QTextDocument()
         document.setHtml(_printable_report_html("\n\n".join(reports), title="CFS Batch Price Reports"))
@@ -849,7 +880,7 @@ class BatchPage(Page):
             return
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
-        if dialog.exec() != QDialog.Accepted:
+        if dialog.exec() != DIALOG_ACCEPTED:
             return
         document = QTextDocument()
         document.setHtml(_printable_batch_summary_html(items, self.main_window.state.batch_source_path))
@@ -894,7 +925,7 @@ class BatchPage(Page):
             return None
         return index
 
-    def _row_action_widget(self, row: int, item: dict[str, Any]) -> QWidget:
+    def _row_action_widget(self, row: int, item: dict[str, Any]) -> Any:
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1058,10 +1089,10 @@ class SpecsPage(Page):
         )
         self.form_container = QWidget()
         self.form = QFormLayout(self.form_container)
-        self.inputs: dict[str, QWidget] = {}
+        self.inputs: dict[str, Any] = {}
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(FRAME_NO_FRAME)
         scroll.setWidget(self.form_container)
         self.root.addWidget(scroll, 1)
         self.error = QLabel()
@@ -1124,7 +1155,7 @@ class LoadingPage(Page):
     def __init__(self, window: MainWindow) -> None:
         super().__init__(window, "Searching", "Searching configured pricing sources and preparing the price report.")
         self.message = QLabel()
-        self.message.setAlignment(Qt.AlignCenter)
+        self.message.setAlignment(ALIGN_CENTER)
         self.root.addStretch()
         self.root.addWidget(self.message)
         self.root.addStretch()
@@ -1145,7 +1176,7 @@ class ReportPage(Page):
         )
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setFrameShape(FRAME_NO_FRAME)
         self.content = QWidget()
         self.content_layout = QVBoxLayout(self.content)
         self.content_layout.setSpacing(14)
@@ -1247,7 +1278,7 @@ class ReportPage(Page):
 
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
-        if dialog.exec() != QDialog.Accepted:
+        if dialog.exec() != DIALOG_ACCEPTED:
             return
 
         document = QTextDocument()
@@ -1463,7 +1494,7 @@ class ReportPage(Page):
         if not isinstance(identification, dict) or not identification.get("attempted"):
             return
 
-        rows = [
+        rows: list[tuple[str, Any, str]] = [
             (
                 "Status",
                 str(identification.get("status") or "unknown").replace("_", " ").title(),
@@ -1556,7 +1587,7 @@ class ReportPage(Page):
             source = _format_source_name(diagnostic.get("source"))
             verified = "Verified" if diagnostic.get("source_match_verified") else "Not Verified"
             title = diagnostic.get("title") or "Untitled listing"
-            rows = [
+            rows: list[tuple[str, Any, str]] = [
                 ("Source", source, "The pricing source that returned this candidate."),
                 ("Candidate", f"{index}. {title}", "Candidate listing returned by a non-eBay pricing source."),
                 ("Match", verified, "Whether deterministic spec matching allowed this listing to affect the weighted estimate."),
@@ -1676,7 +1707,7 @@ class ReportPage(Page):
             applied_removed = comparable_id in self.main_window.state.applied_excluded_comparable_ids or listing.get("excluded_by_user") is True
             card = QFrame()
             card.setObjectName("listingCardRemoved" if pending_removed else "listingCard")
-            card.setFrameShape(QFrame.StyledPanel)
+            card.setFrameShape(FRAME_STYLED_PANEL)
             layout = QVBoxLayout(card)
             layout.setSpacing(6)
 
@@ -1730,7 +1761,7 @@ class ReportPage(Page):
             self.content_layout.addWidget(_section_title(title))
         panel = QFrame()
         panel.setObjectName("sectionPanel")
-        panel.setFrameShape(QFrame.StyledPanel)
+        panel.setFrameShape(FRAME_STYLED_PANEL)
         layout = QVBoxLayout(panel)
         layout.setSpacing(7)
         for row in rows:
@@ -1742,7 +1773,7 @@ class ReportPage(Page):
     def _add_message(self, title: str, message: str, object_name: str) -> None:
         panel = QFrame()
         panel.setObjectName(object_name)
-        panel.setFrameShape(QFrame.StyledPanel)
+        panel.setFrameShape(FRAME_STYLED_PANEL)
         layout = QVBoxLayout(panel)
         heading = _selectable_label(title)
         heading.setObjectName("messageTitle")
@@ -1813,7 +1844,8 @@ def _batch_issue_text(item: dict[str, Any]) -> str:
         return " ".join(str(error) for error in errors)
     if item.get("error"):
         return str(item.get("error"))
-    result = item.get("result") if isinstance(item.get("result"), dict) else {}
+    raw_result = item.get("result")
+    result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
     flags = result.get("confidence_flags") if result else []
     if flags:
         comparable_count = _safe_int(result.get("count"))
@@ -1872,7 +1904,7 @@ def _section_title(text: str) -> QLabel:  # type: ignore[misc]
 def _metric_card(title: str, value: str, note: str, help_text: str) -> QFrame:  # type: ignore[misc]
     card = QFrame()
     card.setObjectName("metricCard")
-    card.setFrameShape(QFrame.StyledPanel)
+    card.setFrameShape(FRAME_STYLED_PANEL)
     layout = QGridLayout(card)
     layout.setColumnStretch(2, 1)
     layout.setHorizontalSpacing(8)
@@ -1883,11 +1915,11 @@ def _metric_card(title: str, value: str, note: str, help_text: str) -> QFrame:  
     value_label = _selectable_label(value)
     value_label.setObjectName("metricValue")
     value_label.setWordWrap(True)
-    value_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+    value_label.setAlignment(ALIGN_RIGHT | ALIGN_TOP)
     note_label = _selectable_label(note)
     note_label.setObjectName("metricNote")
     note_label.setWordWrap(True)
-    note_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+    note_label.setAlignment(ALIGN_RIGHT | ALIGN_TOP)
 
     layout.addWidget(title_label, 0, 0)
     layout.addWidget(_info_button(help_text), 0, 1)
@@ -1896,7 +1928,7 @@ def _metric_card(title: str, value: str, note: str, help_text: str) -> QFrame:  
     return card
 
 
-def _detail_row(label: str, value: str | QLabel, help_text: str = "") -> QHBoxLayout:  # type: ignore[misc]
+def _detail_row(label: str, value: Any, help_text: str = "") -> QHBoxLayout:  # type: ignore[misc]
     row = QHBoxLayout()
     row.setSpacing(8)
     label_widget = _selectable_label(label)
@@ -1910,9 +1942,10 @@ def _detail_row(label: str, value: str | QLabel, help_text: str = "") -> QHBoxLa
         _make_label_selectable(value_widget, links=True)
     else:
         value_widget = _selectable_label(value)
+    value_widget = cast(Any, value_widget)
     value_widget.setObjectName("detailValue")
     value_widget.setWordWrap(True)
-    value_widget.setAlignment(Qt.AlignRight | Qt.AlignTop)
+    value_widget.setAlignment(ALIGN_RIGHT | ALIGN_TOP)
     row.addWidget(value_widget, 1)
     return row
 
@@ -1924,9 +1957,9 @@ def _selectable_label(text: str) -> QLabel:  # type: ignore[misc]
 
 
 def _make_label_selectable(label: QLabel, links: bool = False) -> None:  # type: ignore[misc]
-    flags = Qt.TextSelectableByMouse
+    flags = TEXT_SELECTABLE_BY_MOUSE
     if links:
-        flags = flags | Qt.LinksAccessibleByMouse
+        flags = flags | LINKS_ACCESSIBLE_BY_MOUSE
     label.setTextInteractionFlags(flags)
 
 
@@ -1936,7 +1969,7 @@ def _info_button(help_text: str) -> QToolButton:  # type: ignore[misc]
     button.setObjectName("infoButton")
     button.setToolTip(help_text or "Additional information.")
     button.setAutoRaise(True)
-    button.setFocusPolicy(Qt.NoFocus)
+    button.setFocusPolicy(NO_FOCUS)
     return button
 
 

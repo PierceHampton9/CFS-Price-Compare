@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, cast
 
 from pc_pricer.aggregator import aggregate_listings
 from pc_pricer.capacity import capacity_values_gb
@@ -89,6 +89,7 @@ def price_specs(
     if tier_excluded_reasons:
         filtered["excluded_count"] += sum(tier_excluded_reasons.values())
         filtered["excluded_reasons"] = _merge_reason_counts(filtered["excluded_reasons"], tier_excluded_reasons)
+    pricing_listings = _tag_pricing_listing_context(pricing_listings, pricing_specs)
     _mark_included_in_pricing(normalized_listings, pricing_listings)
     source_diagnostics = _source_diagnostics(
         normalized_listings,
@@ -213,7 +214,7 @@ def _source_list(source: ListingSource | Sequence[ListingSource]) -> list[Listin
     if isinstance(source, Sequence) and not isinstance(source, (str, bytes, bytearray)):
         return [item for item in source if getattr(item, "enabled", True)]
     if getattr(source, "enabled", True):
-        return [source]
+        return [cast(ListingSource, source)]
     return []
 
 
@@ -327,10 +328,11 @@ def _add_source_runtime_stats(status: dict[str, Any], stats: Any) -> None:
     status["dropped_candidate_count"] = _safe_int(status.get("dropped_candidate_count")) + _safe_int(
         stats.get("dropped_candidate_count")
     )
-    status["dropped_candidate_reasons"] = _merge_reason_counts(
-        status.get("dropped_candidate_reasons") if isinstance(status.get("dropped_candidate_reasons"), dict) else {},
-        stats.get("dropped_candidate_reasons") if isinstance(stats.get("dropped_candidate_reasons"), dict) else {},
-    )
+    raw_status_reasons = status.get("dropped_candidate_reasons")
+    raw_stats_reasons = stats.get("dropped_candidate_reasons")
+    status_reasons = cast(dict[str, int], raw_status_reasons if isinstance(raw_status_reasons, dict) else {})
+    stats_reasons = cast(dict[str, int], raw_stats_reasons if isinstance(raw_stats_reasons, dict) else {})
+    status["dropped_candidate_reasons"] = _merge_reason_counts(status_reasons, stats_reasons)
     status["detail_page_count"] = _safe_int(status.get("detail_page_count")) + _safe_int(stats.get("detail_page_count"))
     status["detail_error_count"] = _safe_int(status.get("detail_error_count")) + _safe_int(stats.get("detail_error_count"))
     detail_urls = status.setdefault("detail_urls", [])
@@ -517,6 +519,18 @@ def _pricing_listings(listings: list[dict[str, Any]]) -> tuple[list[dict[str, An
     return verified_or_nonretail, excluded_reasons
 
 
+def _tag_pricing_listing_context(listings: list[dict[str, Any]], specs: dict[str, Any]) -> list[dict[str, Any]]:
+    target_storage = _target_storage_gb(specs)
+    if not target_storage:
+        return listings
+    tagged = []
+    for listing in listings:
+        copy = dict(listing)
+        copy["target_storage_gb"] = target_storage
+        tagged.append(copy)
+    return tagged
+
+
 def _tier_gated_pricing_listings(
     listings: list[dict[str, Any]],
     min_specific_count: int,
@@ -619,7 +633,8 @@ def _source_match_hard_exclusion_reason(listing: dict[str, Any]) -> str | None:
     if "ram_mismatch" in reasons:
         return "ram_mismatch"
     if "storage_mismatch" in reasons:
-        return "storage_mismatch"
+        if not listing.get("storage_mismatch_allowed"):
+            return "storage_mismatch"
     return None
 
 
@@ -909,7 +924,13 @@ def _verified_refurb_match(
 
     storage_gb = _target_storage_gb(specs)
     if storage_gb and not _storage_capacity_matches(text, storage_gb, specs):
-        reasons.append("storage_mismatch")
+        if _computer_storage_capacity_near_match(text, storage_gb, specs):
+            updated_source_specs = dict(listing.get("source_specs") or {})
+            updated_source_specs["storage_mismatch_allowed"] = True
+            listing["source_specs"] = updated_source_specs
+            listing["storage_mismatch_allowed"] = True
+        else:
+            reasons.append("storage_mismatch")
 
     cpu_short = specs.get("cpu_short")
     if cpu_short and not _cpu_matches(text, str(cpu_short)):
@@ -1028,6 +1049,30 @@ def _storage_capacity_matches(text: str, capacity_gb: int, specs: dict[str, Any]
     lower_bound = capacity_gb / 2
     upper_bound = capacity_gb * 2
     return any(lower_bound <= value <= upper_bound for value in capacity_values_gb(text))
+
+
+def _computer_storage_capacity_near_match(text: str, capacity_gb: int, specs: dict[str, Any]) -> bool:
+    device_type = str(specs.get("device_type") or "").strip().lower()
+    if device_type != "computer" or capacity_gb < 128:
+        return False
+    allowed = _adjacent_computer_storage_capacities(capacity_gb)
+    return any(value in allowed for value in capacity_values_gb(text))
+
+
+def _adjacent_computer_storage_capacities(capacity_gb: int) -> set[int]:
+    if capacity_gb <= 128:
+        return {128, 256}
+    if capacity_gb <= 256:
+        return {256, 512}
+    common = [512, 1024, 2048]
+    nearest = min(common, key=lambda value: abs(value - capacity_gb))
+    index = common.index(nearest)
+    allowed = {nearest}
+    if index > 0:
+        allowed.add(common[index - 1])
+    if index + 1 < len(common):
+        allowed.add(common[index + 1])
+    return allowed
 
 
 def _cpu_matches(text: str, cpu_short: str) -> bool:

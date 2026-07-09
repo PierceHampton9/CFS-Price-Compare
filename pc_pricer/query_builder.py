@@ -24,7 +24,7 @@ def build_queries(specs: dict[str, Any]) -> list[dict[str, Any]]:
 
     form_factor = _clean(specs.get("form_factor"))
 
-    if _uses_laptop_style_queries(form_factor):
+    if form_factor is not None and _uses_laptop_style_queries(form_factor):
         queries = _laptop_queries(specs, form_factor)
     else:
         queries = _desktop_queries(specs)

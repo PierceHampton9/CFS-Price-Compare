@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from pc_pricer.sources.amazon_renewed import (
+    AmazonCandidate,
     AmazonRenewedSource,
     candidates_from_search_rows,
     parse_product_page,
@@ -9,6 +10,7 @@ from pc_pricer.sources.amazon_renewed import (
     _best_price,
     _fallback_price,
     _looks_like_blocked_page,
+    _rank_search_candidates,
 )
 
 
@@ -24,9 +26,10 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertEqual(candidates[0].condition_raw, "Amazon Renewed")
         self.assertIs(candidates[0].available, True)
         self.assertEqual(candidates[0].shipping_cad, 0.0)
-        self.assertEqual(candidates[0].source_specs["ram_gb"], 16)
-        self.assertEqual(candidates[0].source_specs["storage_gb"], 256)
-        self.assertEqual(candidates[0].source_specs["cpu_short"], "i5-1135G7")
+        source_specs = _source_specs(candidates[0])
+        self.assertEqual(source_specs["ram_gb"], 16)
+        self.assertEqual(source_specs["storage_gb"], 256)
+        self.assertEqual(source_specs["cpu_short"], "i5-1135G7")
 
     def test_parse_product_page_extracts_detail_fields(self):
         candidate = parse_product_page(_product_html(), "https://www.amazon.ca/dp/B0AMAZON01")
@@ -206,7 +209,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             "https://www.amazon.ca/dp/B0AMAZON01",
         )
 
-        self.assertEqual(candidate.source_specs["storage_gb"], 256)
+        self.assertEqual(_source_specs(candidate)["storage_gb"], 256)
 
     def test_product_detail_specs_do_not_treat_lone_ram_as_storage(self):
         candidate = parse_product_page(
@@ -226,7 +229,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             "https://www.amazon.ca/dp/B0AMAZON01",
         )
 
-        self.assertNotIn("storage_gb", candidate.source_specs)
+        self.assertNotIn("storage_gb", _source_specs(candidate))
 
     def test_candidates_from_rendered_rows_do_not_require_legacy_card_shape(self):
         candidates = candidates_from_search_rows(
@@ -310,7 +313,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(candidates[0].source_specs["brand"], "Apple")
+        self.assertEqual(_source_specs(candidates[0])["brand"], "Apple")
 
     def test_candidates_prefer_explicit_brand_over_apple_product_word(self):
         candidates = candidates_from_search_rows(
@@ -325,7 +328,7 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(candidates[0].source_specs["brand"], "Samsung")
+        self.assertEqual(_source_specs(candidates[0])["brand"], "Samsung")
 
     def test_search_uses_injected_browser_fetcher_and_detail_pages(self):
         fetched = []
@@ -571,6 +574,21 @@ class AmazonRenewedSourceTests(unittest.TestCase):
         self.assertIn("B0EXACT000", fetched[1])
         self.assertEqual(listings[0]["item_id"], "B0EXACT000")
 
+    def test_search_ranking_penalizes_generation_and_cpu_conflicts(self):
+        candidates = [
+            _candidate("Lenovo ThinkPad X13 Yoga Gen 1 i7-10610U 16GB 512GB Renewed"),
+            _candidate("Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB Renewed"),
+            _candidate("Lenovo ThinkPad X13 Yoga Gen 2 i7-1185G7 16GB 512GB Renewed"),
+        ]
+
+        ranked = _rank_search_candidates(
+            candidates,
+            "Lenovo ThinkPad X13 Yoga Gen 2 i7-1185G7 16GB Renewed",
+        )
+
+        self.assertEqual(ranked[0].title, "Lenovo ThinkPad X13 Yoga Gen 2 i7-1185G7 16GB 512GB Renewed")
+        self.assertEqual(ranked[-1].title, "Lenovo ThinkPad X13 Yoga Gen 1 i7-10610U 16GB 512GB Renewed")
+
     def test_missing_price_returns_no_listing(self):
         source = AmazonRenewedSource(page_fetcher=lambda _url: _search_html(price=None), max_product_pages=0)
 
@@ -665,9 +683,10 @@ class AmazonRenewedSourceTests(unittest.TestCase):
             "https://www.amazon.ca/dp/B0AMAZON01",
         )
 
-        self.assertEqual(candidate.source_specs["ram_gb"], 16)
-        self.assertEqual(candidate.source_specs["storage_gb"], 256)
-        self.assertEqual(candidate.source_specs["cpu_short"], "i5-1135G7")
+        source_specs = _source_specs(candidate)
+        self.assertEqual(source_specs["ram_gb"], 16)
+        self.assertEqual(source_specs["storage_gb"], 256)
+        self.assertEqual(source_specs["cpu_short"], "i5-1135G7")
 
     def test_skips_one_failed_detail_page_and_keeps_later_candidates(self):
         def fetcher(url):
@@ -707,11 +726,11 @@ class AmazonRenewedSourceTests(unittest.TestCase):
 
 
 def _search_html(
-    title="Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB",
-    price="$599.99",
-    url="/Lenovo-ThinkPad/dp/B0AMAZON01",
-    include_renewed=True,
-    asin="B0AMAZON01",
+    title: str = "Lenovo ThinkPad X13 Yoga Renewed i5-1135G7 16GB 256GB",
+    price: str | None = "$599.99",
+    url: str = "/Lenovo-ThinkPad/dp/B0AMAZON01",
+    include_renewed: bool = True,
+    asin: str = "B0AMAZON01",
 ):
     price_html = (
         f"""
@@ -736,6 +755,26 @@ def _search_html(
   </body>
 </html>
 """
+
+
+def _source_specs(candidate):
+    source_specs = candidate.source_specs
+    assert source_specs is not None
+    return source_specs
+
+
+def _candidate(title):
+    return AmazonCandidate(
+        title=title,
+        item_price_cad=499.99,
+        url="https://www.amazon.ca/Lenovo-ThinkPad/dp/B0AMAZON01",
+        available=True,
+        condition_raw="Renewed",
+        shipping_cad=0.0,
+        shipping_is_estimated=False,
+        prime_signal=True,
+        source_specs={},
+    )
 
 
 def _two_result_search_html():

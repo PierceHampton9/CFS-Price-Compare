@@ -645,11 +645,14 @@ class ListingFilterTests(unittest.TestCase):
 
         self.assertEqual(
             [listing["title"] for listing in result["listings"]],
-            ["Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD"],
+            [
+                "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 256GB SSD",
+                "Lenovo ThinkPad X13 Yoga Gen 2 i5-1135G7 16GB 512GB SSD",
+            ],
         )
         self.assertEqual(
             result["excluded_reasons"],
-            {"model_mismatch": 1, "ram_mismatch": 1, "cpu_mismatch": 1, "storage_mismatch": 1},
+            {"model_mismatch": 1, "ram_mismatch": 1, "cpu_mismatch": 1},
         )
 
     def test_computer_filter_allows_adjacent_storage_for_larger_drives(self):

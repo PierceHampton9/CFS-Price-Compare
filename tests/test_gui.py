@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import tempfile
+from typing import Any, cast
 import unittest
 from unittest.mock import patch
 
@@ -342,10 +343,10 @@ class GuiImportTests(unittest.TestCase):
         self.assertEqual(window.state.batch_items[0]["status"], "Ready")
         self.assertEqual(window.state.batch_items[1]["status"], "Invalid")
         self.assertEqual(window.batch_page.table.columnCount(), 7)
-        self.assertEqual(window.batch_page.table.item(0, 0).text(), "1")
-        self.assertEqual(window.batch_page.table.item(0, 1).text(), "Computer")
-        self.assertEqual(window.batch_page.table.item(0, 3).text(), "")
-        self.assertIn("Form factor is required.", window.batch_page.table.item(1, 5).text())
+        self.assertEqual(_table_text(window.batch_page.table, 0, 0), "1")
+        self.assertEqual(_table_text(window.batch_page.table, 0, 1), "Computer")
+        self.assertEqual(_table_text(window.batch_page.table, 0, 3), "")
+        self.assertIn("Form factor is required.", _table_text(window.batch_page.table, 1, 5))
         self.assertIsNotNone(window.batch_page.table.cellWidget(0, 6))
 
         window.close()
@@ -387,8 +388,8 @@ class GuiImportTests(unittest.TestCase):
 
         window.batch_page.refresh()
 
-        self.assertEqual(window.batch_page.table.item(0, 3).text(), "$290.00 CAD")
-        self.assertEqual(window.batch_page.table.item(1, 3).text(), "$497.50 CAD")
+        self.assertEqual(_table_text(window.batch_page.table, 0, 3), "$290.00 CAD")
+        self.assertEqual(_table_text(window.batch_page.table, 1, 3), "$497.50 CAD")
 
         window.close()
 
@@ -406,7 +407,7 @@ class GuiImportTests(unittest.TestCase):
                 "report_text": "completed report",
             }
         ]
-        window.batch_pricing_thread = FakeRunningThread()
+        cast(Any, window).batch_pricing_thread = FakeRunningThread()
 
         window.batch_page.refresh()
 
@@ -477,7 +478,7 @@ class GuiImportTests(unittest.TestCase):
             },
         ]
         window.batch_page.refresh()
-        FakePrintDialog.next_result = gui.QDialog.Accepted
+        FakePrintDialog.next_result = gui.DIALOG_ACCEPTED
         FakeTextDocument.created.clear()
 
         with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
@@ -697,7 +698,7 @@ class GuiImportTests(unittest.TestCase):
         window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
         window.state.report_result = {"count": 1, "median_price_cad": 300, "source_counts": {"ebay": 1}}
         FakeTextDocument.created.clear()
-        FakePrintDialog.next_result = gui.QDialog.Accepted
+        FakePrintDialog.next_result = gui.DIALOG_ACCEPTED
 
         with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
             "pc_pricer.gui.QPrintDialog", FakePrintDialog
@@ -714,7 +715,7 @@ class GuiImportTests(unittest.TestCase):
         self._qt_app()
         window = gui.MainWindow()
         FakeTextDocument.created.clear()
-        FakePrintDialog.next_result = gui.QDialog.Accepted
+        FakePrintDialog.next_result = gui.DIALOG_ACCEPTED
 
         with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
             "pc_pricer.gui.QPrintDialog", FakePrintDialog
@@ -742,7 +743,7 @@ class GuiImportTests(unittest.TestCase):
         window.state.report_text = "Price estimate\nMedian price: $300.00 CAD"
         window.state.report_result = {"count": 1}
         FakeTextDocument.created.clear()
-        FakePrintDialog.next_result = gui.QDialog.Rejected
+        FakePrintDialog.next_result = gui.DIALOG_REJECTED
 
         with patch("pc_pricer.gui.QPrinter", FakePrinter), patch(
             "pc_pricer.gui.QPrintDialog", FakePrintDialog
@@ -751,7 +752,7 @@ class GuiImportTests(unittest.TestCase):
 
         self.assertEqual(FakeTextDocument.created, [])
 
-        FakePrintDialog.next_result = gui.QDialog.Accepted
+        FakePrintDialog.next_result = gui.DIALOG_ACCEPTED
         window.close()
 
     def _qt_app(self):
@@ -777,8 +778,8 @@ class FakeSignal:
 
 
 class FakePricingThread:
-    created = []
-    next_error = None
+    created: list[Any] = []
+    next_error: str | None = None
 
     def __init__(self, device_type, specs, _parent=None) -> None:
         self.device_type = device_type
@@ -803,8 +804,8 @@ class FakePricingThread:
 
 
 class FakeDetectionThread:
-    created = []
-    next_error = None
+    created: list[Any] = []
+    next_error: str | None = None
 
     def __init__(self, parent=None) -> None:
         self.parent = parent
@@ -838,7 +839,7 @@ class FakePrinter:
 
 
 class FakePrintDialog:
-    next_result = None
+    next_result: Any = None
 
     def __init__(self, printer, _parent=None) -> None:
         self.printer = printer
@@ -848,7 +849,7 @@ class FakePrintDialog:
 
 
 class FakeTextDocument:
-    created = []
+    created: list[Any] = []
 
     def __init__(self) -> None:
         self.html = ""
@@ -865,6 +866,12 @@ class FakeTextDocument:
 class FakeRunningThread:
     def isRunning(self) -> bool:
         return True
+
+
+def _table_text(table: Any, row: int, column: int) -> str:
+    item = table.item(row, column)
+    assert item is not None
+    return item.text()
 
 
 if __name__ == "__main__":

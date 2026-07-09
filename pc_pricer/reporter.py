@@ -23,6 +23,7 @@ LIMITATION_LABELS = {
 WARNING_LABELS = {
     "unknown_shipping": "Unknown shipping on one or more comparables",
     "high_shipping": "High shipping on one or more comparables",
+    "mixed_storage": "Mixed storage sizes across comparable listings",
     "non_canadian_location": "Non-Canadian location on one or more comparables",
 }
 

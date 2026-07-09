@@ -1,6 +1,10 @@
 import unittest
+from pathlib import Path
 
 from pc_pricer.sources.refurb_io import RefurbIoSource, parse_product_html
+
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "refurb_io"
 
 
 class RefurbIoSourceTests(unittest.TestCase):
@@ -169,6 +173,26 @@ class RefurbIoSourceTests(unittest.TestCase):
 
         self.assertEqual(apple.specs["cpu_short"], "M2")
         self.assertEqual(ultra.specs["cpu_short"], "Core Ultra 7 155U")
+
+    def test_parses_refurb_io_product_fixture(self):
+        html = (FIXTURE_DIR / "optiplex_7050_out_of_stock.html").read_text(encoding="utf-8")
+
+        product = parse_product_html(html)
+
+        self.assertEqual(
+            product.title,
+            "Dell OptiPlex 7050 SFF Desktop i5-6500 3.2GHz ,16GB RAM 512GB Solid State Drive Windows 10 Pro-Refurbished",
+        )
+        self.assertEqual(product.item_price_cad, 449.0)
+        self.assertIs(product.available, False)
+        self.assertEqual(product.condition_raw, "Refurbished")
+        self.assertEqual(product.shipping_cad, 0.0)
+        self.assertFalse(product.shipping_is_estimated)
+        self.assertEqual(product.sku, "610747")
+        self.assertEqual(product.specs["brand"], "Dell")
+        self.assertEqual(product.specs["model"], "Dell 7050")
+        self.assertEqual(product.specs["ram_gb"], 16)
+        self.assertEqual(product.specs["storage_gb"], 512)
 
 
 def _product_html(

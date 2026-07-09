@@ -13,9 +13,6 @@ LOOKUP_SOURCE_NAMES = {"refurb_io", "amazon_renewed"}
 
 
 class DeviceLookupSource(Protocol):
-    name: str
-    enabled: bool
-
     def search(self, query: str, max_results: int) -> list[dict[str, Any]]:
         """Return search results that may contain title and source_specs metadata."""
         ...
@@ -38,6 +35,26 @@ def enrich_specs_from_model_lookup(
 
     brand = _clean(specs.get("brand"))
     queries = _dedupe([_join_terms(brand, identifier), identifier])
+    local_candidate = _local_model_candidate(specs, identifier)
+    if local_candidate:
+        enriched, added_fields = _merge_enriched_specs(
+            specs,
+            identifier,
+            local_candidate.get("enriched_specs") or {},
+        )
+        status = _lookup_status(
+            identifier,
+            queries,
+            "identified",
+            source=str(local_candidate.get("source") or "local_model_table"),
+            title=_clean(local_candidate.get("title")),
+            confidence="high",
+            score=_safe_int(local_candidate.get("score")),
+            added_fields=added_fields,
+            candidates=_public_candidates([local_candidate]),
+        )
+        return enriched, status, []
+
     if manufacturer_lookup is not None:
         try:
             manufacturer_candidate = manufacturer_lookup(specs, identifier)
@@ -145,7 +162,8 @@ def _candidate_from_listing(
     source_name: str,
     query: str,
 ) -> dict[str, Any] | None:
-    source_specs = listing.get("source_specs") if isinstance(listing.get("source_specs"), dict) else {}
+    raw_source_specs = listing.get("source_specs")
+    source_specs: dict[str, Any] = raw_source_specs if isinstance(raw_source_specs, dict) else {}
     title = _clean(listing.get("title")) or ""
     text = _normalized_text(
         " ".join(
@@ -190,6 +208,55 @@ def _candidate_from_listing(
         "score": score,
         "enriched_specs": enriched,
     }
+
+
+LENOVO_MACHINE_TYPE_MODELS = {
+    "20W8": {
+        "search_model": "ThinkPad X13 Yoga Gen 2",
+        "form_factor": "laptop",
+    },
+    "20W9": {
+        "search_model": "ThinkPad X13 Yoga Gen 2",
+        "form_factor": "laptop",
+    },
+}
+
+
+def _local_model_candidate(specs: dict[str, Any], identifier: str) -> dict[str, Any] | None:
+    brand = (_clean(specs.get("brand")) or "").lower()
+    if brand not in {"lenovo", "lenovo group limited", "lenovo group ltd"}:
+        return None
+
+    machine_type = _lenovo_machine_type(identifier)
+    if not machine_type:
+        return None
+
+    enriched = LENOVO_MACHINE_TYPE_MODELS.get(machine_type)
+    if not enriched:
+        return None
+
+    search_model = _clean(enriched.get("search_model"))
+    return {
+        "source": "local:lenovo_machine_type",
+        "query": identifier,
+        "title": _join_terms("Lenovo", search_model) or search_model or identifier,
+        "score": 12,
+        "enriched_specs": {
+            "device_type": "computer",
+            "brand": "Lenovo",
+            **enriched,
+        },
+    }
+
+
+def _lenovo_machine_type(identifier: str) -> str | None:
+    compact = re.sub(r"[^A-Z0-9]+", "", identifier.upper())
+    if len(compact) < 4:
+        return None
+    machine_type = compact[:4]
+    if re.fullmatch(r"[A-Z0-9]{4}", machine_type):
+        return machine_type
+    return None
 
 
 def _canonical_specs_from_listing(
