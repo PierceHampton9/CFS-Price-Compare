@@ -419,7 +419,26 @@ def _has_conflicting_storage_capacity(title: str, target_specs: dict[str, Any], 
         lower_bound = target_capacity / 2
         upper_bound = target_capacity * 2
         return not any(lower_bound <= capacity <= upper_bound for capacity in capacities)
+    if device_type == "computer" and target_capacity >= 128:
+        allowed = _adjacent_computer_storage_capacities(target_capacity)
+        return not any(capacity in allowed for capacity in capacities)
     return target_capacity not in capacities
+
+
+def _adjacent_computer_storage_capacities(target_capacity: int) -> set[int]:
+    if target_capacity <= 128:
+        return {128, 256}
+    if target_capacity <= 256:
+        return {256, 512}
+    common = [512, 1024, 2048]
+    nearest = min(common, key=lambda value: abs(value - target_capacity))
+    index = common.index(nearest)
+    allowed = {nearest}
+    if index > 0:
+        allowed.add(common[index - 1])
+    if index + 1 < len(common):
+        allowed.add(common[index + 1])
+    return allowed
 
 
 def _has_conflicting_ram(title: str, target_specs: dict[str, Any]) -> bool:

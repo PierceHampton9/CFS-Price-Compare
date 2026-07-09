@@ -34,6 +34,7 @@ class ManufacturerLookupTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(result)
+        assert result is not None
         specs = result["enriched_specs"]
         self.assertEqual(result["source"], "manufacturer:lenovo")
         self.assertGreaterEqual(result["score"], 12)
@@ -68,6 +69,7 @@ class ManufacturerLookupTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(result)
+        assert result is not None
         specs = result["enriched_specs"]
         self.assertEqual(specs["search_model"], "HP EliteOne 800 G5 All-in-One")
         self.assertEqual(specs["form_factor"], "all-in-one")
@@ -100,6 +102,7 @@ class ManufacturerLookupTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(result)
+        assert result is not None
         specs = result["enriched_specs"]
         self.assertEqual(specs["search_model"], "Dell OptiPlex 7060")
         self.assertEqual(specs["form_factor"], "desktop")
@@ -189,6 +192,7 @@ class ManufacturerLookupTests(unittest.TestCase):
             }
         )
         self.assertIsNotNone(lookup)
+        assert lookup is not None
 
         from pc_pricer import manufacturer_lookup as manufacturer_module
 

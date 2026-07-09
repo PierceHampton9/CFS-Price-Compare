@@ -715,21 +715,30 @@ def _is_product_price_metadata(tag: str, attrs: dict[str, str]) -> bool:
 
 def _rank_search_candidates(candidates: list[AmazonCandidate], query: str) -> list[AmazonCandidate]:
     tokens = _query_tokens(query)
-    if not tokens:
+    requirements = _query_requirements(query)
+    if not tokens and not requirements:
         return candidates
 
     indexed = list(enumerate(candidates))
-    indexed.sort(key=lambda item: (-_candidate_score(item[1], tokens), item[0]))
+    indexed.sort(key=lambda item: (-_candidate_score(item[1], tokens, requirements), item[0]))
     return [candidate for _index, candidate in indexed]
 
 
-def _candidate_score(candidate: AmazonCandidate, tokens: list[str]) -> float:
+def _candidate_score(candidate: AmazonCandidate, tokens: list[str], requirements: dict[str, str]) -> float:
     text = _normalize_match_text(f"{candidate.title} {' '.join(str(value) for value in (candidate.source_specs or {}).values())}")
     compact_text = text.replace(" ", "")
     score = 0.0
     for token in tokens:
         if token in text or token.replace(" ", "") in compact_text:
             score += 1.0
+    query_generation = requirements.get("generation")
+    candidate_generation = _generation_token(text)
+    if query_generation and candidate_generation:
+        score += 2.0 if candidate_generation == query_generation else -6.0
+    query_cpu = requirements.get("cpu")
+    candidate_cpus = _cpu_match_tokens(text)
+    if query_cpu and candidate_cpus:
+        score += 2.0 if query_cpu in candidate_cpus else -7.0
     if candidate.condition_raw:
         score += 0.25
     lowered_url = candidate.url.lower()
@@ -761,6 +770,35 @@ def _query_tokens(query: str) -> list[str]:
         normalized = token
         if normalized not in tokens:
             tokens.append(normalized)
+    return tokens
+
+
+def _query_requirements(query: str) -> dict[str, str]:
+    text = _normalize_match_text(query)
+    requirements = {}
+    generation = _generation_token(text)
+    if generation:
+        requirements["generation"] = generation
+    cpus = _cpu_match_tokens(text)
+    if cpus:
+        requirements["cpu"] = sorted(cpus, key=len, reverse=True)[0]
+    return requirements
+
+
+def _generation_token(text: str) -> str | None:
+    match = re.search(r"\bgen\s+(\d{1,2})\b", text)
+    return match.group(1) if match else None
+
+
+def _cpu_match_tokens(text: str) -> set[str]:
+    tokens = set()
+    patterns = [
+        r"\bi([3579])[-\s]?(\d{4,5}[a-z0-9]{0,4})\b",
+        r"\bcore\s+i([3579])[-\s]?(\d{4,5}[a-z0-9]{0,4})\b",
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            tokens.add(f"i{match.group(1)}{match.group(2)}".lower())
     return tokens
 
 

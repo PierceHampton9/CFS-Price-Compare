@@ -65,21 +65,42 @@ class QualityTests(unittest.TestCase):
 
         self.assertIn("non_canadian_location", result["listing_warnings"])
 
+    def test_flags_mixed_storage_when_target_storage_differs(self):
+        result = add_listing_quality_flags(
+            {
+                "confidence_flags": [],
+                "sold_count": 0,
+                "asking_count": 2,
+            },
+            [
+                _listing(title="Lenovo ThinkPad X13 Yoga 16GB 256GB SSD", target_storage_gb=256),
+                _listing(title="Lenovo ThinkPad X13 Yoga 16GB 512GB SSD", target_storage_gb=256),
+            ],
+        )
+
+        self.assertIn("mixed_storage", result["listing_warnings"])
+
 
 def _listing(
     item_price_cad=100,
-    shipping_cad=0,
+    shipping_cad: float | None = 0,
     shipping_is_estimated=False,
     location="Calgary, AB, CA",
     source="ebay",
+    title="Listing",
+    target_storage_gb=None,
 ):
-    return {
+    listing = {
         "source": source,
+        "title": title,
         "item_price_cad": item_price_cad,
         "shipping_cad": shipping_cad,
         "shipping_is_estimated": shipping_is_estimated,
         "location": location,
     }
+    if target_storage_gb is not None:
+        listing["target_storage_gb"] = target_storage_gb
+    return listing
 
 
 if __name__ == "__main__":

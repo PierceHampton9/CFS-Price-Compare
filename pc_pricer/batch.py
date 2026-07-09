@@ -158,7 +158,8 @@ def batch_summary_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build flat summary rows from completed GUI/CLI batch item dictionaries."""
     rows = []
     for index, item in enumerate(items, start=1):
-        result = item.get("result") if isinstance(item.get("result"), dict) else {}
+        raw_result = item.get("result")
+        result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
         rows.append(
             {
                 "order": index,
